@@ -46,7 +46,7 @@ interface Product {
 
 type MarketTabValue = "all" | "buy" | "sell" | "rent" | "gifts" | "sports";
 
-const dummyProducts: Product[] = [
+export const dummyProducts: Product[] = [ // Exported dummyProducts
   {
     $id: "prod1",
     imageUrl: "/placeholder.svg",

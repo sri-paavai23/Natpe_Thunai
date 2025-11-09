@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID, Query } from 'appwrite';
+import { dummyProducts } from "./MarketPage"; // Import dummy products
 
 interface Product {
   $id: string; // Appwrite document ID
@@ -61,10 +62,17 @@ const ProductDetailsPage = () => {
           productId
         );
         setProduct(fetchedProduct as unknown as Product);
-      } catch (error) {
-        console.error("Error fetching product details:", error);
-        toast.error("Failed to load product details.");
-        setProduct(null);
+      } catch (error: any) {
+        console.error("Error fetching product details from Appwrite:", error);
+        // If Appwrite fetch fails, check if it's a dummy product
+        const foundDummy = dummyProducts.find(p => p.$id === productId);
+        if (foundDummy) {
+          setProduct(foundDummy);
+          toast.info("Displaying dummy product details.");
+        } else {
+          toast.error("Failed to load product details. Product not found.");
+          setProduct(null);
+        }
       } finally {
         setLoadingProduct(false);
       }
@@ -138,7 +146,7 @@ const ProductDetailsPage = () => {
       const newTransaction = await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
-        ID.unique(),
+        ID.unique(), // Use Appwrite's $id
         {
           productId: product.$id, // Use Appwrite's $id
           buyerId: user.$id,
