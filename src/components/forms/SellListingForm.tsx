@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle } from "lucide-react"; // Import AI-related icons
+import { Brain, CheckCircle, XCircle } from "lucide-react";
+import { usePriceAnalysis } from "@/hooks/usePriceAnalysis"; // Import the new hook
 
 interface SellListingFormProps {
   onSubmit: (product: {
@@ -18,15 +19,15 @@ interface SellListingFormProps {
     category: string;
     damages: string;
     imageUrl: string;
-    ambassadorDelivery: boolean; // New field
-    ambassadorMessage: string; // New field
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
   }) => void;
   onCancel: () => void;
 }
 
 const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel }) => {
   const [title, setTitle] = useState("");
-  const [priceValue, setPriceValue] = useState(""); // Raw number input for price
+  const [priceValue, setPriceValue] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [damages, setDamages] = useState("");
@@ -34,70 +35,17 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  // AI Price Analysis States
-  const [isPriceAnalyzed, setIsPriceAnalyzed] = useState(false);
-  const [isPriceReasonable, setIsPriceReasonable] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
+  const {
+    isPriceAnalyzed,
+    isPriceReasonable,
+    aiSuggestion,
+    aiLoading,
+    analyzePrice,
+    resetAnalysis,
+  } = usePriceAnalysis();
 
-  const handleAnalyzePrice = () => {
-    setAiLoading(true);
-    setIsPriceAnalyzed(false);
-    setIsPriceReasonable(false);
-    setAiSuggestion("");
-
-    setTimeout(() => { // Simulate AI processing time
-      const price = parseFloat(priceValue);
-      const lowerTitle = title.toLowerCase();
-      let reasonable = true;
-      let suggestion = "";
-
-      if (isNaN(price) || price <= 0) {
-        reasonable = false;
-        suggestion = "Price must be a valid number greater than zero.";
-      } else if (category === "electronics") {
-        if (lowerTitle.includes("laptop")) {
-          if (price < 10000 || price > 80000) { // Example range for used laptops
-            reasonable = false;
-            suggestion = "For a used laptop, a typical selling price is between ₹10,000 and ₹80,000, depending on specifications and condition.";
-          }
-        } else if (lowerTitle.includes("phone") || lowerTitle.includes("smartphone")) {
-          if (price < 2000 || price > 30000) { // Example range for used phones
-            reasonable = false;
-            suggestion = "For a used smartphone, a typical selling price is between ₹2,000 and ₹30,000.";
-          }
-        } else {
-          suggestion = "Consider market rates for similar used electronics.";
-        }
-      } else if (category === "books") {
-        if (lowerTitle.includes("textbook")) {
-          if (price < 100 || price > 1500) { // Example range for used textbooks
-            reasonable = false;
-            suggestion = "For a used textbook, a typical selling price is between ₹100 and ₹1,500, depending on edition and condition.";
-          }
-        } else if (lowerTitle.includes("novel")) {
-          if (price < 50 || price > 500) { // Example range for used novels
-            reasonable = false;
-            suggestion = "For a used novel, a typical selling price is between ₹50 and ₹500.";
-          }
-        } else {
-          suggestion = "Consider market rates for similar used books.";
-        }
-      } else {
-        suggestion = "Price seems generally acceptable, but consider market rates for similar items in the 'Other' category.";
-      }
-
-      setIsPriceAnalyzed(true);
-      setIsPriceReasonable(reasonable);
-      setAiSuggestion(suggestion);
-      setAiLoading(false);
-
-      if (reasonable) {
-        toast.success("Price analysis complete: Price seems reasonable!");
-      } else {
-        toast.warning(`Price analysis complete: Price might be unreasonable. ${suggestion}`);
-      }
-    }, 1500); // 1.5 second delay for AI simulation
+  const handleAnalyzePriceClick = () => {
+    analyzePrice(title, priceValue, category);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -124,9 +72,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
     setImageUrl("/app-logo.png");
     setAmbassadorDelivery(false);
     setAmbassadorMessage("");
-    setIsPriceAnalyzed(false);
-    setIsPriceReasonable(false);
-    setAiSuggestion("");
+    resetAnalysis();
   };
 
   return (
@@ -138,7 +84,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
           type="text"
           placeholder="e.g., Gaming Laptop"
           value={title}
-          onChange={(e) => { setTitle(e.target.value); setIsPriceAnalyzed(false); }}
+          onChange={(e) => { setTitle(e.target.value); resetAnalysis(); }}
           required
           className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
         />
@@ -147,10 +93,10 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
         <Label htmlFor="price" className="text-foreground">Price</Label>
         <Input
           id="price"
-          type="number" // Changed to number for better input control
+          type="number"
           placeholder="e.g., 65000"
           value={priceValue}
-          onChange={(e) => { setPriceValue(e.target.value); setIsPriceAnalyzed(false); }}
+          onChange={(e) => { setPriceValue(e.target.value); resetAnalysis(); }}
           required
           min="1"
           className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
@@ -179,7 +125,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
       </div>
       <div>
         <Label htmlFor="category" className="text-foreground">Category</Label>
-        <Select value={category} onValueChange={(value) => { setCategory(value); setIsPriceAnalyzed(false); }} required>
+        <Select value={category} onValueChange={(value) => { setCategory(value); resetAnalysis(); }} required>
           <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
@@ -214,7 +160,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
       <div className="space-y-2 border-t border-border pt-4 mt-4">
         <Button
           type="button"
-          onClick={handleAnalyzePrice}
+          onClick={handleAnalyzePriceClick}
           disabled={aiLoading || !title || !priceValue || !category}
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
@@ -246,7 +192,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
         <Button
           type="submit"
           className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-          disabled={!isPriceReasonable || aiLoading} // Disable if price not reasonable or AI is loading
+          disabled={!isPriceReasonable || aiLoading}
         >
           Create Listing
         </Button>

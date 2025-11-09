@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // Import new component
-import { Brain, CheckCircle, XCircle } from "lucide-react"; // Import AI-related icons
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+import { Brain, CheckCircle, XCircle } from "lucide-react";
+import { usePriceAnalysis } from "@/hooks/usePriceAnalysis"; // Import the new hook
 
 interface GiftCraftListingFormProps {
   onSubmit: (product: {
@@ -15,58 +16,31 @@ interface GiftCraftListingFormProps {
     price: string;
     description: string;
     imageUrl: string;
-    ambassadorDelivery: boolean; // New field
-    ambassadorMessage: string; // New field
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
   }) => void;
   onCancel: () => void;
 }
 
 const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, onCancel }) => {
   const [title, setTitle] = useState("");
-  const [priceValue, setPriceValue] = useState(""); // Raw number input for price
+  const [priceValue, setPriceValue] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("/app-logo.png"); // Default to app logo
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // New state
-  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // New state
+  const [imageUrl, setImageUrl] = useState("/app-logo.png");
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
+  const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  // AI Price Analysis States
-  const [isPriceAnalyzed, setIsPriceAnalyzed] = useState(false);
-  const [isPriceReasonable, setIsPriceReasonable] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
+  const {
+    isPriceAnalyzed,
+    isPriceReasonable,
+    aiSuggestion,
+    aiLoading,
+    analyzePrice,
+    resetAnalysis,
+  } = usePriceAnalysis();
 
-  const handleAnalyzePrice = () => {
-    setAiLoading(true);
-    setIsPriceAnalyzed(false);
-    setIsPriceReasonable(false);
-    setAiSuggestion("");
-
-    setTimeout(() => { // Simulate AI processing time
-      const price = parseFloat(priceValue);
-      let reasonable = true;
-      let suggestion = "";
-
-      if (isNaN(price) || price <= 0) {
-        reasonable = false;
-        suggestion = "Price must be a valid number greater than zero.";
-      } else if (price < 50 || price > 1500) { // Example range for gifts/crafts
-        reasonable = false;
-        suggestion = "For handmade gifts and crafts, a typical price range is between ₹50 and ₹1500, depending on complexity and materials.";
-      } else {
-        suggestion = "Price seems generally acceptable for a gift/craft item.";
-      }
-
-      setIsPriceAnalyzed(true);
-      setIsPriceReasonable(reasonable);
-      setAiSuggestion(suggestion);
-      setAiLoading(false);
-
-      if (reasonable) {
-        toast.success("Price analysis complete: Price seems reasonable!");
-      } else {
-        toast.warning(`Price analysis complete: Price might be unreasonable. ${suggestion}`);
-      }
-    }, 1500); // 1.5 second delay for AI simulation
+  const handleAnalyzePriceClick = () => {
+    analyzePrice(title, priceValue); // No category/condition for this form
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,9 +65,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
     setImageUrl("/app-logo.png");
     setAmbassadorDelivery(false);
     setAmbassadorMessage("");
-    setIsPriceAnalyzed(false);
-    setIsPriceReasonable(false);
-    setAiSuggestion("");
+    resetAnalysis();
   };
 
   return (
@@ -105,7 +77,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
           type="text"
           placeholder="e.g., Handmade Bracelet"
           value={title}
-          onChange={(e) => { setTitle(e.target.value); setIsPriceAnalyzed(false); }}
+          onChange={(e) => { setTitle(e.target.value); resetAnalysis(); }}
           required
           className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
         />
@@ -117,7 +89,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
           type="number"
           placeholder="e.g., 250"
           value={priceValue}
-          onChange={(e) => { setPriceValue(e.target.value); setIsPriceAnalyzed(false); }}
+          onChange={(e) => { setPriceValue(e.target.value); resetAnalysis(); }}
           required
           min="1"
           className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
@@ -158,7 +130,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
       <div className="space-y-2 border-t border-border pt-4 mt-4">
         <Button
           type="button"
-          onClick={handleAnalyzePrice}
+          onClick={handleAnalyzePriceClick}
           disabled={aiLoading || !title || !priceValue}
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
@@ -190,7 +162,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
         <Button
           type="submit"
           className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-          disabled={!isPriceReasonable || aiLoading} // Disable if price not reasonable or AI is loading
+          disabled={!isPriceReasonable || aiLoading}
         >
           Create Listing
         </Button>

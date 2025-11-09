@@ -7,95 +7,44 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // Import new component
-import { Brain, CheckCircle, XCircle } from "lucide-react"; // Import AI-related icons
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+import { Brain, CheckCircle, XCircle } from "lucide-react";
+import { usePriceAnalysis } from "@/hooks/usePriceAnalysis"; // Import the new hook
 
 interface RentListingFormProps {
   onSubmit: (product: {
     title: string;
-    rentPrice: string; // e.g., "₹500/day" or "₹50/hour"
+    rentPrice: string;
     description: string;
-    policies: string; // New field for rent policies
+    policies: string;
     imageUrl: string;
-    ambassadorDelivery: boolean; // New field
-    ambassadorMessage: string; // New field
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
   }) => void;
   onCancel: () => void;
 }
 
 const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel }) => {
   const [title, setTitle] = useState("");
-  const [rentPriceValue, setRentPriceValue] = useState(""); // Raw number input for price
+  const [rentPriceValue, setRentPriceValue] = useState("");
   const [rentUnit, setRentUnit] = useState<"day" | "hour">("day");
   const [description, setDescription] = useState("");
-  const [policies, setPolicies] = useState(""); // State for policies
-  const [imageUrl, setImageUrl] = useState("/app-logo.png"); // Default to app logo
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // New state
-  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // New state
+  const [policies, setPolicies] = useState("");
+  const [imageUrl, setImageUrl] = useState("/app-logo.png");
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
+  const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  // AI Price Analysis States
-  const [isPriceAnalyzed, setIsPriceAnalyzed] = useState(false);
-  const [isPriceReasonable, setIsPriceReasonable] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
+  const {
+    isPriceAnalyzed,
+    isPriceReasonable,
+    aiSuggestion,
+    aiLoading,
+    analyzePrice,
+    resetAnalysis,
+  } = usePriceAnalysis();
 
-  const handleAnalyzePrice = () => {
-    setAiLoading(true);
-    setIsPriceAnalyzed(false);
-    setIsPriceReasonable(false);
-    setAiSuggestion("");
-
-    setTimeout(() => { // Simulate AI processing time
-      const price = parseFloat(rentPriceValue);
-      const lowerTitle = title.toLowerCase();
-      let reasonable = true;
-      let suggestion = "";
-
-      if (lowerTitle.includes("laptop") || lowerTitle.includes("computer") || lowerTitle.includes("macbook")) {
-        if (rentUnit === "hour") {
-          if (price < 30 || price > 150) { // Example range: ₹30-₹150 per hour
-            reasonable = false;
-            suggestion = "For a laptop, a reasonable hourly rent is typically between ₹30-₹150.";
-          }
-        } else if (rentUnit === "day") {
-          if (price < 200 || price > 800) { // Example range: ₹200-₹800 per day
-            reasonable = false;
-            suggestion = "For a laptop, a reasonable daily rent is typically between ₹200-₹800.";
-          }
-        }
-      } else if (lowerTitle.includes("bicycle") || lowerTitle.includes("bike")) {
-        if (rentUnit === "hour") {
-          if (price < 10 || price > 50) { // Example range: ₹10-₹50 per hour
-            reasonable = false;
-            suggestion = "For a bicycle, a reasonable hourly rent is typically between ₹10-₹50.";
-          }
-        } else if (rentUnit === "day") {
-          if (price < 50 || price > 250) { // Example range: ₹50-₹250 per day
-            reasonable = false;
-            suggestion = "For a bicycle, a reasonable daily rent is typically between ₹50-₹250.";
-          }
-        }
-      } else {
-        // Default for other items if no specific rules apply
-        if (price <= 0) {
-          reasonable = false;
-          suggestion = "Price must be greater than zero.";
-        } else {
-          suggestion = "Price seems generally acceptable, but consider market rates for similar items.";
-        }
-      }
-
-      setIsPriceAnalyzed(true);
-      setIsPriceReasonable(reasonable);
-      setAiSuggestion(suggestion);
-      setAiLoading(false);
-
-      if (reasonable) {
-        toast.success("Price analysis complete: Price seems reasonable!");
-      } else {
-        toast.warning(`Price analysis complete: Price might be unreasonable. ${suggestion}`);
-      }
-    }, 1500); // 1.5 second delay for AI simulation
+  const handleAnalyzePriceClick = () => {
+    analyzePrice(title, rentPriceValue, undefined, rentUnit); // Pass rentUnit
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -110,8 +59,6 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
     }
     if (!isPriceReasonable) {
       toast.error("The price is outside the reasonable range. Please adjust or confirm you understand.");
-      // Optionally, allow override with a confirmation dialog in a real app
-      // For now, we'll strictly prevent it.
       return;
     }
 
@@ -124,9 +71,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
     setImageUrl("/app-logo.png");
     setAmbassadorDelivery(false);
     setAmbassadorMessage("");
-    setIsPriceAnalyzed(false);
-    setIsPriceReasonable(false);
-    setAiSuggestion("");
+    resetAnalysis();
   };
 
   return (
@@ -138,7 +83,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
           type="text"
           placeholder="e.g., Bicycle"
           value={title}
-          onChange={(e) => { setTitle(e.target.value); setIsPriceAnalyzed(false); }}
+          onChange={(e) => { setTitle(e.target.value); resetAnalysis(); }}
           required
           className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
         />
@@ -148,15 +93,15 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
         <div className="flex flex-col sm:flex-row gap-2">
           <Input
             id="rentPrice"
-            type="number" // Changed to number for better input control
+            type="number"
             placeholder="e.g., 500"
             value={rentPriceValue}
-            onChange={(e) => { setRentPriceValue(e.target.value); setIsPriceAnalyzed(false); }}
+            onChange={(e) => { setRentPriceValue(e.target.value); resetAnalysis(); }}
             required
             min="1"
             className="flex-grow bg-input text-foreground border-border focus:ring-ring focus:border-ring"
           />
-          <Select value={rentUnit} onValueChange={(value: "day" | "hour") => { setRentUnit(value); setIsPriceAnalyzed(false); }} required>
+          <Select value={rentUnit} onValueChange={(value: "day" | "hour") => { setRentUnit(value); resetAnalysis(); }} required>
             <SelectTrigger className="w-full sm:w-[100px] bg-input text-foreground border-border focus:ring-ring focus:border-ring">
               <SelectValue placeholder="Unit" />
             </SelectTrigger>
@@ -213,7 +158,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
       <div className="space-y-2 border-t border-border pt-4 mt-4">
         <Button
           type="button"
-          onClick={handleAnalyzePrice}
+          onClick={handleAnalyzePriceClick}
           disabled={aiLoading || !title || !rentPriceValue}
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
@@ -245,7 +190,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
         <Button
           type="submit"
           className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-          disabled={!isPriceReasonable || aiLoading} // Disable if price not reasonable or AI is loading
+          disabled={!isPriceReasonable || aiLoading}
         >
           Create Listing
         </Button>
