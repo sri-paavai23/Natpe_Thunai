@@ -1,0 +1,86 @@
+"use client";
+
+import React from "react";
+import { MadeWithDyad } from "@/components/made-with-dyad";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { DollarSign, Wallet, Banknote } from "lucide-react"; // Removed CreditCard icon as Payment Methods card is removed
+import { toast } from "sonner";
+
+const WalletPage = () => {
+  // Dummy data for wallet
+  const currentBalance = 1250.75;
+  const commissionRate = 30; // Percentage
+  const developerUpiId = "8903480105@superyes"; // Updated developer UPI ID
+
+  const handleAddFunds = () => {
+    const addFundsAmount = 500; // Example fixed amount for adding funds
+    const transactionNote = "Add funds to Natpe Thunai wallet";
+    const upiDeepLink = `upi://pay?pa=${developerUpiId}&pn=NatpeThunaiDevelopers&am=${addFundsAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+
+    window.open(upiDeepLink, "_blank");
+    toast.info(`Redirecting to your banking app to add ₹${addFundsAmount.toFixed(2)} to your wallet. Please complete the payment.`);
+  };
+
+  const handleWithdrawFunds = () => {
+    if (currentBalance <= 0) {
+      toast.error("Your wallet balance is zero. Cannot withdraw funds.");
+      return;
+    }
+    const transactionNote = "Withdraw funds from Natpe Thunai wallet";
+    const upiDeepLink = `upi://pay?pa=${developerUpiId}&pn=NatpeThunaiDevelopers&am=${currentBalance.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+
+    window.open(upiDeepLink, "_blank");
+    toast.info(`Redirecting to your banking app to withdraw ₹${currentBalance.toFixed(2)}. Developers will process your withdrawal after deducting any applicable fees.`);
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground p-4 pb-20">
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Wallet & Payments</h1>
+      <div className="max-w-md mx-auto space-y-6">
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-secondary-neon" /> Your Wallet
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+            <div className="flex justify-between items-center border-b border-border pb-3">
+              <p className="text-lg text-muted-foreground">Current Balance:</p>
+              <p className="text-2xl font-bold text-secondary-neon">₹{currentBalance.toFixed(2)}</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Button onClick={handleAddFunds} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Banknote className="mr-2 h-4 w-4" /> Add Funds
+              </Button>
+              <Button onClick={handleWithdrawFunds} variant="outline" className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10">
+                <DollarSign className="mr-2 h-4 w-4" /> Withdraw
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Removed the "Payment Methods" card as requested */}
+
+        <Card className="bg-destructive/10 border-destructive text-destructive-foreground shadow-lg">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-destructive flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-destructive" /> Commission Policy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-sm">
+              Please note that a <span className="font-bold">{commissionRate}% commission</span> is applied to all successful transactions facilitated through Natpe🤝Thunai. This helps us maintain and improve the platform.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              For more details, please refer to our full Terms of Service.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+      <MadeWithDyad />
+    </div>
+  );
+};
+
+export default WalletPage;

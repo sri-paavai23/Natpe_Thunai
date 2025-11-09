@@ -1,0 +1,112 @@
+"use client";
+
+import React from "react";
+import { MadeWithDyad } from "@/components/made-with-dyad";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
+
+const ServicesPage = () => {
+  const navigate = useNavigate();
+  const { userProfile } = useAuth();
+
+  // Get user's age from profile, default to 0 if not available
+  const userAge = userProfile?.age || 0; 
+  // Content is age-gated if user is 25 or older (meaning they CANNOT access it)
+  const isAgeGated = userAge >= 25; 
+
+  const handleServiceClick = (path: string, serviceName: string) => {
+    toast.info(`Navigating to "${serviceName}"...`);
+    navigate(path);
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground p-4 pb-20">
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">The Grind (Services)</h1>
+      <div className="max-w-md mx-auto space-y-6">
+        {/* New Tournament Card */}
+        <Link to="/tournaments">
+          <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow">
+            <CardHeader className="p-0 pb-2">
+              <CardTitle className="text-xl font-semibold text-card-foreground">Esports Arena</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <p className="text-muted-foreground">Register for mobile esports tournaments, view winners, and check standings.</p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/freelance", "Freelance Section")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Freelance Section</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Resume Building, Video Editing, Content Writing, and more.</p>
+          </CardContent>
+        </Card>
+
+        {isAgeGated ? (
+          <Card className="bg-card p-4 rounded-lg shadow-md border border-border opacity-70 cursor-not-allowed">
+            <CardHeader className="p-0 pb-2">
+              <CardTitle className="text-xl font-semibold text-card-foreground">Errands & Short-Term Needs</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <p className="text-muted-foreground">This section is not available for users aged 25 and above.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/errands", "Errands")}>
+              <CardHeader className="p-0 pb-2">
+                <CardTitle className="text-xl font-semibold text-card-foreground">Errands</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <p className="text-muted-foreground">Note-writing, small jobs, delivery services (Age-Gated).</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/short-term", "Short-Term Needs")}>
+              <CardHeader className="p-0 pb-2">
+                <CardTitle className="text-xl font-semibold text-card-foreground">Short-Term Needs</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <p className="text-muted-foreground">Instant requests with extra charges for urgent tasks (Age-Gated).</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/food-wellness", "Food & Wellness")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Food & Wellness</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Homemade food/remedies with cancellation warning and quality assurance.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ticket-booking", "Ticket Booking")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Ticket Booking</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">IRCTC, Abhi Bus, Paytm redirection for easy travel bookings.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/collaborators", "Project Collaborator Tab")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Project Collaborator Tab</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Post or search for collaborators for academic or personal projects.</p>
+          </CardContent>
+        </Card>
+      </div>
+      <MadeWithDyad />
+    </div>
+  );
+};
+
+export default ServicesPage;
