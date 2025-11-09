@@ -8,7 +8,8 @@ import { Package, Truck, XCircle, MessageSquareText, DollarSign } from "lucide-r
 import { cn } from "@/lib/utils";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner"; // Added missing import for toast
+import { toast } from "sonner";
+import { Models, Query } from "appwrite"; // Import Models and Query
 
 interface TrackingItem {
   id: string;
@@ -37,24 +38,42 @@ const TrackingPage = () => {
 
       setLoading(true);
       try {
-        const transactionsResponse = await databases.listDocuments(
+        // Fetch transactions where the current user is the buyer
+        const buyerTransactionsResponse = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_TRANSACTIONS_COLLECTION_ID,
+          [Query.equal('buyerId', user.$id)]
         );
 
-        const fetchedTransactions: TrackingItem[] = transactionsResponse.documents
-          .filter((doc: any) => doc.buyerId === user.$id || doc.sellerId === user.$id)
-          .map((doc: any) => ({
+        // Fetch transactions where the current user is the seller
+        const sellerTransactionsResponse = await databases.listDocuments(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_TRANSACTIONS_COLLECTION_ID,
+          [Query.equal('sellerId', user.$id)]
+        );
+
+        // Combine and deduplicate transactions
+        const allTransactions = [...buyerTransactionsResponse.documents, ...sellerTransactionsResponse.documents];
+        const uniqueTransactions = Array.from(new Map(allTransactions.map(item => [item.$id, item])).values());
+
+
+        const fetchedTransactions: TrackingItem[] = uniqueTransactions
+          .map((doc: Models.Document) => ({
             id: doc.$id,
             type: "Transaction",
-            description: `Payment for ${doc.productTitle}`,
-            status: doc.status === "initiated" ? "Initiated" : (doc.status === "completed" ? "Payment Confirmed" : "Pending"),
+            description: `Payment for ${(doc as any).productTitle}`,
+            status: (doc as any).status === "initiated" ? "Initiated" :
+                    (doc as any).status === "payment_confirmed_to_developer" ? "In Progress" :
+                    (doc as any).status === "commission_deducted" ? "In Progress" :
+                    (doc as any).status === "paid_to_seller" ? "Completed" :
+                    (doc as any).status === "failed" ? "Cancelled" :
+                    "Pending", // Default fallback
             date: new Date(doc.$createdAt).toLocaleDateString(),
-            productTitle: doc.productTitle,
-            amount: doc.amount,
-            sellerName: doc.sellerName,
-            buyerId: doc.buyerId,
-            sellerId: doc.sellerId,
+            productTitle: (doc as any).productTitle,
+            amount: (doc as any).amount,
+            sellerName: (doc as any).sellerName,
+            buyerId: (doc as any).buyerId,
+            sellerId: (doc as any).sellerId,
           }));
 
         const dummyOtherItems: TrackingItem[] = [
@@ -68,7 +87,7 @@ const TrackingPage = () => {
         setTrackingItems([...fetchedTransactions, ...dummyOtherItems]);
       } catch (error) {
         console.error("Error fetching tracking items:", error);
-        toast.error("Failed to load tracking items.");
+        toast.error("Failed to load tracking items. Please check your network and Appwrite permissions.");
       } finally {
         setLoading(false);
       }
