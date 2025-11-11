@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avatar generator
 
 const getPageTitle = (pathname: string) => {
   switch (pathname) {
@@ -50,10 +51,6 @@ const getPageTitle = (pathname: string) => {
   }
 };
 
-const generateDiceBearAvatar = (seed: string) => {
-  return `https://api.dicebear.com/8.x/lorelei/svg?seed=${encodeURIComponent(seed)}`;
-};
-
 const Header = () => {
   const location = useLocation();
   const title = getPageTitle(location.pathname);
@@ -64,7 +61,11 @@ const Header = () => {
     ? `${userProfile.firstName} ${userProfile.lastName}`
     : user?.name || "Guest";
   
-  const avatarUrl = generateDiceBearAvatar(displayName);
+  const avatarUrl = generateAvatarUrl(
+    displayName,
+    userProfile?.gender || "prefer-not-to-say",
+    userProfile?.userType || "student"
+  );
 
   return (
     <header className="sticky top-0 z-40 w-full bg-primary text-primary-foreground border-b border-border-dark p-4 flex items-center justify-between md:px-6 lg:px-8">

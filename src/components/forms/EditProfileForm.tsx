@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Import RadioGroup
 import { useAuth } from "@/context/AuthContext";
 
 interface EditProfileFormProps {
@@ -15,6 +16,8 @@ interface EditProfileFormProps {
     age: number;
     mobileNumber: string;
     upiId: string;
+    gender: "male" | "female" | "prefer-not-to-say"; // Added gender
+    userType: "student" | "staff"; // Added userType
   };
   onSave: (data: {
     firstName: string;
@@ -22,6 +25,8 @@ interface EditProfileFormProps {
     age: number;
     mobileNumber: string;
     upiId: string;
+    gender: "male" | "female" | "prefer-not-to-say"; // Added gender
+    userType: "student" | "staff"; // Added userType
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -36,6 +41,8 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
   const [age, setAge] = useState(String(initialData.age));
   const [mobileNumber, setMobileNumber] = useState(initialData.mobileNumber);
   const [upiId, setUpiId] = useState(initialData.upiId);
+  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">(initialData.gender); // New state
+  const [userType, setUserType] = useState<"student" | "staff">(initialData.userType); // New state
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,12 +51,14 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
     setAge(String(initialData.age));
     setMobileNumber(initialData.mobileNumber);
     setUpiId(initialData.upiId);
+    setGender(initialData.gender);
+    setUserType(initialData.userType);
   }, [initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    if (!firstName || !lastName || !age || !mobileNumber || !upiId) {
+    if (!firstName || !lastName || !age || !mobileNumber || !upiId || !gender || !userType) {
       toast.error("Please fill in all required fields.");
       setLoading(false);
       return;
@@ -69,6 +78,8 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
         age: parsedAge,
         mobileNumber,
         upiId,
+        gender, // Pass gender
+        userType, // Pass userType
       });
       toast.success("Profile updated successfully!");
       onCancel(); // Close dialog on success
@@ -146,6 +157,41 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
           required
         />
       </div>
+
+      {/* Gender Selection */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label className="text-left sm:text-right text-foreground">Gender</Label>
+        <RadioGroup value={gender} onValueChange={(value: "male" | "female" | "prefer-not-to-say") => setGender(value)} className="col-span-3 flex flex-wrap gap-4">
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="male" id="edit-gender-male" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+            <Label htmlFor="edit-gender-male" className="text-foreground">Male</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="female" id="edit-gender-female" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+            <Label htmlFor="edit-gender-female" className="text-foreground">Female</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="prefer-not-to-say" id="edit-gender-prefer-not-to-say" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+            <Label htmlFor="edit-gender-prefer-not-to-say" className="text-foreground">Prefer not to say</Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {/* User Type Selection */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label className="text-left sm:text-right text-foreground">User Type</Label>
+        <RadioGroup value={userType} onValueChange={(value: "student" | "staff") => setUserType(value)} className="col-span-3 flex flex-wrap gap-4">
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="student" id="edit-user-type-student" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+            <Label htmlFor="edit-user-type-student" className="text-foreground">Student</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="staff" id="edit-user-type-staff" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+            <Label htmlFor="edit-user-type-staff" className="text-foreground">Staff</Label>
+          </div>
+        </RadioGroup>
+      </div>
+
       <DialogFooter className="pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={loading} className="border-border text-primary-foreground hover:bg-muted">
           Cancel

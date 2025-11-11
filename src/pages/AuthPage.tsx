@@ -48,6 +48,8 @@ const AuthPage = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say"); // New state for gender
+  const [userType, setUserType] = useState<"student" | "staff">("student"); // New state for user type
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -119,11 +121,13 @@ const AuthPage = () => {
               mobileNumber,
               upiId,
               collegeIdPhotoId: collegeIdPhotoFileId,
-              role: "user", // Explicitly set role to "user"
+              role: "user", // Explicitly set Appwrite system role to "user"
+              gender, // New field
+              userType, // New field
             }
           );
           toast.success("User profile saved.");
-          toast.info("Your age, mobile, UPI, and college ID are for developer safety assurance only and will not be shared publicly.");
+          toast.info("Your Name, Age, Mobile Number, UPI ID, and College ID Photo are collected for developer safety assurance only and will NOT be shared publicly. Only your chosen username will be visible.");
         } catch (profileError: any) {
           console.error("Error creating user profile document:", profileError);
           toast.error(`Failed to create user profile: ${profileError.message}. Please check Appwrite collection permissions.`);
@@ -152,6 +156,8 @@ const AuthPage = () => {
         setGeneratedUsernames([]);
         setSelectedUsername("");
         setTermsAccepted(false);
+        setGender("prefer-not-to-say");
+        setUserType("student");
       }
     } catch (error: any) {
       toast.error(error.message || "An error occurred during authentication.");
@@ -251,6 +257,41 @@ const AuthPage = () => {
                   />
                   {collegeIdPhoto && <p className="text-xs text-muted-foreground mt-1">File selected: {collegeIdPhoto.name}</p>}
                 </div>
+
+                {/* Gender Selection */}
+                <div>
+                  <Label className="mb-2 block text-foreground">Gender</Label>
+                  <RadioGroup value={gender} onValueChange={(value: "male" | "female" | "prefer-not-to-say") => setGender(value)} className="flex flex-wrap gap-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="male" id="gender-male" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+                      <Label htmlFor="gender-male" className="text-foreground">Male</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="female" id="gender-female" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+                      <Label htmlFor="gender-female" className="text-foreground">Female</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="prefer-not-to-say" id="gender-prefer-not-to-say" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+                      <Label htmlFor="gender-prefer-not-to-say" className="text-foreground">Prefer not to say</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {/* User Type Selection */}
+                <div>
+                  <Label className="mb-2 block text-foreground">Are you a?</Label>
+                  <RadioGroup value={userType} onValueChange={(value: "student" | "staff") => setUserType(value)} className="flex flex-wrap gap-4">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="student" id="user-type-student" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+                      <Label htmlFor="user-type-student" className="text-foreground">Student</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="staff" id="user-type-staff" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
+                      <Label htmlFor="user-type-staff" className="text-foreground">Staff</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
                 <div>
                   <Label className="mb-2 block text-foreground">Choose Your Username (Public)</Label>
                   <RadioGroup value={selectedUsername} onValueChange={setSelectedUsername} className="grid grid-cols-1 gap-2">

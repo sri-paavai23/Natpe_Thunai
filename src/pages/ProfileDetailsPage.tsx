@@ -5,16 +5,13 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Star, UserCheck, Award, TrendingUp, Edit } from "lucide-react";
+import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase } from "lucide-react"; // Added User and Briefcase icons
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import EditProfileForm from "@/components/forms/EditProfileForm"; // Import the new form
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
-
-const generateDiceBearAvatar = (seed: string) => {
-  return `https://api.dicebear.com/8.x/lorelei/svg?seed=${encodeURIComponent(seed)}`;
-};
+import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avatar generator
 
 const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
@@ -31,7 +28,11 @@ const ProfileDetailsPage = () => {
   const isVerified = true; // Placeholder for verification status
   const badges = ["Top Seller", "Early Adopter"];
 
-  const avatarUrl = generateDiceBearAvatar(userName);
+  const avatarUrl = generateAvatarUrl(
+    userName,
+    userProfile?.gender || "prefer-not-to-say",
+    userProfile?.userType || "student"
+  );
 
   const handleSaveProfile = async (data: {
     firstName: string;
@@ -39,6 +40,8 @@ const ProfileDetailsPage = () => {
     age: number;
     mobileNumber: string;
     upiId: string;
+    gender: "male" | "female" | "prefer-not-to-say"; // Added gender
+    userType: "student" | "staff"; // Added userType
   }) => {
     if (userProfile) {
       await updateUserProfile(userProfile.$id, data);
@@ -115,6 +118,12 @@ const ProfileDetailsPage = () => {
                 <p className="text-sm text-muted-foreground">Age: <span className="font-semibold text-foreground">{userProfile.age}</span></p>
                 <p className="text-sm text-muted-foreground">Mobile: <span className="font-semibold text-foreground">{userProfile.mobileNumber}</span></p>
                 <p className="text-sm text-muted-foreground">UPI ID: <span className="font-semibold text-foreground">{userProfile.upiId}</span></p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <User className="h-4 w-4 text-secondary-neon" /> Gender: <span className="font-semibold text-foreground capitalize">{userProfile.gender.replace(/-/g, ' ')}</span>
+                </p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-secondary-neon" /> Type: <span className="font-semibold text-foreground capitalize">{userProfile.userType}</span>
+                </p>
               </div>
             )}
           </CardContent>
@@ -135,6 +144,8 @@ const ProfileDetailsPage = () => {
                 age: userProfile.age,
                 mobileNumber: userProfile.mobileNumber,
                 upiId: userProfile.upiId,
+                gender: userProfile.gender, // Pass gender
+                userType: userProfile.userType, // Pass userType
               }}
               onSave={handleSaveProfile}
               onCancel={() => setIsEditDialogOpen(false)}

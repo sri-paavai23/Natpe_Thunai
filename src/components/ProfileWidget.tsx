@@ -6,10 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
-
-const generateDiceBearAvatar = (seed: string) => {
-  return `https://api.dicebear.com/8.x/lorelei/svg?seed=${encodeURIComponent(seed)}`;
-};
+import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avatar generator
 
 const ProfileWidget = () => {
   const { user, userProfile } = useAuth();
@@ -24,7 +21,11 @@ const ProfileWidget = () => {
   const maxXp = 100; // Placeholder
   const xpPercentage = (currentXp / maxXp) * 100;
 
-  const avatarUrl = generateDiceBearAvatar(displayName);
+  const avatarUrl = generateAvatarUrl(
+    displayName,
+    userProfile?.gender || "prefer-not-to-say",
+    userProfile?.userType || "student"
+  );
 
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -39,7 +40,7 @@ const ProfileWidget = () => {
           <h3 className="text-xl font-bold text-foreground">{displayName}</h3>
           <p className="text-sm text-muted-foreground">Level {userLevel}</p>
           <div className="flex items-center gap-2 mt-1">
-            <Progress value={xpPercentage} className="h-2 bg-muted-foreground/30 [&::-webkit-progress-bar]:bg-secondary-neon [&::-::-webkit-progress-value]:bg-secondary-neon" />
+            <Progress value={xpPercentage} className="h-2 bg-muted-foreground/30 [&::-webkit-progress-bar]:bg-secondary-neon [&::-webkit-progress-value]:bg-secondary-neon" />
             <span className="text-xs text-muted-foreground">{currentXp}/{maxXp} XP</span>
           </div>
         </div>

@@ -17,7 +17,7 @@ interface ChangeUserRoleFormProps {
 const ChangeUserRoleForm: React.FC<ChangeUserRoleFormProps> = ({ onRoleChanged }) => {
   const { updateUserProfile } = useAuth();
   const [targetUserId, setTargetUserId] = useState("");
-  const [newRole, setNewRole] = useState<string>("user");
+  const [newRole, setNewRole] = useState<"user" | "developer">("user"); // Explicitly type newRole
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,7 +81,7 @@ const ChangeUserRoleForm: React.FC<ChangeUserRoleFormProps> = ({ onRoleChanged }
       </div>
       <div>
         <Label htmlFor="newRole" className="text-foreground">New Role</Label>
-        <Select value={newRole} onValueChange={setNewRole} required disabled={loading}>
+        <Select value={newRole} onValueChange={(value: "user" | "developer") => setNewRole(value)} required disabled={loading}>
           <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
             <SelectValue placeholder="Select new role" />
           </SelectTrigger>

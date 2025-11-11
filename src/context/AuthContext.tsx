@@ -17,7 +17,9 @@ interface UserProfile extends Models.Document {
   mobileNumber: string;
   upiId: string;
   collegeIdPhotoId?: string;
-  role: string; // Made required and explicit
+  role: "user" | "developer"; // Appwrite system role
+  gender: "male" | "female" | "prefer-not-to-say"; // New field
+  userType: "student" | "staff"; // New field
 }
 
 interface AuthContextType {
