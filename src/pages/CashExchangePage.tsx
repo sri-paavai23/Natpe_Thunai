@@ -134,9 +134,9 @@ const CashExchangePage = () => {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "requests" | "offers" | "group-contributions")} className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-primary-blue-light text-primary-foreground h-auto"> {/* Updated grid-cols */}
-            <TabsTrigger value="requests" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">My Requests</TabsTrigger>
-            <TabsTrigger value="offers" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">My Offers</TabsTrigger>
-            <TabsTrigger value="group-contributions" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Group Contributions</TabsTrigger> {/* New tab */}
+            <TabsTrigger value="requests" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">My Requests</TabsTrigger>
+            <TabsTrigger value="offers" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">My Offers</TabsTrigger>
+            <TabsTrigger value="group-contributions" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Group Contributions</TabsTrigger> {/* New tab */}
           </TabsList>
           <div className="mt-4 space-y-4">
             <TabsContent value="requests">
@@ -248,7 +248,7 @@ const CashExchangePage = () => {
                   type="button"
                   variant={postType === "request" ? "default" : "outline"}
                   onClick={() => setPostType("request")}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground"
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs"
                 >
                   Request Cash
                 </Button>
@@ -256,7 +256,7 @@ const CashExchangePage = () => {
                   type="button"
                   variant={postType === "offer" ? "default" : "outline"}
                   onClick={() => setPostType("offer")}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground"
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs"
                 >
                   Offer Cash
                 </Button>
@@ -264,7 +264,7 @@ const CashExchangePage = () => {
                   type="button"
                   variant={postType === "group-contribution" ? "default" : "outline"}
                   onClick={() => setPostType("group-contribution")}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground"
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs"
                 >
                   Group Contribution
                 </Button>
@@ -326,9 +326,9 @@ const CashExchangePage = () => {
                 required
               />
             </div>
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsPostDialogOpen(false)} className="border-border text-primary-foreground hover:bg-muted">Cancel</Button>
-              <Button type="submit" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">Post</Button>
+            <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsPostDialogOpen(false)} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">Cancel</Button>
+              <Button type="submit" className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">Post</Button>
             </DialogFooter>
           </form>
         </DialogContent>

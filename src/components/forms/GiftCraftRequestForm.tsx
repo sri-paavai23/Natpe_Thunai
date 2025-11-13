@@ -115,11 +115,11 @@ const GiftCraftRequestForm: React.FC<GiftCraftRequestFormProps> = ({ onSubmit, o
         setAmbassadorMessage={setAmbassadorMessage}
       />
 
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} className="border-border text-primary-foreground hover:bg-muted">
+      <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
           Cancel
         </Button>
-        <Button type="submit" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+        <Button type="submit" className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
           Post Request
         </Button>
       </div>

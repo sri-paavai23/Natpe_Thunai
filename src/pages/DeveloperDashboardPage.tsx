@@ -224,7 +224,7 @@ const DeveloperDashboardPage = () => {
             {transactions.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">No transactions found.</p>
             ) : (
-              <Table>
+              <Table className="min-w-[800px]"> {/* Ensure minimum width for table scroll */}
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-foreground">Product</TableHead>
@@ -260,7 +260,7 @@ const DeveloperDashboardPage = () => {
                             size="sm"
                             onClick={() => handleProcessPayment(tx)}
                             disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
                           >
                             Process Commission
                           </Button>
@@ -271,7 +271,7 @@ const DeveloperDashboardPage = () => {
                             size="sm"
                             onClick={() => handlePaySeller(tx)}
                             disabled={loading}
-                            className="w-full bg-green-600 hover:bg-green-700 text-white"
+                            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs"
                           >
                             Pay Seller
                           </Button>

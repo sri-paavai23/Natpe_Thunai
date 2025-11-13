@@ -266,7 +266,7 @@ const ProductDetailsPage = () => {
                 <p className="text-sm text-muted-foreground">{product.condition}</p>
               </div>
             )}
-            <div className="flex gap-2 mt-4">
+            <div className="flex flex-col sm:flex-row gap-2 mt-4">
               <Button
                 className="flex-1 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
                 onClick={() => handlePayment(product.type === "rent" ? "rent" : "buy")}

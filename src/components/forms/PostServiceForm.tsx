@@ -48,8 +48,8 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-      <div>
-        <Label htmlFor="title" className="text-foreground">{isCustomOrder ? "Custom Order Title" : "Service Title"}</Label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="title" className="text-left sm:text-right text-foreground">{isCustomOrder ? "Custom Order Title" : "Service Title"}</Label>
         <Input
           id="title"
           value={title}
@@ -59,8 +59,8 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
           required
         />
       </div>
-      <div>
-        <Label htmlFor="description" className="text-foreground">{isCustomOrder ? "Brief Description" : "Description"}</Label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="description" className="text-left sm:text-right text-foreground">{isCustomOrder ? "Brief Description" : "Description"}</Label>
         <Textarea
           id="description"
           value={description}
@@ -71,8 +71,8 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
         />
       </div>
       {isCustomOrder && (
-        <div>
-          <Label htmlFor="customOrderDescription" className="text-foreground">Detailed Customization (Optional)</Label>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+          <Label htmlFor="customOrderDescription" className="text-left sm:text-right text-foreground">Detailed Customization (Optional)</Label>
           <Textarea
             id="customOrderDescription"
             value={customOrderDescription}
@@ -80,13 +80,13 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
             className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
             placeholder="e.g., Specific ingredients, dietary restrictions, preparation methods, or remedy components."
           />
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-1 col-span-4 sm:col-start-2">
             Provide detailed instructions for your custom food or wellness remedy.
           </p>
         </div>
       )}
-      <div>
-        <Label htmlFor="category" className="text-foreground">Category</Label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="category" className="text-left sm:text-right text-foreground">Category</Label>
         <Select value={category} onValueChange={setCategory} required>
           <SelectTrigger className="col-span-3 w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
             <SelectValue placeholder="Select a category" />
@@ -102,8 +102,8 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <Label htmlFor="price" className="text-foreground">{isCustomOrder ? "Proposed Budget" : "Price/Fee"}</Label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="price" className="text-left sm:text-right text-foreground">{isCustomOrder ? "Proposed Budget" : "Price/Fee"}</Label>
         <Input
           id="price"
           value={price}

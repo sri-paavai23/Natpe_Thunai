@@ -117,7 +117,7 @@ const PoliciesPage = () => {
               {dialogContent.description}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 text-foreground" dangerouslySetInnerHTML={{ __html: dialogContent.fullText }} />
+          <div className="py-4 text-foreground prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: dialogContent.fullText }} />
         </DialogContent>
       </Dialog>
     </div>

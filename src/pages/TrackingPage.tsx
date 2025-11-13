@@ -207,15 +207,15 @@ const TrackingPage = () => {
                   <div className="flex-shrink-0 mt-1">
                     {getIcon(item.type)}
                   </div>
-                  <div className="flex-grow">
-                    <p className="font-medium text-foreground">{item.description}</p>
+                  <div className="flex-grow min-w-0">
+                    <p className="font-medium text-foreground truncate">{item.description}</p>
                     {item.type === "Transaction" && (
                       <>
                         <p className="text-sm text-muted-foreground">Amount: ₹{item.amount?.toFixed(2)}</p>
                         {item.buyerId === user?.$id ? (
-                          <p className="text-xs text-muted-foreground">You are the buyer. Seller: {item.sellerName || "N/A"}</p>
+                          <p className="text-xs text-muted-foreground truncate">You are the buyer. Seller: {item.sellerName || "N/A"}</p>
                         ) : (
-                          <p className="text-xs text-muted-foreground">You are the seller. Buyer: {item.buyerId || "N/A"}</p>
+                          <p className="text-xs text-muted-foreground truncate">You are the seller. Buyer: {item.buyerId || "N/A"}</p>
                         )}
                         {item.status === "Initiated" && (
                           <p className="text-xs text-yellow-500">Awaiting payment confirmation from developer.</p>

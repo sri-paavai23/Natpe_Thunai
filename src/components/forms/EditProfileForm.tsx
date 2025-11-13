@@ -93,7 +93,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label htmlFor="firstName" className="text-left sm:text-right text-foreground">
           First Name
         </Label>
@@ -105,7 +105,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
           required
         />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label htmlFor="lastName" className="text-left sm:text-right text-foreground">
           Last Name
         </Label>
@@ -117,7 +117,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
           required
         />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label htmlFor="age" className="text-left sm:text-right text-foreground">
           Age
         </Label>
@@ -131,7 +131,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
           required
         />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label htmlFor="mobileNumber" className="text-left sm:text-right text-foreground">
           Mobile Number
         </Label>
@@ -144,7 +144,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
           required
         />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label htmlFor="upiId" className="text-left sm:text-right text-foreground">
           UPI ID
         </Label>
@@ -159,7 +159,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
       </div>
 
       {/* Gender Selection */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label className="text-left sm:text-right text-foreground">Gender</Label>
         <RadioGroup value={gender} onValueChange={(value: "male" | "female" | "prefer-not-to-say") => setGender(value)} className="col-span-3 flex flex-wrap gap-4">
           <div className="flex items-center space-x-2">
@@ -178,7 +178,7 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
       </div>
 
       {/* User Type Selection */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 sm:gap-4 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label className="text-left sm:text-right text-foreground">User Type</Label>
         <RadioGroup value={userType} onValueChange={(value: "student" | "staff") => setUserType(value)} className="col-span-3 flex flex-wrap gap-4">
           <div className="flex items-center space-x-2">
@@ -192,11 +192,11 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
         </RadioGroup>
       </div>
 
-      <DialogFooter className="pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={loading} className="border-border text-primary-foreground hover:bg-muted">
+      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={loading} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
           Cancel
         </Button>
-        <Button type="submit" disabled={loading} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+        <Button type="submit" disabled={loading} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
           {loading ? "Saving..." : "Save Changes"}
         </Button>
       </DialogFooter>
