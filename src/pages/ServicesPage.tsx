@@ -18,6 +18,10 @@ const ServicesPage = () => {
   const isAgeGated = userAge >= 25; 
 
   const handleServiceClick = (path: string, serviceName: string) => {
+    if (isAgeGated && (path === "/services/errands" || path === "/services/short-term")) {
+      toast.error(`Access denied: "${serviceName}" is not available for users aged 25 and above.`);
+      return;
+    }
     toast.info(`Navigating to "${serviceName}"...`);
     navigate(path);
   };
@@ -47,35 +51,31 @@ const ServicesPage = () => {
           </CardContent>
         </Card>
 
-        {isAgeGated ? (
-          <Card className="bg-card p-4 rounded-lg shadow-md border border-border opacity-70 cursor-not-allowed">
-            <CardHeader className="p-0 pb-2">
-              <CardTitle className="text-xl font-semibold text-card-foreground">Errands & Short-Term Needs</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <p className="text-muted-foreground">This section is not available for users aged 25 and above.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/errands", "Errands")}>
-              <CardHeader className="p-0 pb-2">
-                <CardTitle className="text-xl font-semibold text-card-foreground">Errands</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <p className="text-muted-foreground">Note-writing, small jobs, delivery services (Age-Gated).</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/short-term", "Short-Term Needs")}>
-              <CardHeader className="p-0 pb-2">
-                <CardTitle className="text-xl font-semibold text-card-foreground">Short-Term Needs</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <p className="text-muted-foreground">Instant requests with extra charges for urgent tasks (Age-Gated).</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
+        {/* Errands Card (Age Gated) */}
+        <Card 
+          className={`bg-card p-4 rounded-lg shadow-md border border-border transition-shadow ${isAgeGated ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-xl'}`} 
+          onClick={() => handleServiceClick("/services/errands", "Errands")}
+        >
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Errands</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Note-writing, small jobs, delivery services {isAgeGated ? "(Access Denied)" : "(Age-Gated)"}.</p>
+          </CardContent>
+        </Card>
+
+        {/* Short-Term Needs Card (Age Gated) */}
+        <Card 
+          className={`bg-card p-4 rounded-lg shadow-md border border-border transition-shadow ${isAgeGated ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-xl'}`} 
+          onClick={() => handleServiceClick("/services/short-term", "Short-Term Needs")}
+        >
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Short-Term Needs</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Instant requests with extra charges for urgent tasks {isAgeGated ? "(Access Denied)" : "(Age-Gated)"}.</p>
+          </CardContent>
+        </Card>
 
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/food-wellness", "Food & Wellness")}>
           <CardHeader className="p-0 pb-2">
