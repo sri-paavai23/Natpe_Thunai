@@ -11,10 +11,8 @@ import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avata
 const ProfileWidget = () => {
   const { user, userProfile } = useAuth();
 
-  // Prioritize userProfile's first and last name, then Appwrite user name, then fallback
-  const displayName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`
-    : user?.name || "CampusExplorer";
+  // Use the public username (user.name) for display everywhere except private profile page
+  const displayName = user?.name || "CampusExplorer";
   
   const userLevel = 5; // Placeholder, assuming level is not in Appwrite profile yet
   const currentXp = 75; // Placeholder

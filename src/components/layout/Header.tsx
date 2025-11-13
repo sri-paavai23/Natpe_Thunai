@@ -56,10 +56,8 @@ const Header = () => {
   const title = getPageTitle(location.pathname);
   const { user, userProfile } = useAuth();
 
-  // Prioritize userProfile's first and last name, then Appwrite user name, then fallback
-  const displayName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`
-    : user?.name || "Guest";
+  // Use the public username (user.name) for display
+  const displayName = user?.name || "Guest";
   
   const avatarUrl = generateAvatarUrl(
     displayName,

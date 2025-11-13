@@ -17,9 +17,10 @@ const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  // Use actual user data if available, otherwise fall back to placeholders
-  const userName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : (user?.name || "CampusExplorer");
-  const userEmail = user?.email || "campusexplorer@example.com";
+  // Use the public username (user.name) for the main display name and avatar seed
+  const publicUsername = user?.name || "CampusExplorer";
+  const userEmail = user?.email || "N/A"; // Define userEmail here
+  
   const userLevel = 5; // Placeholder, assuming level is not in Appwrite profile yet
   const currentXp = 75; // Placeholder
   const maxXp = 100; // Placeholder
@@ -29,7 +30,7 @@ const ProfileDetailsPage = () => {
   const badges = ["Top Seller", "Early Adopter"];
 
   const avatarUrl = generateAvatarUrl(
-    userName,
+    publicUsername,
     userProfile?.gender || "prefer-not-to-say",
     userProfile?.userType || "student"
   );
@@ -65,13 +66,13 @@ const ProfileDetailsPage = () => {
           <CardContent className="p-4 pt-0 space-y-4">
             <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-4 text-center sm:text-left">
               <Avatar className="h-20 w-20 border-2 border-secondary-neon">
-                <AvatarImage src={avatarUrl} alt={userName} />
+                <AvatarImage src={avatarUrl} alt={publicUsername} />
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  {userName.charAt(0)}
+                  {publicUsername.charAt(0)}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="text-2xl font-bold text-foreground">{userName}</h3>
+                <h3 className="text-2xl font-bold text-foreground">{publicUsername}</h3>
                 <p className="text-sm text-muted-foreground">{userEmail}</p>
                 {isVerified && (
                   <Badge className="mt-1 bg-blue-500 text-white flex items-center gap-1 w-fit mx-auto sm:mx-0">
@@ -113,6 +114,7 @@ const ProfileDetailsPage = () => {
             )}
             {userProfile && (
               <div className="space-y-2 pt-4 border-t border-border">
+                <h4 className="text-lg font-semibold text-foreground">Private Details (Visible to Developers)</h4>
                 <p className="text-sm text-muted-foreground">First Name: <span className="font-semibold text-foreground">{userProfile.firstName}</span></p>
                 <p className="text-sm text-muted-foreground">Last Name: <span className="font-semibold text-foreground">{userProfile.lastName}</span></p>
                 <p className="text-sm text-muted-foreground">Age: <span className="font-semibold text-foreground">{userProfile.age}</span></p>

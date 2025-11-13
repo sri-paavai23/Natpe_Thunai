@@ -10,7 +10,7 @@ import { Trophy, Calendar, DollarSign, Users, Gamepad2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import TournamentRegistrationForm from "@/components/forms/TournamentRegistrationForm.tsx"; // Import the new form with .tsx extension
+import DetailedTournamentRegistrationForm from "@/components/forms/DetailedTournamentRegistrationForm"; // Use the new form
 
 interface Tournament {
   id: string;
@@ -57,9 +57,9 @@ const TournamentPage = () => {
     setIsRegisterDialogOpen(true);
   };
 
-  const handleRegistrationSubmit = (data: { teamName: string; contactEmail: string; numPlayers: string }) => {
+  const handleRegistrationSubmit = (data: { teamName: string; contactEmail: string; players: { name: string; inGameId: string }[] }) => {
     if (!selectedTournament) return;
-    toast.success(`Successfully registered "${data.teamName}" for ${selectedTournament.name}!`);
+    toast.success(`Successfully registered "${data.teamName}" (${data.players.length} players) for ${selectedTournament.name}!`);
     // In a real app, send data to backend, handle payment, etc.
     setIsRegisterDialogOpen(false);
   };
@@ -173,12 +173,12 @@ const TournamentPage = () => {
 
       {/* Registration Dialog */}
       <Dialog open={isRegisterDialogOpen} onOpenChange={setIsRegisterDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-foreground">Register for {selectedTournament?.name}</DialogTitle>
           </DialogHeader>
           {selectedTournament && (
-            <TournamentRegistrationForm
+            <DetailedTournamentRegistrationForm
               tournamentName={selectedTournament.name}
               gameName={selectedTournament.game}
               onRegister={handleRegistrationSubmit}
