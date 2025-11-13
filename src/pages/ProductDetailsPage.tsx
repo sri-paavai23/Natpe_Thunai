@@ -38,6 +38,14 @@ interface Product {
   sellerUpiId?: string;
 }
 
+// Simulated Blocked Word List (In a real app, this would come from an API/Database)
+const BLOCKED_WORDS = ["badword", "spam", "scam", "fraud", "abuse", "hate"];
+
+const containsBlockedWords = (text: string): boolean => {
+  const lowerText = text.toLowerCase();
+  return BLOCKED_WORDS.some(word => lowerText.includes(word));
+};
+
 const ProductDetailsPage = () => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
@@ -200,6 +208,10 @@ const ProductDetailsPage = () => {
 
   const handleSendFeedback = () => {
     if (feedbackText.trim()) {
+      if (containsBlockedWords(feedbackText)) {
+        toast.error("Your feedback contains blocked words. Please revise.");
+        return;
+      }
       toast.success(`Feedback sent for "${product.title}": "${feedbackText}"`);
       setFeedbackText("");
     } else {
@@ -209,6 +221,10 @@ const ProductDetailsPage = () => {
 
   const handleSendReport = () => {
     if (reportText.trim()) {
+      if (containsBlockedWords(reportText)) {
+        toast.error("Your report contains blocked words. Please revise.");
+        return;
+      }
       toast.success(`Report sent for "${product.title}": "${reportText}"`);
       setReportText("");
     } else {
@@ -342,6 +358,9 @@ const ProductDetailsPage = () => {
                 <Flag className="mr-2 h-4 w-4" /> Submit Report
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Note: Content is checked against a list of blocked words to maintain community safety.
+            </p>
           </CardContent>
         </Card>
       </div>
