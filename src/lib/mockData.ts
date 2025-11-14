@@ -9,6 +9,7 @@ export interface Product {
   description: string;
   sellerId: string;
   sellerName: string;
+  sellerUpiId: string; // Added UPI ID
   damages?: string;
   location: string;
   isDeveloper?: boolean;
@@ -26,6 +27,7 @@ export const dummyProducts: Product[] = [
     description: "A classic film camera in excellent condition.",
     sellerId: "user123",
     sellerName: "Alex P.",
+    sellerUpiId: "seller123@upi",
     location: "Campus East"
   },
   { 
@@ -38,6 +40,7 @@ export const dummyProducts: Product[] = [
     description: "Durable, stylish wallet crafted from genuine leather.",
     sellerId: "user456",
     sellerName: "Maria K.",
+    sellerUpiId: "seller456@upi",
     location: "Dormitory B"
   },
   { 
@@ -50,6 +53,7 @@ export const dummyProducts: Product[] = [
     description: "Freshly roasted single-origin beans, free for pickup.",
     sellerId: "user789",
     sellerName: "Sam L.",
+    sellerUpiId: "seller789@upi",
     location: "Library Cafe"
   },
   { 
@@ -62,6 +66,7 @@ export const dummyProducts: Product[] = [
     description: "High-quality mountain bike available for daily rental.",
     sellerId: "user001",
     sellerName: "Chris R.",
+    sellerUpiId: "seller001@upi",
     location: "Sports Center"
   },
   { 
@@ -74,6 +79,7 @@ export const dummyProducts: Product[] = [
     description: "Handmade bracelet with custom color options.",
     sellerId: "user101",
     sellerName: "Priya S.",
+    sellerUpiId: "seller101@upi",
     location: "Arts Block"
   },
   { 
@@ -86,6 +92,7 @@ export const dummyProducts: Product[] = [
     description: "Willow cricket bat, lightly used for one season.",
     sellerId: "user202",
     sellerName: "Ravi V.",
+    sellerUpiId: "seller202@upi",
     location: "Hostel C"
   },
 ];

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Product } from "@/lib/mockData"; // Import Product interface
 import { Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom'; // Import Link
 
 interface ProductListingCardProps {
   product: Product;
@@ -13,7 +14,7 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product, onDeve
   const isDeveloper = product.isDeveloper && onDeveloperDelete;
 
   return (
-    <Card className="flex flex-col h-full relative">
+    <Card className="flex flex-col h-full relative hover:shadow-xl transition-shadow">
       {isDeveloper && (
         <Button 
           variant="destructive" 
@@ -24,19 +25,26 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product, onDeve
           <Trash2 className="h-4 w-4" />
         </Button>
       )}
-      <CardHeader>
-        <CardTitle>{product.title}</CardTitle>
-        <CardDescription>{product.price}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex-grow">
-        <p className="text-sm text-gray-600">{product.description}</p>
-        <div className="mt-2 text-xs text-gray-500">
-          Seller: {product.sellerName} ({product.sellerRating} stars)
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button className="w-full">View Details</Button>
-      </CardFooter>
+      <Link to={`/market/product/${product.$id}`} className="flex flex-col h-full">
+        <CardHeader>
+          <CardTitle>{product.title}</CardTitle>
+          <CardDescription>{product.price}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex-grow">
+          <img 
+            src={product.imageUrl || "/app-logo.png"} 
+            alt={product.title} 
+            className="w-full h-32 object-cover rounded-md mb-2"
+          />
+          <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
+          <div className="mt-2 text-xs text-gray-500">
+            Seller: {product.sellerName} ({product.sellerRating} stars)
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button className="w-full">View Details</Button>
+        </CardFooter>
+      </Link>
     </Card>
   );
 };
