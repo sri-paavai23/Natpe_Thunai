@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ProductListingCard from "@/components/ProductListingCard";
-import { dummyProducts, Product } from "@/lib/mockData"; // Import Product interface and dummy data
+import { Product } from "@/lib/mockData"; // Import Product interface
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMarketListings } from '@/hooks/useMarketListings'; // Import the new hook
 
 // Helper function to filter products by type
 const filterProducts = (products: Product[], type: Product['type'] | 'all'): Product[] => {
@@ -21,18 +22,9 @@ interface MarketTabsProps {
 
 const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
   const [activeTab, setActiveTab] = useState<Product['type'] | 'all'>(initialTab);
-  const [isLoading, setIsLoading] = useState(true);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const { products, isLoading, error } = useMarketListings(); // Use the hook
 
-  useEffect(() => {
-    // Simulate data fetching
-    setTimeout(() => {
-      setAllProducts(dummyProducts);
-      setIsLoading(false);
-    }, 500);
-  }, []);
-
-  const items = filterProducts(allProducts, activeTab);
+  const items = filterProducts(products, activeTab);
 
   const renderContent = () => {
     if (isLoading) {
@@ -43,6 +35,10 @@ const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
           ))}
         </div>
       );
+    }
+    
+    if (error) {
+        return <p className="p-4 text-center text-destructive">Error loading listings: {error}</p>;
     }
 
     if (items.length === 0) {

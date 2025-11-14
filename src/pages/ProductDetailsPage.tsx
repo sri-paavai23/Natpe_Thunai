@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ID, Query } from 'appwrite';
-import { dummyProducts, Product } from "@/lib/mockData";
+import { ID, Query, Models } from 'appwrite'; // Import Models
+import { Product } from "@/lib/mockData"; // Import Product interface
 import { containsBlockedWords } from "@/lib/moderation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, MapPin, Star, DollarSign, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from '@/lib/appwrite';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
 import { calculateCommissionRate } from '@/utils/commission'; // Import commission calculator
 
 // Developer UPI ID for all payments (as per DeveloperChatbox.tsx)
@@ -27,18 +27,36 @@ export default function ProductDetailsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    setIsLoading(true);
-    setError(null);
+    const fetchProduct = async () => {
+      if (!productId) {
+        setError("Invalid product ID.");
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const doc = await databases.getDocument(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_PRODUCTS_COLLECTION_ID,
+          productId
+        ) as unknown as Product;
+        setProduct(doc);
+      } catch (err: any) {
+        console.error("Error fetching product:", err);
+        setError("Product not found or failed to load.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProduct();
     
-    const foundProduct = dummyProducts.find(p => p.$id === productId);
-    
-    if (foundProduct) {
-      setProduct(foundProduct);
-    } else {
-      setError("Product not found.");
-    }
-    
-    setIsLoading(false);
+    // Optional: Add real-time subscription for this specific product if needed, 
+    // but for details page, a single fetch is often sufficient unless status changes frequently.
+    // We will skip the subscription here to keep it simple, relying on the user to refresh.
+
   }, [productId]);
 
   const handleInitiatePayment = async (isBargain: boolean = false) => {
@@ -47,6 +65,8 @@ export default function ProductDetailsPage() {
       navigate("/auth");
       return;
     }
+    if (!product) return;
+
     if (user.$id === product.sellerId) {
       toast.error("You cannot buy/rent your own listing.");
       return;

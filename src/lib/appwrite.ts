@@ -28,5 +28,5 @@ export const APPWRITE_COLLEGE_ID_BUCKET_ID = import.meta.env.VITE_APPWRITE_COLLE
 export const APPWRITE_PRODUCTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_PRODUCTS_COLLECTION_ID || 'products';
 export const APPWRITE_TRANSACTIONS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_TRANSACTIONS_COLLECTION_ID || 'transactions'; // New export
 export const APPWRITE_CANTEEN_COLLECTION_ID = import.meta.env.VITE_APPWRITE_CANTEEN_COLLECTION_ID || 'canteen_data'; // New export
-
+export const APPWRITE_CASH_EXCHANGE_COLLECTION_ID = import.meta.env.VITE_APPWRITE_CASH_EXCHANGE_COLLECTION_ID || 'cash_exchange'; // New export
 export default client;

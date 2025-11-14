@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,105 +8,293 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, Handshake, PlusCircle, Users } from "lucide-react";
+import { DollarSign, Handshake, PlusCircle, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_CASH_EXCHANGE_COLLECTION_ID } from "@/lib/appwrite";
+import { ID, Models, Query } from "appwrite";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 
-interface CashExchangeRequest {
-  id: string;
-  type: "request" | "offer" | "group-contribution"; // Added group-contribution type
+interface Contribution {
+  userId: string;
+  amount: number;
+}
+
+interface CashExchangeRequest extends Models.Document {
+  type: "request" | "offer" | "group-contribution";
   amount: number;
   commission: number;
   notes: string;
   status: "Open" | "Accepted" | "Completed" | "Group Contribution";
-  date: string;
-  meetingLocation?: string;
-  meetingTime?: string;
-  contributions?: { userId: string; amount: number }[];
+  meetingLocation: string;
+  meetingTime: string;
+  contributions?: Contribution[];
+  posterId: string; // ID of the user who posted the request/offer
+  posterName: string; // Name of the user who posted
 }
 
-const dummyRequests: CashExchangeRequest[] = [
-  { id: "ce1", type: "request", amount: 1000, commission: 30, notes: "Need cash for books.", status: "Open", date: "2024-07-22", meetingLocation: "Library Entrance", meetingTime: "Tomorrow 3 PM" },
-  { id: "ce2", type: "offer", amount: 500, commission: 15, notes: "Can provide cash instantly.", status: "Open", date: "2024-07-21", meetingLocation: "Canteen", meetingTime: "Today 1 PM" },
-  { id: "ce3", type: "request", amount: 2000, commission: 60, notes: "Urgent need for hostel fees.", status: "Accepted", date: "2024-07-20", meetingLocation: "Hostel Block A Lobby", meetingTime: "Yesterday 6 PM" },
-  { id: "ce4", type: "group-contribution", amount: 3000, commission: 90, notes: "Group contribution for project funds.", status: "Group Contribution", date: "2024-07-23", meetingLocation: "CS Dept. Lab", meetingTime: "Friday 10 AM", contributions: [{ userId: "user1", amount: 1000 }, { userId: "user2", amount: 500 }] },
-];
-
 const CashExchangePage = () => {
-  const [activeTab, setActiveTab] = useState<"requests" | "offers" | "group-contributions">("requests"); // Updated activeTab options
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<"requests" | "offers" | "group-contributions">("requests");
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
-  const [postType, setPostType] = useState<"request" | "offer" | "group-contribution">("request"); // Updated postType options
+  const [postType, setPostType] = useState<"request" | "offer" | "group-contribution">("request");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [meetingLocation, setMeetingLocation] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
+  const [isPosting, setIsPosting] = useState(false);
 
-  const handlePostSubmit = (e: React.FormEvent) => {
+  const COMMISSION_RATE = 0.03; // 3% commission
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
+        [Query.orderDesc('$createdAt')]
+      );
+      setExchangeRequests(response.documents as unknown as CashExchangeRequest[]);
+    } catch (error) {
+      console.error("Error fetching cash exchange data:", error);
+      toast.error("Failed to load cash exchange listings.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRequests();
+
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CASH_EXCHANGE_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as CashExchangeRequest;
+
+        setExchangeRequests(prev => {
+          const existingIndex = prev.findIndex(r => r.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New cash exchange post: ${payload.type} for ₹${payload.amount}`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Cash exchange updated: ${payload.type} status is now ${payload.status}`);
+              return prev.map(r => r.$id === payload.$id ? payload : r);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Cash exchange post removed.`);
+              return prev.filter(r => r.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchRequests]);
+
+
+  const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      toast.error("You must be logged in to post.");
+      return;
+    }
+
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       toast.error("Please enter a valid amount.");
       return;
     }
-    if (!notes.trim()) {
-      toast.error("Please add some notes for your post.");
-      return;
-    }
-    if (!meetingLocation.trim() || !meetingTime.trim()) {
-      toast.error("Please specify meeting location and time.");
+    if (!notes.trim() || !meetingLocation.trim() || !meetingTime.trim()) {
+      toast.error("Please fill in all required fields.");
       return;
     }
 
-    const newRequest: CashExchangeRequest = {
-      id: `ce${dummyRequests.length + 1}`,
-      type: postType,
-      amount: parsedAmount,
-      commission: parsedAmount * 0.03, // 3% commission for example
-      notes: notes.trim(),
-      status: postType === "group-contribution" ? "Group Contribution" : "Open", // Set status based on type
-      date: new Date().toISOString().split('T')[0],
-      meetingLocation: meetingLocation.trim(),
-      meetingTime: meetingTime.trim(),
-      contributions: postType === "group-contribution" ? [] : undefined, // Initialize contributions for group type
-    };
-    dummyRequests.unshift(newRequest); // Add to the beginning for visibility
-    toast.success(`Your ${postType.replace('-', ' ')} for ₹${parsedAmount} has been posted!`);
-    setIsPostDialogOpen(false);
-    setAmount("");
-    setNotes("");
-    setMeetingLocation("");
-    setMeetingTime("");
-    setActiveTab(postType === "offer" ? "offers" : (postType === "group-contribution" ? "group-contributions" : "requests"));
-  };
+    setIsPosting(true);
+    try {
+      const newRequestData = {
+        type: postType,
+        amount: parsedAmount,
+        commission: parsedAmount * COMMISSION_RATE,
+        notes: notes.trim(),
+        status: postType === "group-contribution" ? "Group Contribution" : "Open",
+        meetingLocation: meetingLocation.trim(),
+        meetingTime: meetingTime.trim(),
+        contributions: postType === "group-contribution" ? [] : undefined,
+        posterId: user.$id,
+        posterName: user.name,
+      };
 
-  const handleAcceptDeal = (id: string) => {
-    const request = dummyRequests.find(r => r.id === id);
-    if (request) {
-      request.status = "Accepted";
-      toast.success(`Deal accepted for ${request.type} of ₹${request.amount}!`);
-      // In a real app, this would initiate a transaction process
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
+        ID.unique(),
+        newRequestData
+      );
+
+      toast.success(`Your ${postType.replace('-', ' ')} for ₹${parsedAmount} has been posted!`);
+      setIsPostDialogOpen(false);
+      setAmount("");
+      setNotes("");
+      setMeetingLocation("");
+      setMeetingTime("");
+      setActiveTab(postType === "offer" ? "offers" : (postType === "group-contribution" ? "group-contributions" : "requests"));
+    } catch (error: any) {
+      console.error("Error posting cash exchange:", error);
+      toast.error(error.message || "Failed to post cash exchange request.");
+    } finally {
+      setIsPosting(false);
     }
   };
 
-  const handleContribute = (id: string, currentContribution: number) => {
-    const request = dummyRequests.find(r => r.id === id);
-    if (request && request.status === "Group Contribution") {
-      const newContribution = 500; // Example fixed contribution amount
-      const remaining = request.amount - currentContribution;
-      if (remaining <= 0) {
-        toast.error("This group contribution is already fully funded.");
-        return;
-      }
-      const actualContribution = Math.min(newContribution, remaining);
-      
-      if (!request.contributions) {
-        request.contributions = [];
-      }
-      request.contributions.push({ userId: "currentUser", amount: actualContribution }); // Simulate current user
+  const handleAcceptDeal = async (request: CashExchangeRequest) => {
+    if (request.posterId === user?.$id) {
+      toast.error("You cannot accept your own deal.");
+      return;
+    }
+    if (request.status !== "Open") {
+      toast.error("This deal is no longer open.");
+      return;
+    }
+
+    try {
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
+        request.$id,
+        { status: "Accepted" }
+      );
+      toast.success(`Deal accepted for ${request.type} of ₹${request.amount}! Please arrange meeting.`);
+    } catch (error: any) {
+      console.error("Error accepting deal:", error);
+      toast.error(error.message || "Failed to accept deal.");
+    }
+  };
+
+  const handleContribute = async (request: CashExchangeRequest) => {
+    if (request.posterId === user?.$id) {
+      toast.error("You cannot contribute to your own request.");
+      return;
+    }
+    if (request.status !== "Group Contribution") {
+      toast.error("This is not an active group contribution request.");
+      return;
+    }
+    if (!user) return;
+
+    const contributionAmount = 500; // Example fixed contribution amount
+    const currentContribution = request.contributions?.reduce((sum, c) => sum + c.amount, 0) || 0;
+    const remainingAmount = request.amount - currentContribution;
+
+    if (remainingAmount <= 0) {
+      toast.error("This group contribution is already fully funded.");
+      return;
+    }
+    
+    const actualContribution = Math.min(contributionAmount, remainingAmount);
+    
+    // Check if user already contributed (optional, but good practice)
+    if (request.contributions?.some(c => c.userId === user.$id)) {
+        toast.warning("You have already contributed to this request.");
+        // For simplicity, we allow multiple contributions until fully funded, but warn.
+    }
+
+    const newContributions: Contribution[] = [
+      ...(request.contributions || []),
+      { userId: user.$id, amount: actualContribution }
+    ];
+
+    try {
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
+        request.$id,
+        { contributions: newContributions }
+      );
       toast.success(`You contributed ₹${actualContribution} to this request!`);
-      // In a real app, this would update the backend and notify the requestor
+    } catch (error: any) {
+      console.error("Error contributing:", error);
+      toast.error(error.message || "Failed to record contribution.");
     }
+  };
+
+  const renderListings = (type: CashExchangeRequest["type"]) => {
+    const filteredRequests = exchangeRequests.filter(r => r.type === type);
+
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+          <p className="ml-3 text-muted-foreground">Loading listings...</p>
+        </div>
+      );
+    }
+
+    if (filteredRequests.length === 0) {
+      return <p className="text-center text-muted-foreground py-4">No {type.replace('-', ' ')} posts yet.</p>;
+    }
+
+    return filteredRequests.map((req) => {
+      const isPoster = req.posterId === user?.$id;
+      const currentContribution = req.contributions?.reduce((sum, c) => sum + c.amount, 0) || 0;
+      const remainingAmount = req.amount - currentContribution;
+
+      return (
+        <div key={req.$id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
+          <div>
+            <p className="font-semibold text-foreground">
+              ₹{req.amount} 
+              <Badge className={cn("ml-2", 
+                req.type === "request" && "bg-blue-500 text-white",
+                req.type === "offer" && "bg-green-500 text-white",
+                req.type === "group-contribution" && "bg-purple-500 text-white"
+              )}>
+                {req.type === "group-contribution" ? "Group" : req.type.charAt(0).toUpperCase() + req.type.slice(1)}
+              </Badge>
+            </p>
+            <p className="text-sm text-muted-foreground">{req.notes}</p>
+            <p className="text-xs text-muted-foreground">Commission: ₹{req.commission.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">Poster: {isPoster ? "You" : req.posterName}</p>
+            {req.meetingLocation && <p className="text-xs text-muted-foreground">Meet: {req.meetingLocation} at {req.meetingTime}</p>}
+            
+            {req.type === "group-contribution" && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                <Users className="h-3 w-3" /> Contributed: ₹{currentContribution} / ₹{req.amount}
+              </p>
+            )}
+          </div>
+          
+          {/* Action Buttons */}
+          {req.status === "Open" && !isPoster && (
+            <Button size="sm" className="mt-2 sm:mt-0 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" onClick={() => handleAcceptDeal(req)}>
+              Accept Deal
+            </Button>
+          )}
+          {req.status === "Group Contribution" && !isPoster && remainingAmount > 0 && (
+            <Button size="sm" className="mt-2 sm:mt-0 bg-blue-500 text-white hover:bg-blue-600" onClick={() => handleContribute(req)}>
+              Contribute (₹500)
+            </Button>
+          )}
+          {req.status !== "Open" && req.status !== "Group Contribution" && (
+            <Badge className={cn("mt-2 sm:mt-0", req.status === "Accepted" ? "bg-orange-500 text-white" : "bg-green-500 text-white")}>
+              {req.status}
+            </Badge>
+          )}
+        </div>
+      );
+    });
   };
 
   return (
@@ -133,97 +321,30 @@ const CashExchangePage = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "requests" | "offers" | "group-contributions")} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-primary-blue-light text-primary-foreground h-auto"> {/* Updated grid-cols */}
-            <TabsTrigger value="requests" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">My Requests</TabsTrigger>
-            <TabsTrigger value="offers" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">My Offers</TabsTrigger>
-            <TabsTrigger value="group-contributions" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Group Contributions</TabsTrigger> {/* New tab */}
+          <TabsList className="grid w-full grid-cols-3 bg-primary-blue-light text-primary-foreground h-auto">
+            <TabsTrigger value="requests" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Requests</TabsTrigger>
+            <TabsTrigger value="offers" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Offers</TabsTrigger>
+            <TabsTrigger value="group-contributions" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Group</TabsTrigger>
           </TabsList>
           <div className="mt-4 space-y-4">
             <TabsContent value="requests">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 space-y-3">
-                  {dummyRequests.filter(r => r.type === "request").length > 0 ? (
-                    dummyRequests.filter(r => r.type === "request").map((req) => (
-                      <div key={req.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
-                        <div>
-                          <p className="font-semibold text-foreground">₹{req.amount} <Badge className="ml-2 bg-blue-500 text-white">Request</Badge></p>
-                          <p className="text-sm text-muted-foreground">{req.notes}</p>
-                          <p className="text-xs text-muted-foreground">Commission: ₹{req.commission.toFixed(2)}</p>
-                          {req.meetingLocation && <p className="text-xs text-muted-foreground">Meet: {req.meetingLocation} at {req.meetingTime}</p>}
-                        </div>
-                        {req.status === "Open" ? (
-                          <Button size="sm" className="mt-2 sm:mt-0 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" onClick={() => handleAcceptDeal(req.id)}>
-                            Accept Deal
-                          </Button>
-                        ) : (
-                          <Badge className="mt-2 sm:mt-0 bg-green-500 text-white">{req.status}</Badge>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-center text-muted-foreground py-4">No cash requests posted yet.</p>
-                  )}
+                  {renderListings("request")}
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="offers">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 space-y-3">
-                  {dummyRequests.filter(r => r.type === "offer").length > 0 ? (
-                    dummyRequests.filter(r => r.type === "offer").map((offer) => (
-                      <div key={offer.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
-                        <div>
-                          <p className="font-semibold text-foreground">₹{offer.amount} <Badge className="ml-2 bg-green-500 text-white">Offer</Badge></p>
-                          <p className="text-sm text-muted-foreground">{offer.notes}</p>
-                          <p className="text-xs text-muted-foreground">Commission: ₹{offer.commission.toFixed(2)}</p>
-                          {offer.meetingLocation && <p className="text-xs text-muted-foreground">Meet: {offer.meetingLocation} at {offer.meetingTime}</p>}
-                        </div>
-                        {offer.status === "Open" ? (
-                          <Button size="sm" className="mt-2 sm:mt-0 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" onClick={() => handleAcceptDeal(offer.id)}>
-                            Accept Deal
-                          </Button>
-                        ) : (
-                          <Badge className="mt-2 sm:mt-0 bg-green-500 text-white">{offer.status}</Badge>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-center text-muted-foreground py-4">No cash offers posted yet.</p>
-                  )}
+                  {renderListings("offer")}
                 </CardContent>
               </Card>
             </TabsContent>
-            <TabsContent value="group-contributions"> {/* New tab content */}
+            <TabsContent value="group-contributions">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 space-y-3">
-                  {dummyRequests.filter(r => r.type === "group-contribution").length > 0 ? (
-                    dummyRequests.filter(r => r.type === "group-contribution").map((req) => {
-                      const currentContribution = req.contributions?.reduce((sum, c) => sum + c.amount, 0) || 0;
-                      const remainingAmount = req.amount - currentContribution;
-                      return (
-                        <div key={req.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
-                          <div>
-                            <p className="font-semibold text-foreground">₹{req.amount} <Badge className="ml-2 bg-purple-500 text-white">Group Contribution</Badge></p>
-                            <p className="text-sm text-muted-foreground">{req.notes}</p>
-                            <p className="text-xs text-muted-foreground">Commission: ₹{req.commission.toFixed(2)}</p>
-                            {req.meetingLocation && <p className="text-xs text-muted-foreground">Meet: {req.meetingLocation} at {req.meetingTime}</p>}
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Users className="h-3 w-3" /> Contributed: ₹{currentContribution} / ₹{req.amount}
-                            </p>
-                          </div>
-                          {remainingAmount > 0 ? (
-                            <Button size="sm" className="mt-2 sm:mt-0 bg-blue-500 text-white hover:bg-blue-600" onClick={() => handleContribute(req.id, currentContribution)}>
-                              Contribute (₹500)
-                            </Button>
-                          ) : (
-                            <Badge className="mt-2 sm:mt-0 bg-green-500 text-white">Fully Funded</Badge>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-center text-muted-foreground py-4">No group contribution requests posted yet.</p>
-                  )}
+                  {renderListings("group-contribution")}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -243,7 +364,7 @@ const CashExchangePage = () => {
               <Label htmlFor="postType" className="text-left sm:text-right text-foreground">
                 Type
               </Label>
-              <div className="col-span-3 flex flex-wrap gap-2"> {/* Changed to flex-wrap for better mobile */}
+              <div className="col-span-3 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant={postType === "request" ? "default" : "outline"}
@@ -283,6 +404,7 @@ const CashExchangePage = () => {
                 placeholder="e.g., 1000"
                 min="1"
                 required
+                disabled={isPosting}
               />
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
@@ -296,6 +418,7 @@ const CashExchangePage = () => {
                 className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
                 placeholder="e.g., Need cash for books by tomorrow."
                 required
+                disabled={isPosting}
               />
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
@@ -310,6 +433,7 @@ const CashExchangePage = () => {
                 className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
                 placeholder="e.g., Library Entrance, Canteen"
                 required
+                disabled={isPosting}
               />
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
@@ -324,11 +448,15 @@ const CashExchangePage = () => {
                 className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
                 placeholder="e.g., Tomorrow 3 PM, Today 1 PM"
                 required
+                disabled={isPosting}
               />
             </div>
             <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsPostDialogOpen(false)} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">Cancel</Button>
-              <Button type="submit" className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">Post</Button>
+              <Button type="button" variant="outline" onClick={() => setIsPostDialogOpen(false)} disabled={isPosting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">Cancel</Button>
+              <Button type="submit" disabled={isPosting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+                {isPosting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                Post
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
