@@ -36,7 +36,7 @@ interface Product {
   contact?: string;
   sellerId: string;
   sellerName: string;
-  sellerUpiId?: string;
+  sellerUpiId?: string; // Now included in the interface
 }
 
 const ProductDetailsPage = () => {
@@ -57,27 +57,53 @@ const ProductDetailsPage = () => {
         setLoadingProduct(false);
         return;
       }
+      
+      let fetchedProduct: Product | null = null;
+      let isDummy = false;
+
       try {
-        const fetchedProduct = await databases.getDocument(
+        // 1. Try fetching from Appwrite
+        const doc = await databases.getDocument(
           APPWRITE_DATABASE_ID,
           APPWRITE_PRODUCTS_COLLECTION_ID,
           productId
         );
-        setProduct(fetchedProduct as unknown as Product);
+        fetchedProduct = doc as unknown as Product;
       } catch (error: any) {
         console.error("Error fetching product details from Appwrite:", error);
-        // If Appwrite fetch fails, check if it's a dummy product
+        // 2. Fallback to dummy product
         const foundDummy = dummyProducts.find(p => p.$id === productId);
         if (foundDummy) {
-          setProduct(foundDummy);
+          fetchedProduct = foundDummy;
+          isDummy = true;
           toast.info("Displaying dummy product details.");
         } else {
           toast.error("Failed to load product details. Product not found.");
           setProduct(null);
+          setLoadingProduct(false);
+          return;
         }
-      } finally {
-        setLoadingProduct(false);
       }
+
+      // 3. Ensure seller UPI ID is present (fetch from profile if missing and not dummy)
+      if (fetchedProduct && !fetchedProduct.sellerUpiId && !isDummy) {
+        try {
+          const sellerProfiles = await databases.listDocuments(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_USER_PROFILES_COLLECTION_ID,
+            [Query.equal('userId', fetchedProduct.sellerId)]
+          );
+          if (sellerProfiles.documents.length > 0) {
+            const sellerProfile = sellerProfiles.documents[0] as any;
+            fetchedProduct.sellerUpiId = sellerProfile.upiId;
+          }
+        } catch (profileError) {
+          console.warn("Could not fetch seller UPI ID from profile.", profileError);
+        }
+      }
+
+      setProduct(fetchedProduct);
+      setLoadingProduct(false);
     };
 
     fetchProduct();
@@ -129,8 +155,8 @@ const ProductDetailsPage = () => {
       toast.error("You must be logged in to make a purchase.");
       return;
     }
-    if (!product.sellerId) {
-      toast.error("Seller information is missing for this product.");
+    if (!product.sellerId || !product.sellerUpiId) {
+      toast.error("Seller information (ID or UPI) is missing for this product. Cannot proceed.");
       return;
     }
 
@@ -140,21 +166,9 @@ const ProductDetailsPage = () => {
     const transactionNote = `${action === "buy" ? "Purchase" : "Rent"} of ${product.title} from Natpe🤝Thunai.`;
 
     try {
-      // Fetch seller's profile to get their UPI ID and full name
-      const sellerProfiles = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', product.sellerId)]
-      );
-
-      if (sellerProfiles.documents.length === 0) {
-        toast.error("Seller profile not found. Cannot proceed with transaction.");
-        setIsInitiatingPayment(false);
-        return;
-      }
-      const sellerProfile = sellerProfiles.documents[0] as any;
-      const sellerUpiId = sellerProfile.upiId;
-      const sellerFullName = `${sellerProfile.firstName} ${sellerProfile.lastName}`;
+      // We already have sellerName and sellerUpiId attached to the product object (or fetched it above)
+      const sellerFullName = product.sellerName;
+      const sellerUpiId = product.sellerUpiId;
 
       // Get buyer's full name
       const buyerFullName = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : user.name;
@@ -170,7 +184,7 @@ const ProductDetailsPage = () => {
           buyerName: buyerFullName,
           sellerId: product.sellerId,
           sellerName: sellerFullName,
-          sellerUpiId: sellerUpiId,
+          sellerUpiId: sellerUpiId, // Use the UPI ID fetched/stored with the product
           amount: amount,
           status: "initiated",
           type: action,

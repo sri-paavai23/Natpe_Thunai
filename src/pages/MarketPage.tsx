@@ -42,6 +42,7 @@ interface Product {
   contact?: string;
   sellerId: string; // Made required
   sellerName: string; // Made required
+  sellerUpiId?: string; // New field
 }
 
 type MarketTabValue = "all" | "buy" | "sell" | "rent" | "gifts" | "sports";
@@ -61,6 +62,7 @@ export const dummyProducts: Product[] = [ // Exported dummyProducts
     condition: "Used - Like New",
     sellerId: "userA",
     sellerName: "Priya Sharma",
+    sellerUpiId: "priya.s@upi", // Dummy UPI ID
   },
   {
     $id: "prod102",
@@ -74,6 +76,7 @@ export const dummyProducts: Product[] = [ // Exported dummyProducts
     condition: "Used - Good",
     sellerId: "userB",
     sellerName: "Karthik V.",
+    sellerUpiId: "karthik.v@upi", // Dummy UPI ID
   },
   {
     $id: "prod103",
@@ -89,6 +92,7 @@ export const dummyProducts: Product[] = [ // Exported dummyProducts
     contact: "club.lead@example.com",
     sellerId: "userC",
     sellerName: "Deepa R.",
+    sellerUpiId: "deepa.r@upi", // Dummy UPI ID
   },
   {
     $id: "prod104",
@@ -101,6 +105,7 @@ export const dummyProducts: Product[] = [ // Exported dummyProducts
     condition: "Used - Good",
     sellerId: "userD",
     sellerName: "Arjun K.",
+    sellerUpiId: "arjun.k@upi", // Dummy UPI ID
   },
 ];
 
@@ -202,6 +207,7 @@ const MarketPage = () => {
           sellerBadge: "New Seller", // Default badge
           type: type,
           price: data.price || data.rentPrice || data.budget, // Price can be from different forms
+          sellerUpiId: userProfile.upiId, // Include seller's UPI ID directly from profile
         }
       );
       toast.success(`"${newProduct.title}" listed successfully!`);
