@@ -4,7 +4,7 @@ import React from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import ProfileWidget from "@/components/ProfileWidget";
 import QuickUpdatesBar from "@/components/QuickUpdatesBar";
-import CanteenStatusWidget from "@/components/CanteenStatusWidget";
+import CanteenManagerWidget from "@/components/CanteenManagerWidget";
 import DiscoveryFeed from "@/components/DiscoveryFeed";
 import DailyQuestCard from "@/components/DailyQuestCard";
 import LoginStreakCard from "@/components/LoginStreakCard";
@@ -18,7 +18,7 @@ const HomePage = () => {
 
         <QuickUpdatesBar />
 
-        <CanteenStatusWidget />
+        <CanteenManagerWidget />
 
         <DiscoveryFeed />
 
