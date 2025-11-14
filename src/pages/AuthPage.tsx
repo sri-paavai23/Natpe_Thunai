@@ -138,7 +138,7 @@ const AuthPage = () => {
         }
         
         await account.createVerification(
-          `http://localhost:8080/verify-email`
+          `https://natpe-thunai-g0zzwknin-agaram-acolytes-projects.vercel.app/verify-email`
         );
         toast.info("Verification email sent! Please check your inbox.");
 
