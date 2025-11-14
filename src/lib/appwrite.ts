@@ -1,10 +1,20 @@
 import { Client, Account, Databases, Storage, Functions, ID } from 'appwrite';
 
+const APPWRITE_ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
+const APPWRITE_PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '690f3ae200352dd0534a';
+
+if (!import.meta.env.VITE_APPWRITE_ENDPOINT || !import.meta.env.VITE_APPWRITE_PROJECT_ID) {
+    console.warn("Appwrite environment variables (VITE_APPWRITE_ENDPOINT and VITE_APPWRITE_PROJECT_ID) are missing. Using fallback values.");
+}
+
+console.log(`Appwrite Client Initializing with Endpoint: ${APPWRITE_ENDPOINT} and Project ID: ${APPWRITE_PROJECT_ID}`);
+
+
 const client = new Client();
 
 client
-    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1') // Your Appwrite Endpoint
-    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '690f3ae200352dd0534a'); // Your project ID
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT_ID);
 
 export const account = new Account(client);
 export const databases = new Databases(client);
