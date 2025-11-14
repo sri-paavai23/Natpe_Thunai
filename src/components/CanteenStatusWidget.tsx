@@ -1,69 +1,158 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RefreshCw, UtensilsCrossed, Plus, Trash2 } from "lucide-react";
+import { RefreshCw, UtensilsCrossed, Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_CANTEEN_COLLECTION_ID } from "@/lib/appwrite";
+import { ID, Models } from "appwrite";
 
 interface CanteenItem {
   name: string;
   available: boolean;
 }
 
+interface CanteenData extends Models.Document {
+  isOpen: boolean;
+  items: CanteenItem[];
+}
+
+// We use a fixed ID for the single canteen status document
+const CANTEEN_DOC_ID = "campus_canteen_status";
+
 const CanteenStatusWidget = () => {
-  const [isOpen, setIsOpen] = useState(true); // Canteen status as a toggle
-  const [items, setItems] = useState<CanteenItem[]>([
-    { name: "Samosa", available: true },
-    { name: "Coffee", available: true },
-    { name: "Sandwich", available: false },
-  ]);
+  const [canteenData, setCanteenData] = useState<CanteenData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [newItemName, setNewItemName] = useState("");
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const fetchCanteenData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const doc = await databases.getDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CANTEEN_COLLECTION_ID,
+        CANTEEN_DOC_ID
+      ) as unknown as CanteenData;
+      setCanteenData(doc);
+    } catch (error: any) {
+      if (error.code === 404) {
+        // Document not found, initialize it
+        await initializeCanteenData();
+      } else {
+        console.error("Error fetching canteen data:", error);
+        toast.error("Failed to load canteen status.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const initializeCanteenData = async () => {
+    const initialData = {
+      isOpen: true,
+      items: [
+        { name: "Samosa", available: true },
+        { name: "Coffee", available: true },
+        { name: "Sandwich", available: false },
+      ],
+    };
+    try {
+      const newDoc = await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CANTEEN_COLLECTION_ID,
+        CANTEEN_DOC_ID,
+        initialData
+      ) as unknown as CanteenData;
+      setCanteenData(newDoc);
+      toast.info("Canteen status initialized.");
+    } catch (e) {
+      console.error("Error initializing canteen data:", e);
+      toast.error("Failed to initialize canteen status.");
+    }
+  };
+
+  const updateCanteenData = async (updates: Partial<CanteenData>) => {
+    if (!canteenData) return;
+    setIsUpdating(true);
+    try {
+      const updatedDoc = await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CANTEEN_COLLECTION_ID,
+        CANTEEN_DOC_ID,
+        updates
+      ) as unknown as CanteenData;
+      setCanteenData(updatedDoc);
+      return updatedDoc;
+    } catch (error: any) {
+      console.error("Error updating canteen data:", error);
+      toast.error(error.message || "Failed to update canteen status.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCanteenData();
+  }, [fetchCanteenData]);
 
   const handleRefresh = () => {
     toast.info("Refreshing canteen status...");
-    // Simulate API call for status refresh
-    setTimeout(() => {
-      // For items, we'll keep user-made changes, so refresh won't randomly toggle availability
-      toast.success("Canteen status updated!");
-    }, 1000);
+    fetchCanteenData();
   };
 
   const handleToggleCanteenStatus = (checked: boolean) => {
-    setIsOpen(checked);
+    updateCanteenData({ isOpen: checked });
     toast.success(`Canteen is now ${checked ? "Open" : "Closed"}!`);
   };
 
   const handleToggleAvailability = (index: number) => {
-    setItems(prevItems =>
-      prevItems.map((item, i) =>
-        i === index ? { ...item, available: !item.available } : item
-      )
+    if (!canteenData) return;
+    const newItems = canteenData.items.map((item, i) =>
+      i === index ? { ...item, available: !item.available } : item
     );
+    updateCanteenData({ items: newItems });
     toast.success("Item availability updated!");
   };
 
   const handleAddItem = () => {
+    if (!canteenData) return;
     if (newItemName.trim() === "") {
       toast.error("Food item name cannot be empty.");
       return;
     }
-    setItems(prevItems => [...prevItems, { name: newItemName.trim(), available: true }]);
+    const newItems = [...canteenData.items, { name: newItemName.trim(), available: true }];
+    updateCanteenData({ items: newItems });
     setNewItemName("");
     setIsAddingItem(false);
     toast.success(`"${newItemName.trim()}" added to the menu!`);
   };
 
   const handleRemoveItem = (index: number) => {
-    const removedItemName = items[index].name;
-    setItems(prevItems => prevItems.filter((_, i) => i !== index));
+    if (!canteenData) return;
+    const removedItemName = canteenData.items[index].name;
+    const newItems = canteenData.items.filter((_, i) => i !== index);
+    updateCanteenData({ items: newItems });
     toast.info(`"${removedItemName}" removed from the menu.`);
   };
+
+  if (loading) {
+    return (
+      <Card className="bg-card text-card-foreground shadow-lg border-border p-6 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+        <p className="ml-3 text-muted-foreground">Loading Canteen Status...</p>
+      </Card>
+    );
+  }
+
+  const isOpen = canteenData?.isOpen ?? false;
+  const items = canteenData?.items ?? [];
 
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -72,11 +161,11 @@ const CanteenStatusWidget = () => {
           <UtensilsCrossed className="h-5 w-5 text-secondary-neon" /> Canteen Status
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setIsAddingItem(true)} className="text-muted-foreground hover:text-secondary-neon">
+          <Button variant="ghost" size="icon" onClick={() => setIsAddingItem(true)} className="text-muted-foreground hover:text-secondary-neon" disabled={isUpdating}>
             <Plus className="h-4 w-4" />
             <span className="sr-only">Add Item</span>
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleRefresh} className="text-muted-foreground hover:text-secondary-neon">
+          <Button variant="ghost" size="icon" onClick={handleRefresh} className="text-muted-foreground hover:text-secondary-neon" disabled={isUpdating}>
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh Status</span>
           </Button>
@@ -90,6 +179,7 @@ const CanteenStatusWidget = () => {
             checked={isOpen}
             onCheckedChange={handleToggleCanteenStatus}
             className="data-[state=checked]:bg-secondary-neon data-[state=unchecked]:bg-muted-foreground"
+            disabled={isUpdating}
           />
         </div>
         <ul className="space-y-2 text-sm">
@@ -101,8 +191,9 @@ const CanteenStatusWidget = () => {
                   checked={item.available}
                   onCheckedChange={() => handleToggleAvailability(index)}
                   className="data-[state=checked]:bg-secondary-neon data-[state=unchecked]:bg-muted-foreground"
+                  disabled={isUpdating}
                 />
-                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-destructive hover:bg-destructive/10">
+                <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-destructive hover:bg-destructive/10" disabled={isUpdating}>
                   <Trash2 className="h-4 w-4" />
                   <span className="sr-only">Remove {item.name}</span>
                 </Button>

@@ -27,5 +27,6 @@ export const APPWRITE_USER_PROFILES_COLLECTION_ID = import.meta.env.VITE_APPWRIT
 export const APPWRITE_COLLEGE_ID_BUCKET_ID = import.meta.env.VITE_APPWRITE_COLLEGE_ID_BUCKET_ID || '69100b27002c8fea5167';
 export const APPWRITE_PRODUCTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_PRODUCTS_COLLECTION_ID || 'products';
 export const APPWRITE_TRANSACTIONS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_TRANSACTIONS_COLLECTION_ID || 'transactions'; // New export
+export const APPWRITE_CANTEEN_COLLECTION_ID = import.meta.env.VITE_APPWRITE_CANTEEN_COLLECTION_ID || 'canteen_data'; // New export
 
 export default client;
