@@ -1,117 +1,69 @@
-"use client";
-
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Loader2, Plus } from "lucide-react";
-import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import ProductListingCard from "@/components/ProductListingCard"; // Import ProductListingCard
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import { dummyProducts } from "@/pages/MarketPage"; // Import dummyProducts from MarketPage
+import { dummyProducts, Product } from "@/lib/mockData"; // Import dummyProducts and Product interface
+import ProductListingCard from "@/components/ProductListingCard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
-// Define a type for the listings to ensure all required ProductListingCard props are present
-interface DiscoveryListing {
-  $id: string;
-  title: string;
-  price: string;
-  imageUrl: string;
-  category?: string; // Made optional as it's not always present in Product type
-  sellerRating: number;
-  sellerBadge?: string;
-  type: "sell" | "rent" | "gift" | "sports" | "gift-request";
-  description: string;
-  sellerId: string;
-  sellerName: string;
-}
+// Mock function for developer deletion
+const mockDeveloperDelete = (productId: string) => {
+  console.log(`Developer deleting product: ${productId}`);
+  // In a real app, this would call an API endpoint
+};
 
-const DiscoveryFeed = () => {
-  const navigate = useNavigate();
-  // Use a subset of dummyProducts for initial display
-  const [listings, setListings] = useState<DiscoveryListing[]>(dummyProducts.slice(0, 4));
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true); // Assume there's more to load initially
-  const { userProfile } = useAuth();
-  const isDeveloper = userProfile?.role === "developer";
+const DiscoveryFeed: React.FC = () => {
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const [listings, setListings] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleViewDetails = (listingId: string) => {
-    toast.info(`Viewing details for listing ${listingId}`);
-    navigate(`/market/product/${listingId}`);
-  };
-
-  const handleViewAllFeed = () => {
-    navigate("/market");
-    toast.info("Navigating to the full Discovery Feed!");
-  };
-
-  const handleLoadMore = () => {
-    setLoadingMore(true);
+  useEffect(() => {
+    // Simulate fetching data
     setTimeout(() => {
-      // Load the rest of the dummy products
-      const remainingProducts = dummyProducts.slice(listings.length);
-      setListings((prevListings) => [...prevListings, ...remainingProducts]);
-      setHasMore(false); // After loading all dummy products, there are no more
-      setLoadingMore(false);
-      toast.success("More listings loaded!");
+      // Add isDeveloper flag if the user is a developer
+      const processedListings = dummyProducts.map(product => ({
+        ...product,
+        isDeveloper: user?.isDeveloper || false,
+      }));
+      setListings(processedListings);
+      setIsLoading(false);
     }, 1000);
-  };
+  }, [user]);
 
-  const handleDeveloperDelete = (productId: string) => {
-    toast.info(`Developer delete action for product ID: ${productId} (simulated from Discovery Feed)`);
-    setListings(prev => prev.filter(item => item.$id !== productId));
-  };
+  if (isAuthLoading || isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+        {[...Array(6)].map((_, i) => (
+          <Skeleton key={i} className="h-64 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (listings.length === 0) {
+    return (
+      <div className="p-4">
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>No Listings Found</AlertTitle>
+          <AlertDescription>
+            It looks like there are no products matching your criteria right now.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
-    <Card className="bg-card text-card-foreground shadow-lg border-border">
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-xl font-semibold text-card-foreground cursor-pointer hover:text-secondary-neon transition-colors" onClick={handleViewAllFeed}>
-          Discovery Feed
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <p className="text-sm text-muted-foreground mb-3">New, trending, top-rated listings.</p>
-        <ScrollArea className="w-full whitespace-nowrap rounded-md border border-border p-2">
-          <div className="flex w-max space-x-4 pb-2">
-            {listings.map((listing) => (
-              <div key={listing.$id} className="w-[150px] flex-shrink-0">
-                <ProductListingCard
-                  $id={listing.$id}
-                  imageUrl={listing.imageUrl}
-                  title={listing.title}
-                  price={listing.price}
-                  sellerRating={listing.sellerRating}
-                  sellerBadge={listing.sellerBadge}
-                  type={listing.type}
-                  description={listing.description}
-                  sellerId={listing.sellerId}
-                  sellerName={listing.sellerName}
-                  onDeveloperDelete={isDeveloper ? handleDeveloperDelete : undefined}
-                />
-              </div>
-            ))}
-            {hasMore && (
-              <div className="w-[150px] flex-shrink-0 flex items-center justify-center">
-                <Button
-                  variant="outline"
-                  className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" />
-                  )}
-                  Load More
-                </Button>
-              </div>
-            )}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-      </CardContent>
-    </Card>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+      {listings.map((listing) => (
+        <ProductListingCard
+          key={listing.$id}
+          product={listing} // Pass the entire listing object as the 'product' prop
+          onDeveloperDelete={listing.isDeveloper ? mockDeveloperDelete : undefined}
+        />
+      ))}
+    </div>
   );
 };
 

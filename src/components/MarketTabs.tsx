@@ -1,110 +1,71 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
-import ProductListingCard from "@/components/ProductListingCard"; // Import ProductListingCard
+import ProductListingCard from "@/components/ProductListingCard";
+import { dummyProducts, Product } from "@/lib/mockData"; // Import Product interface and dummy data
+import { Skeleton } from "@/components/ui/skeleton";
 
-// Define MarketTabValue type for consistency
-type MarketTabValue = "all" | "buy" | "sell" | "rent" | "gifts" | "sports";
-
-interface Product {
-  $id: string; // Changed to $id
-  imageUrl: string;
-  title: string;
-  price: string;
-  sellerRating: number;
-  sellerBadge?: string;
-  type: "sell" | "rent" | "gift" | "sports" | "gift-request";
-  description: string;
-  damages?: string;
-  policies?: string;
-  condition?: string;
-  sellerId: string; // Added for consistency
-  sellerName: string; // Added for consistency
-}
+// Helper function to filter products by type
+const filterProducts = (products: Product[], type: Product['type'] | 'all'): Product[] => {
+  if (type === 'all') return products;
+  return products.filter(p => p.type === type);
+};
 
 interface MarketTabsProps {
-  onValueChange: (value: MarketTabValue) => void;
-  products: Product[]; // All products
-  filteredProducts: Product[]; // Products filtered by the current tab
-  activeTab: MarketTabValue; // Pass activeTab to ensure correct initial display
+  initialTab?: Product['type'] | 'all';
 }
 
-const MarketTabs: React.FC<MarketTabsProps> = ({ onValueChange, products, filteredProducts, activeTab }) => {
-  const handleTabChange = (value: MarketTabValue) => {
-    onValueChange(value); // Propagate the change to parent
-    toast.info(`Switched to ${value} market tab.`);
+const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
+  const [activeTab, setActiveTab] = useState<Product['type'] | 'all'>(initialTab);
+  const [isLoading, setIsLoading] = useState(true);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    // Simulate data fetching
+    setTimeout(() => {
+      setAllProducts(dummyProducts);
+      setIsLoading(false);
+    }, 500);
+  }, []);
+
+  const items = filterProducts(allProducts, activeTab);
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full" />
+          ))}
+        </div>
+      );
+    }
+
+    if (items.length === 0) {
+      return <p className="p-4 text-center text-gray-500">No listings found for this category.</p>;
+    }
+
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+        {items.map((product) => (
+          <ProductListingCard key={product.$id} product={product} />
+        ))}
+      </div>
+    );
   };
 
-  // Helper to render product cards for a given product array
-  const renderProductCards = (items: Product[]) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {items.length > 0 ? (
-        items.map((product) => (
-          <ProductListingCard key={product.$id} {...product} /> // Use $id here
-        ))
-      ) : (
-        <p className="col-span-full text-center text-muted-foreground py-4">No listings found for this category.</p>
-      )}
-    </div>
-  );
-
   return (
-    <Tabs defaultValue={activeTab} className="w-full" onValueChange={handleTabChange}>
-      <TabsList className="flex flex-wrap justify-center w-full bg-primary-blue-light text-primary-foreground h-auto p-1">
-        <TabsTrigger value="all" className="flex-1 sm:flex-none data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">All Market</TabsTrigger>
-        <TabsTrigger value="buy" className="flex-1 sm:flex-none data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Buy</TabsTrigger>
-        <TabsTrigger value="sell" className="flex-1 sm:flex-none data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Sell</TabsTrigger>
-        <TabsTrigger value="rent" className="flex-1 sm:flex-none data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Rent</TabsTrigger>
-        <TabsTrigger value="gifts" className="flex-1 sm:flex-none data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Gifts & Crafts</TabsTrigger>
-        <TabsTrigger value="sports" className="flex-1 sm:flex-none data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Sports Gear</TabsTrigger>
+    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Product['type'] | 'all')} className="w-full">
+      <TabsList className="grid w-full grid-cols-5">
+        <TabsTrigger value="all">All</TabsTrigger>
+        <TabsTrigger value="sell">Sell</TabsTrigger>
+        <TabsTrigger value="rent">Rent</TabsTrigger>
+        <TabsTrigger value="gift">Gift</TabsTrigger>
+        <TabsTrigger value="sports">Sports</TabsTrigger>
       </TabsList>
-      <div className="mt-4 space-y-4">
-        <TabsContent value="all">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              {renderProductCards(products)}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="buy">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              {renderProductCards(filteredProducts.filter(p => p.type === "sell"))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="sell">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              {renderProductCards(filteredProducts.filter(p => p.type === "sell"))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="rent">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              {renderProductCards(filteredProducts.filter(p => p.type === "rent"))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="gifts">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              {renderProductCards(filteredProducts.filter(p => p.type === "gift" || p.type === "gift-request"))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="sports">
-          <Card className="bg-card border-border">
-            <CardContent className="p-4">
-              {renderProductCards(filteredProducts.filter(p => p.type === "sports"))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </div>
+      
+      <TabsContent value={activeTab}>
+        {renderContent()}
+      </TabsContent>
     </Tabs>
   );
 };
