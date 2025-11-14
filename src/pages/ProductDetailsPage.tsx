@@ -83,6 +83,19 @@ const ProductDetailsPage = () => {
     fetchProduct();
   }, [productId]);
 
+  // Determine button text
+  const getButtonText = (type: Product["type"]) => {
+    if (type === "rent") return "Rent Now";
+    if (type === "gift-request") return "Fulfill Request";
+    if (type === "gift") return "Claim Gift";
+    return "Buy Now";
+  };
+
+  // Determine action type for handlePayment
+  const getActionType = (type: Product["type"]): "buy" | "rent" => {
+    return type === "rent" ? "rent" : "buy";
+  };
+
   if (loadingProduct) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4">
@@ -239,6 +252,8 @@ const ProductDetailsPage = () => {
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-3xl font-bold text-foreground">{product.title}</CardTitle>
             <CardDescription className="text-xl font-bold text-secondary-neon mt-1">{product.price}</CardDescription>
+            
+            {/* Seller Info */}
             <div className="flex items-center text-sm text-muted-foreground mt-2">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 mr-1" />
               <span>{product.sellerRating.toFixed(1)} Seller Rating</span>
@@ -248,12 +263,40 @@ const ProductDetailsPage = () => {
                 </Badge>
               )}
             </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Listed by: <span className="font-semibold text-foreground">{product.sellerName}</span>
+            </p>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
+            
+            {/* General Details */}
             <div>
               <h4 className="font-semibold text-foreground mb-1">Description:</h4>
               <p className="text-sm text-muted-foreground">{product.description}</p>
             </div>
+            
+            {/* Conditional Details based on Type */}
+            {product.type === "gift-request" && (
+              <>
+                <div>
+                  <h4 className="font-semibold text-foreground mb-1">Budget:</h4>
+                  <p className="text-sm text-muted-foreground">{product.budget || 'N/A'}</p>
+                </div>
+                {product.referenceImageUrl && (
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">Reference Image:</h4>
+                    <a href={product.referenceImageUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-secondary-neon hover:underline truncate block max-w-full">
+                      View Reference Image
+                    </a>
+                  </div>
+                )}
+                <div>
+                  <h4 className="font-semibold text-foreground mb-1">Contact:</h4>
+                  <p className="text-sm text-muted-foreground">{product.contact || 'N/A'}</p>
+                </div>
+              </>
+            )}
+
             {product.damages && (
               <div>
                 <h4 className="font-semibold text-foreground mb-1">Damages:</h4>
@@ -272,25 +315,40 @@ const ProductDetailsPage = () => {
                 <p className="text-sm text-muted-foreground">{product.condition}</p>
               </div>
             )}
+            
+            {/* Ambassador Delivery Option */}
+            {product.ambassadorDelivery && (
+              <div className="p-3 border border-border rounded-md bg-background">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <ThumbsUp className="h-4 w-4 text-secondary-neon" /> Ambassador Delivery Available
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Seller opted for Ambassador-mediated exchange. Message: "{product.ambassadorMessage || 'No specific message.'}"
+                </p>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-2 mt-4">
               <Button
                 className="flex-1 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-                onClick={() => handlePayment(product.type === "rent" ? "rent" : "buy")}
+                onClick={() => handlePayment(getActionType(product.type))}
                 disabled={isInitiatingPayment}
               >
                 {isInitiatingPayment ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  product.type === "rent" ? "Rent Now" : "Buy Now"
+                  getButtonText(product.type)
                 )}
               </Button>
-              <Button
-                variant="outline"
-                className="flex-1 border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-                onClick={handleBargain}
-              >
-                Bargain
-              </Button>
+              {product.type !== "gift" && ( // Gifts usually don't allow bargaining
+                <Button
+                  variant="outline"
+                  className="flex-1 border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
+                  onClick={handleBargain}
+                >
+                  Bargain
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
