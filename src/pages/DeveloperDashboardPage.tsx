@@ -17,6 +17,7 @@ import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
 import { Query } from "appwrite";
 import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation";
 import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages"; // NEW IMPORT
+import { calculateCommissionRate } from "@/utils/commission"; // NEW IMPORT
 
 interface Transaction {
   $id: string;
@@ -34,8 +35,6 @@ interface Transaction {
   netSellerAmount?: number;
   $createdAt: string;
 }
-
-const COMMISSION_RATE = 0.30; // 30% commission
 
 const DeveloperDashboardPage = () => {
   const { userProfile, user } = useAuth();
@@ -160,7 +159,7 @@ const DeveloperDashboardPage = () => {
     }
   };
 
-  // --- Transaction Handlers (kept existing logic) ---
+  // --- Transaction Handlers (updated logic) ---
   const handleProcessPayment = async (transaction: Transaction) => {
     if (transaction.status !== "payment_confirmed_to_developer") {
       toast.error("Transaction is not in 'Payment Confirmed' status.");
@@ -169,9 +168,30 @@ const DeveloperDashboardPage = () => {
 
     setLoadingTransactions(true);
     try {
-      const commissionAmount = transaction.amount * COMMISSION_RATE;
+      // 1. Fetch Seller's Profile to get their current level
+      const sellerProfileResponse = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_USER_PROFILES_COLLECTION_ID,
+        [Query.equal('userId', transaction.sellerId)]
+      );
+
+      if (sellerProfileResponse.documents.length === 0) {
+        toast.error("Seller profile not found. Cannot calculate commission.");
+        setLoadingTransactions(false);
+        return;
+      }
+
+      const sellerProfile = sellerProfileResponse.documents[0] as any;
+      const sellerLevel = sellerProfile.level ?? 1;
+      
+      // 2. Calculate dynamic commission rate
+      const commissionRate = calculateCommissionRate(sellerLevel);
+      
+      // 3. Calculate amounts
+      const commissionAmount = transaction.amount * commissionRate;
       const netSellerAmount = transaction.amount - commissionAmount;
 
+      // 4. Update transaction document
       await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
@@ -182,7 +202,7 @@ const DeveloperDashboardPage = () => {
           netSellerAmount: netSellerAmount,
         }
       );
-      toast.success(`Commission deducted for transaction ${transaction.$id}. Ready to pay seller.`);
+      toast.success(`Commission (${(commissionRate * 100).toFixed(2)}%) deducted for transaction ${transaction.$id}. Ready to pay seller.`);
     } catch (error: any) {
       console.error("Error processing payment:", error);
       toast.error(error.message || "Failed to process payment.");
@@ -350,7 +370,7 @@ const DeveloperDashboardPage = () => {
                 variant="destructive"
                 onClick={() => handleDeleteUser(targetUserIdAction)}
                 disabled={!targetUserIdAction}
-                className="w-full sm:w-auto bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                className="w-full sm:w-auto bg-destructive text-destructive-foreground hover:hover:bg-destructive/90"
               >
                 <Trash2 className="mr-2 h-4 w-4" /> Delete User
               </Button>

@@ -45,7 +45,9 @@ interface FoodOrderItem extends BaseTrackingItem {
   buyerId: string;
   providerId: string;
   orderStatus: FoodOrder["status"]; // Specific status for food orders
-  quantity: number; // <-- FIX: Added missing quantity property
+  quantity: number;
+  deliveryLocation: string; // Added missing property
+  notes: string; // Added missing property
 }
 
 interface OtherActivityItem extends BaseTrackingItem {
@@ -125,7 +127,9 @@ const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: s
     providerId: doc.providerId,
     orderStatus: doc.status,
     isUserProvider: doc.providerId === currentUserId,
-    quantity: doc.quantity, // <-- FIX: Mapped quantity from FoodOrder document
+    quantity: doc.quantity,
+    deliveryLocation: doc.deliveryLocation, // Mapped missing property
+    notes: doc.notes, // Mapped missing property
   };
 };
 
@@ -382,6 +386,7 @@ const TrackingPage = () => {
                       <div className="space-y-2 border-t border-border pt-2">
                         <p className="text-xs text-muted-foreground">Total: <span className="font-semibold text-foreground">₹{foodItem.totalAmount.toFixed(2)}</span> | Qty: {foodItem.quantity}</p>
                         <p className="text-xs text-muted-foreground">Delivery to: {foodItem.deliveryLocation}</p>
+                        {foodItem.notes && <p className="text-xs text-muted-foreground">Notes: {foodItem.notes}</p>}
                         
                         {/* Provider Actions */}
                         {isSellerOrProvider && foodItem.orderStatus !== "Delivered" && foodItem.orderStatus !== "Cancelled" && (
