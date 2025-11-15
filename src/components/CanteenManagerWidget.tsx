@@ -7,162 +7,129 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RefreshCw, UtensilsCrossed, Plus, Trash2, Loader2, ChevronDown } from "lucide-react";
+import { RefreshCw, UtensilsCrossed, Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_CANTEEN_COLLECTION_ID } from "@/lib/appwrite";
-import { ID, Models } from "appwrite";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AddCanteenForm from "./forms/AddCanteenForm";
+import { useCanteenData, CanteenData } from "@/hooks/useCanteenData"; // Import the new hook
 
 interface CanteenItem {
   name: string;
   available: boolean;
 }
 
-interface CanteenData extends Models.Document {
-  name: string; // New field to store canteen name
-  isOpen: boolean;
-  items: CanteenItem[];
-}
-
 const CanteenManagerWidget = () => {
-  const [allCanteens, setAllCanteens] = useState<CanteenData[]>([]);
+  const { allCanteens, isLoading, error, refetch, updateCanteen, addCanteen } = useCanteenData();
+  
   const [selectedCanteenId, setSelectedCanteenId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [newItemName, setNewItemName] = useState("");
   const [isAddingItem, setIsAddingItem] = useState(false);
-  const [isAddCanteenDialogOpen, setIsAddCanteenDialogOpen] = useState(false); // Dialog state
-  const [isAddingCanteen, setIsAddingCanteen] = useState(false); // Loading state for submission
+  const [isAddCanteenDialogOpen, setIsAddCanteenDialogOpen] = useState(false);
+  const [isAddingCanteen, setIsAddingCanteen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const selectedCanteen = allCanteens.find(c => c.$id === selectedCanteenId);
 
-  const fetchCanteenData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_CANTEEN_COLLECTION_ID
-      );
-      const fetchedCanteens = response.documents as unknown as CanteenData[];
-      setAllCanteens(fetchedCanteens);
-
-      // If no canteen is selected, select the first one, or null if list is empty
-      if (!selectedCanteenId && fetchedCanteens.length > 0) {
-        setSelectedCanteenId(fetchedCanteens[0].$id);
-      } else if (selectedCanteenId && !fetchedCanteens.some(c => c.$id === selectedCanteenId)) {
-        // If previously selected canteen was deleted, select the first one
-        setSelectedCanteenId(fetchedCanteens.length > 0 ? fetchedCanteens[0].$id : null);
-      }
-    } catch (error: any) {
-      console.error("Error fetching canteen data:", error);
-      toast.error("Failed to load canteen status.");
-    } finally {
-      setLoading(false);
+  // Effect to manage selected canteen ID when data changes
+  useEffect(() => {
+    if (!selectedCanteenId && allCanteens.length > 0) {
+      setSelectedCanteenId(allCanteens[0].$id);
+    } else if (selectedCanteenId && !allCanteens.some(c => c.$id === selectedCanteenId)) {
+      setSelectedCanteenId(allCanteens.length > 0 ? allCanteens[0].$id : null);
     }
-  }, [selectedCanteenId]);
+  }, [allCanteens, selectedCanteenId]);
 
-  const updateCanteenData = async (canteenId: string, updates: Partial<CanteenData>) => {
+  const handleAddCanteen = async (canteenName: string) => {
+    setIsAddingCanteen(true);
+    try {
+      await addCanteen(canteenName);
+      toast.success(`Canteen "${canteenName}" added successfully!`);
+      setIsAddCanteenDialogOpen(false);
+    } catch (e) {
+      // Error handled in hook
+    } finally {
+      setIsAddingCanteen(false);
+    }
+  };
+
+  const handleToggleCanteenStatus = async (checked: boolean) => {
+    if (!selectedCanteenId) return;
     setIsUpdating(true);
     try {
-      const updatedDoc = await databases.updateDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_CANTEEN_COLLECTION_ID,
-        canteenId,
-        updates
-      ) as unknown as CanteenData;
-      
-      // Update local state with the new document
-      setAllCanteens(prev => prev.map(c => c.$id === canteenId ? updatedDoc : c));
-      return updatedDoc;
-    } catch (error: any) {
-      console.error("Error updating canteen data:", error);
-      toast.error(error.message || "Failed to update canteen status.");
+      await updateCanteen(selectedCanteenId, { isOpen: checked });
+      toast.success(`${selectedCanteen?.name} is now ${checked ? "Open" : "Closed"}!`);
+    } catch (e) {
+      // Error handled in hook
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handleAddCanteen = async (canteenName: string) => {
-    setIsAddingCanteen(true);
-    const initialData = {
-      name: canteenName,
-      isOpen: true,
-      items: [
-        { name: "Coffee", available: true },
-        { name: "Tea", available: true },
-      ],
-    };
+  const handleToggleAvailability = async (index: number) => {
+    if (!selectedCanteen || !selectedCanteenId) return;
+    setIsUpdating(true);
     try {
-      const newDoc = await databases.createDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_CANTEEN_COLLECTION_ID,
-        ID.unique(),
-        initialData
-      ) as unknown as CanteenData;
-      
-      setAllCanteens(prev => [...prev, newDoc]);
-      setSelectedCanteenId(newDoc.$id);
-      toast.success(`Canteen "${canteenName}" added successfully!`);
-      setIsAddCanteenDialogOpen(false); // Close dialog on success
-    } catch (e: any) {
-      console.error("Error adding canteen:", e);
-      toast.error(e.message || "Failed to add new canteen.");
+      const newItems = selectedCanteen.items.map((item, i) =>
+        i === index ? { ...item, available: !item.available } : item
+      );
+      await updateCanteen(selectedCanteenId, { items: newItems });
+      toast.success("Item availability updated!");
+    } catch (e) {
+      // Error handled in hook
     } finally {
-      setIsAddingCanteen(false); // Stop loading regardless of outcome
+      setIsUpdating(false);
     }
   };
 
-  useEffect(() => {
-    fetchCanteenData();
-  }, [fetchCanteenData]);
-
-  const handleRefresh = () => {
-    toast.info("Refreshing canteen status...");
-    fetchCanteenData();
-  };
-
-  const handleToggleCanteenStatus = (checked: boolean) => {
-    if (!selectedCanteenId) return;
-    updateCanteenData(selectedCanteenId, { isOpen: checked });
-    toast.success(`${selectedCanteen?.name} is now ${checked ? "Open" : "Closed"}!`);
-  };
-
-  const handleToggleAvailability = (index: number) => {
-    if (!selectedCanteen || !selectedCanteenId) return;
-    const newItems = selectedCanteen.items.map((item, i) =>
-      i === index ? { ...item, available: !item.available } : item
-    );
-    updateCanteenData(selectedCanteenId, { items: newItems });
-    toast.success("Item availability updated!");
-  };
-
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!selectedCanteen || !selectedCanteenId) return;
     if (newItemName.trim() === "") {
       toast.error("Food item name cannot be empty.");
       return;
     }
-    const newItems = [...selectedCanteen.items, { name: newItemName.trim(), available: true }];
-    updateCanteenData(selectedCanteenId, { items: newItems });
-    setNewItemName("");
-    setIsAddingItem(false);
-    toast.success(`"${newItemName.trim()}" added to the menu!`);
+    setIsUpdating(true);
+    try {
+      const newItems = [...selectedCanteen.items, { name: newItemName.trim(), available: true }];
+      await updateCanteen(selectedCanteenId, { items: newItems });
+      toast.success(`"${newItemName.trim()}" added to the menu!`);
+      setNewItemName("");
+      setIsAddingItem(false);
+    } catch (e) {
+      // Error handled in hook
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  const handleRemoveItem = (index: number) => {
+  const handleRemoveItem = async (index: number) => {
     if (!selectedCanteen || !selectedCanteenId) return;
-    const removedItemName = selectedCanteen.items[index].name;
-    const newItems = selectedCanteen.items.filter((_, i) => i !== index);
-    updateCanteenData(selectedCanteenId, { items: newItems });
-    toast.info(`"${removedItemName}" removed from the menu.`);
+    setIsUpdating(true);
+    try {
+      const removedItemName = selectedCanteen.items[index].name;
+      const newItems = selectedCanteen.items.filter((_, i) => i !== index);
+      await updateCanteen(selectedCanteenId, { items: newItems });
+      toast.info(`"${removedItemName}" removed from the menu.`);
+    } catch (e) {
+      // Error handled in hook
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Card className="bg-card text-card-foreground shadow-lg border-border p-6 flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
         <p className="ml-3 text-muted-foreground">Loading Canteen Status...</p>
+      </Card>
+    );
+  }
+  
+  if (error) {
+    return (
+      <Card className="bg-card text-card-foreground shadow-lg border-border p-6">
+        <p className="text-destructive">Error loading canteen data: {error}</p>
+        <Button onClick={refetch} className="mt-2">Retry</Button>
       </Card>
     );
   }
@@ -195,7 +162,7 @@ const CanteenManagerWidget = () => {
               />
             </DialogContent>
           </Dialog>
-          <Button variant="ghost" size="icon" onClick={handleRefresh} className="text-muted-foreground hover:text-secondary-neon" disabled={isUpdating}>
+          <Button variant="ghost" size="icon" onClick={refetch} className="text-muted-foreground hover:text-secondary-neon" disabled={isUpdating}>
             <RefreshCw className="h-4 w-4" />
             <span className="sr-only">Refresh Status</span>
           </Button>
