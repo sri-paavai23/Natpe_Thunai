@@ -36,8 +36,10 @@ const TournamentPage = () => {
 
   const handleRegistrationSubmit = (data: { teamName: string; contactEmail: string; players: { name: string; inGameId: string }[] }) => {
     if (!selectedTournament) return;
+    // The payment initiation is now handled inside the form before calling onRegister.
+    // If onRegister is called, we assume payment initiation was successful (or fee was zero).
     toast.success(`Successfully registered "${data.teamName}" (${data.players.length} players) for ${selectedTournament.name}!`);
-    // In a real app, send registration data to a separate Appwrite collection or function
+    // Reset form state if needed, but closing the dialog handles it.
     setIsRegisterDialogOpen(false);
   };
 
@@ -181,6 +183,7 @@ const TournamentPage = () => {
             <DetailedTournamentRegistrationForm
               tournamentName={selectedTournament.name}
               gameName={selectedTournament.game}
+              fee={selectedTournament.fee} // Pass the fee
               onRegister={handleRegistrationSubmit}
               onCancel={() => setIsRegisterDialogOpen(false)}
             />

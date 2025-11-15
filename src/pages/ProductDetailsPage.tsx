@@ -7,14 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquare } from 'lucide-react';
+import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
 import { calculateCommissionRate } from '@/utils/commission'; // Import commission calculator
-
-// Developer UPI ID for all payments (as per DeveloperChatbox.tsx)
-const DEVELOPER_UPI_ID = "8903480105@superyes"; 
+import { DEVELOPER_UPI_ID } from '@/lib/config'; // Import DEVELOPER_UPI_ID
 
 export default function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
@@ -236,7 +234,7 @@ export default function ProductDetailsPage() {
                 onClick={handleBargainRequest}
                 disabled={isProcessing}
               >
-                <MessageSquare className="mr-2 h-5 w-5" /> 
+                <MessageSquareText className="mr-2 h-5 w-5" /> 
                 Bargain (15% off: ₹{bargainPrice})
               </Button>
             </div>
