@@ -51,12 +51,15 @@ export const useCanteenData = (): CanteenDataState => {
 
   const updateCanteen = useCallback(async (canteenId: string, updates: Partial<CanteenData>) => {
     try {
-      const updatedDoc = await databases.updateDocument(
+      // Ensure that if 'items' is being updated, it is sent as a clean array of objects
+      const updatePayload = { ...updates };
+      
+      await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_CANTEEN_COLLECTION_ID,
         canteenId,
-        updates
-      ) as unknown as CanteenData;
+        updatePayload
+      );
       
       // Real-time subscription handles state update, but we return the doc for immediate feedback
       return;
@@ -71,6 +74,7 @@ export const useCanteenData = (): CanteenDataState => {
     const initialData = {
       name: canteenName,
       isOpen: true,
+      // Ensure the structure matches the Appwrite Array attribute definition
       items: [
         { name: "Coffee", available: true },
         { name: "Tea", available: true },
