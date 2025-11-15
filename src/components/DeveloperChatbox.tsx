@@ -18,7 +18,6 @@ import { containsBlockedWords } from "@/lib/moderation"; // Import moderation ut
 const DeveloperChatbox = () => {
   const { user, userProfile } = useAuth();
   const [message, setMessage] = useState("");
-  const [isAmbassadorFormOpen, setIsAmbassadorFormOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -64,13 +63,6 @@ const DeveloperChatbox = () => {
     }
   };
 
-  const handleAmbassadorApply = (data: { name: string; email: string; mobile: string; whyJoin: string }) => {
-    console.log("Ambassador Application:", data);
-    toast.success("Ambassador application submitted! We'll review it shortly.");
-    setIsAmbassadorFormOpen(false);
-    // In a real app, this data would be sent to a backend for processing.
-  };
-
   const handleContribute = () => {
     toast.info("Redirecting to our contribution guidelines (feature coming soon)!");
     // In a real app, this would link to a GitHub repo, documentation, or a contact form.
@@ -90,8 +82,6 @@ const DeveloperChatbox = () => {
           Have a question or feedback? Send a message directly to our development team!
         </p>
         
-        {/* Removed local chat history display */}
-
         <form onSubmit={handleSendMessage} className="flex gap-2">
           <Input
             type="text"
@@ -122,34 +112,6 @@ const DeveloperChatbox = () => {
             <p className="text-sm font-medium text-foreground">UPI ID: <span className="text-secondary-neon">{developerUpiId}</span></p>
             <p className="text-xs text-muted-foreground text-center">Scan or use this UPI ID for all payments.</p>
           </div>
-        </div>
-
-        <Separator className="my-4" />
-
-        {/* Ambassador Section */}
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Users className="h-4 w-4 text-secondary-neon" /> Become an Ambassador
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Our ambassadors facilitate deliveries and ensure smooth transactions. Join our team!
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Contact our Ambassador Coordinator: <span className="font-medium text-foreground">ambassador.lead@example.com</span>
-          </p>
-          <Dialog open={isAmbassadorFormOpen} onOpenChange={setIsAmbassadorFormOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                <HeartHandshake className="mr-2 h-4 w-4" /> Join as an Ambassador
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-              <DialogHeader>
-                <DialogTitle className="text-foreground">Ambassador Application</DialogTitle>
-              </DialogHeader>
-              <JoinAmbassadorForm onApply={handleAmbassadorApply} onCancel={() => setIsAmbassadorFormOpen(false)} />
-            </DialogContent>
-          </Dialog>
         </div>
 
         <Separator className="my-4" />

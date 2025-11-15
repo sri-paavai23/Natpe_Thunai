@@ -46,6 +46,8 @@ const getPageTitle = (pathname: string) => {
       return "Project Collaborator Tab";
     case "/services/post-job":
       return "Post a Job/Service";
+    case "/services/ambassador-program":
+      return "Ambassador Program"; // NEW TITLE
     default:
       return "Natpe Thunai"; // Default title if no specific route matches
   }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { HeartHandshake } from "lucide-react"; // Import HeartHandshake
 
 const ServicesPage = () => {
   const navigate = useNavigate();
@@ -101,6 +102,18 @@ const ServicesPage = () => {
           </CardHeader>
           <CardContent className="p-0">
             <p className="text-muted-foreground">Post or search for collaborators for academic or personal projects.</p>
+          </CardContent>
+        </Card>
+        
+        {/* New Ambassador Program Card */}
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ambassador-program", "Ambassador Program")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <HeartHandshake className="h-5 w-5 text-secondary-neon" /> Ambassador Program
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Join our team to facilitate deliveries and ensure trust in transactions.</p>
           </CardContent>
         </Card>
       </div>

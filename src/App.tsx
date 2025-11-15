@@ -39,6 +39,7 @@ import TicketBookingPage from "./pages/TicketBookingPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import PostJobPage from "./pages/PostJobPage";
 import ServiceListingPage from "./pages/ServiceListingPage"; // New Import
+import AmbassadorProgramPage from "./pages/AmbassadorProgramPage"; // NEW IMPORT
 
 // Import new Market sub-pages
 import ProductDetailsPage from "./pages/ProductDetailsPage";
@@ -151,6 +152,7 @@ const AppContent = () => {
         <Route path="/services/ticket-booking" element={<TicketBookingPage />} />
         <Route path="/services/collaborators" element={<CollaboratorsPage />} />
         <Route path="/services/post-job" element={<PostJobPage />} />
+        <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} /> {/* NEW ROUTE */}
       </Route>
 
       {/* Protected Routes for Developers Only */}
