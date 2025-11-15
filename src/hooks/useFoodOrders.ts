@@ -15,8 +15,8 @@ export interface FoodOrder extends Models.Document {
   buyerName: string;
   quantity: number;
   totalAmount: number;
-  deliveryLocation: string;
-  notes: string;
+  deliveryLocation: string; // Added missing property
+  notes: string; // Added missing property
   status: "Pending Confirmation" | "Confirmed" | "Preparing" | "Out for Delivery" | "Delivered" | "Cancelled";
 }
 
