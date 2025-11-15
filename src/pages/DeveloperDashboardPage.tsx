@@ -8,14 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle } from "lucide-react";
+import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
 import { Query } from "appwrite";
-import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation"; // Import static list
+import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation";
+import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages"; // NEW IMPORT
 
 interface Transaction {
   $id: string;
@@ -38,9 +39,9 @@ const COMMISSION_RATE = 0.30; // 30% commission
 
 const DeveloperDashboardPage = () => {
   const { userProfile, user } = useAuth();
+  const { messages, isLoading: isMessagesLoading, error: messagesError } = useDeveloperMessages(); // Use message hook
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  // Use local state to manage the blocked words list for demonstration purposes
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [blockedWords, setBlockedWords] = useState<string[]>(STATIC_BLOCKED_WORDS); 
   const [newBlockedWord, setNewBlockedWord] = useState("");
   const [targetUserIdAction, setTargetUserIdAction] = useState("");
@@ -49,12 +50,12 @@ const DeveloperDashboardPage = () => {
 
   useEffect(() => {
     if (!isDeveloper) {
-      setLoading(false);
+      setLoadingTransactions(false);
       return;
     }
 
     const fetchTransactions = async () => {
-      setLoading(true);
+      setLoadingTransactions(true);
       try {
         const response = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
@@ -65,7 +66,7 @@ const DeveloperDashboardPage = () => {
         console.error("Error fetching transactions:", error);
         toast.error("Failed to load transactions.");
       } finally {
-        setLoading(false);
+        setLoadingTransactions(false);
       }
     };
 
@@ -166,7 +167,7 @@ const DeveloperDashboardPage = () => {
       return;
     }
 
-    setLoading(true);
+    setLoadingTransactions(true);
     try {
       const commissionAmount = transaction.amount * COMMISSION_RATE;
       const netSellerAmount = transaction.amount - commissionAmount;
@@ -186,7 +187,7 @@ const DeveloperDashboardPage = () => {
       console.error("Error processing payment:", error);
       toast.error(error.message || "Failed to process payment.");
     } finally {
-      setLoading(false);
+      setLoadingTransactions(false);
     }
   };
 
@@ -200,7 +201,7 @@ const DeveloperDashboardPage = () => {
       return;
     }
 
-    setLoading(true);
+    setLoadingTransactions(true);
     try {
       const upiDeepLink = `upi://pay?pa=${transaction.sellerUpiId}&pn=${encodeURIComponent(transaction.sellerName)}&am=${transaction.netSellerAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Payment for ${transaction.productTitle} (Net of commission)`)}`;
       
@@ -221,7 +222,7 @@ const DeveloperDashboardPage = () => {
       console.error("Error paying seller:", error);
       toast.error(error.message || "Failed to pay seller.");
     } finally {
-      setLoading(false);
+      setLoadingTransactions(false);
     }
   };
 
@@ -252,7 +253,7 @@ const DeveloperDashboardPage = () => {
     );
   }
 
-  if (loading) {
+  if (loadingTransactions && isMessagesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
@@ -265,6 +266,50 @@ const DeveloperDashboardPage = () => {
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Developer Dashboard</h1>
       <div className="max-w-4xl mx-auto space-y-6">
+        
+        {/* --- Developer Messages Section --- */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <MessageSquareText className="h-5 w-5 text-secondary-neon" /> User Messages (Last 48h)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <Clock className="h-4 w-4" /> Messages are automatically filtered to show only those posted in the last 48 hours.
+            </p>
+            {isMessagesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading messages...</p>
+              </div>
+            ) : messagesError ? (
+              <p className="text-center text-destructive py-4">Error loading messages: {messagesError}</p>
+            ) : messages.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">No recent user messages found.</p>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {messages.map((msg) => (
+                  <div key={msg.$id} className={cn(
+                    "p-3 rounded-md border",
+                    msg.isDeveloper ? "bg-primary/10 border-primary" : "bg-background border-border"
+                  )}>
+                    <div className="flex justify-between items-center text-xs mb-1">
+                      <span className="font-semibold text-foreground">{msg.senderName}</span>
+                      <span className="text-muted-foreground">{new Date(msg.$createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="text-sm text-foreground break-words">{msg.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button onClick={messages.length > 0 ? () => toast.info("Simulating developer response...") : undefined} disabled={messages.length === 0} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                Reply (Simulated)
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Separator className="my-6" />
         
         {/* --- User Management Section --- */}
         <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -375,7 +420,12 @@ const DeveloperDashboardPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 overflow-x-auto">
-            {transactions.length === 0 ? (
+            {loadingTransactions ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading transactions...</p>
+              </div>
+            ) : transactions.length === 0 ? (
               <p className="text-center text-muted-foreground py-4">No transactions found.</p>
             ) : (
               <Table className="min-w-[1000px]">
@@ -413,7 +463,7 @@ const DeveloperDashboardPage = () => {
                             variant="secondary"
                             size="sm"
                             onClick={() => handleProcessPayment(tx)}
-                            disabled={loading}
+                            disabled={loadingTransactions}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
                           >
                             Process Commission
@@ -424,7 +474,7 @@ const DeveloperDashboardPage = () => {
                             variant="default"
                             size="sm"
                             onClick={() => handlePaySeller(tx)}
-                            disabled={loading}
+                            disabled={loadingTransactions}
                             className="w-full bg-green-600 hover:bg-green-700 text-white text-xs"
                           >
                             Pay Seller

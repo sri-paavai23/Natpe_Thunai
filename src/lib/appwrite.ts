@@ -33,4 +33,5 @@ export const APPWRITE_SERVICES_COLLECTION_ID = import.meta.env.VITE_APPWRITE_SER
 export const APPWRITE_ERRANDS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_ERRANDS_COLLECTION_ID || 'errands'; // New export
 export const APPWRITE_COLLABORATORS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_COLLABORATORS_COLLECTION_ID || 'collaborators'; // New export
 export const APPWRITE_TOURNAMENTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_TOURNAMENTS_COLLECTION_ID || 'tournaments'; // New export
+export const APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID = import.meta.env.VITE_APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID || 'developer_messages'; // NEW EXPORT
 export default client;

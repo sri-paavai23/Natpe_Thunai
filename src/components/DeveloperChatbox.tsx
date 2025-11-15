@@ -5,34 +5,62 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageSquareText, Send, QrCode, Users, HeartHandshake, Code } from "lucide-react";
+import { MessageSquareText, Send, QrCode, Users, HeartHandshake, Code, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import JoinAmbassadorForm from "@/components/forms/JoinAmbassadorForm"; // Import the new form
-import { Separator } from "@/components/ui/separator"; // Import Separator
+import JoinAmbassadorForm from "@/components/forms/JoinAmbassadorForm";
+import { Separator } from "@/components/ui/separator";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
+import { ID } from 'appwrite';
+import { useAuth } from "@/context/AuthContext";
+import { containsBlockedWords } from "@/lib/moderation"; // Import moderation utility
 
 const DeveloperChatbox = () => {
+  const { user, userProfile } = useAuth();
   const [message, setMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<string[]>([]); // Placeholder for chat history
   const [isAmbassadorFormOpen, setIsAmbassadorFormOpen] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim()) {
-      // In a real application, this message would be sent to a backend service
-      // (e.g., Appwrite Functions, WebSockets, or a ticketing system).
-      // For now, we'll simulate sending and add it to a local history.
-      const newMessage = `You: ${message}`;
-      setChatHistory((prev) => [...prev, newMessage]);
-      setMessage("");
-      toast.success("Message sent to developers!");
+    const trimmedMessage = message.trim();
 
-      // Simulate a developer response after a short delay
-      setTimeout(() => {
-        setChatHistory((prev) => [...prev, "Developer: Thanks for reaching out! We'll get back to you soon."]);
-      }, 2000);
-    } else {
+    if (!trimmedMessage) {
       toast.error("Message cannot be empty.");
+      return;
+    }
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to send a message.");
+      return;
+    }
+    
+    if (containsBlockedWords(trimmedMessage)) {
+      toast.error("Your message contains inappropriate language. Please revise.");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID,
+        ID.unique(),
+        {
+          senderId: user.$id,
+          senderName: user.name,
+          message: trimmedMessage,
+          isDeveloper: userProfile.role === 'developer',
+          // Note: The $createdAt timestamp will be used by the Developer Dashboard
+          // to determine visibility (1-2 days).
+        }
+      );
+      setMessage("");
+      toast.success("Message sent to developers! Check the Developer Dashboard for a response.");
+    } catch (error: any) {
+      console.error("Error sending message to developers:", error);
+      toast.error(error.message || "Failed to send message.");
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -48,7 +76,7 @@ const DeveloperChatbox = () => {
     // In a real app, this would link to a GitHub repo, documentation, or a contact form.
   };
 
-  const developerUpiId = "8903480105@superyes"; // Updated developer UPI ID
+  const developerUpiId = "8903480105@superyes";
 
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -59,19 +87,11 @@ const DeveloperChatbox = () => {
       </CardHeader>
       <CardContent className="p-4 pt-0 space-y-4">
         <p className="text-sm text-muted-foreground">
-          Have a question or feedback? Chat directly with our development team!
+          Have a question or feedback? Send a message directly to our development team!
         </p>
-        <div className="h-40 overflow-y-auto border border-border rounded-md p-3 bg-background text-sm space-y-2">
-          {chatHistory.length === 0 ? (
-            <p className="text-muted-foreground text-center">No messages yet. Start a conversation!</p>
-          ) : (
-            chatHistory.map((msg, index) => (
-              <p key={index} className={msg.startsWith("You:") ? "text-primary-foreground text-right" : "text-muted-foreground text-left"}>
-                {msg}
-              </p>
-            ))
-          )}
-        </div>
+        
+        {/* Removed local chat history display */}
+
         <form onSubmit={handleSendMessage} className="flex gap-2">
           <Input
             type="text"
@@ -79,9 +99,10 @@ const DeveloperChatbox = () => {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="flex-grow bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+            disabled={isSending}
           />
-          <Button type="submit" size="icon" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            <Send className="h-4 w-4" />
+          <Button type="submit" size="icon" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" disabled={isSending}>
+            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             <span className="sr-only">Send Message</span>
           </Button>
         </form>

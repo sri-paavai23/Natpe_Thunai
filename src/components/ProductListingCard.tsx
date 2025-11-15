@@ -2,8 +2,9 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Product } from "@/lib/mockData"; // Import Product interface
-import { Trash2 } from 'lucide-react';
+import { Trash2, ShieldCheck } from 'lucide-react'; // Import ShieldCheck
 import { Link } from 'react-router-dom'; // Import Link
+import { Badge } from "@/components/ui/badge"; // Import Badge
 
 interface ProductListingCardProps {
   product: Product;
@@ -37,8 +38,11 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product, onDeve
             className="w-full h-32 object-cover rounded-md mb-2"
           />
           <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
-          <div className="mt-2 text-xs text-gray-500">
-            Seller: {product.sellerName} ({product.sellerRating} stars)
+          <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+            <span>Seller: {product.sellerName} ({product.sellerRating} stars)</span>
+            <Badge className="bg-green-500 text-white flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3" /> Verified
+            </Badge>
           </div>
         </CardContent>
         <CardFooter>
