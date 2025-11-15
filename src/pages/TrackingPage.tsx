@@ -45,6 +45,7 @@ interface FoodOrderItem extends BaseTrackingItem {
   buyerId: string;
   providerId: string;
   orderStatus: FoodOrder["status"]; // Specific status for food orders
+  quantity: number; // <-- FIX: Added missing quantity property
 }
 
 interface OtherActivityItem extends BaseTrackingItem {
@@ -124,6 +125,7 @@ const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: s
     providerId: doc.providerId,
     orderStatus: doc.status,
     isUserProvider: doc.providerId === currentUserId,
+    quantity: doc.quantity, // <-- FIX: Mapped quantity from FoodOrder document
   };
 };
 
