@@ -1,0 +1,13 @@
+{
+  "appId": "com.natpethunai.app",
+  "appName": "NatpeThunai",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "npmClient": "npm",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  },
+  "cordova": {}
+}
