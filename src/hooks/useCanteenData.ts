@@ -75,11 +75,15 @@ export const useCanteenData = (): CanteenDataState => {
 
   const updateCanteen = useCallback(async (canteenId: string, updates: Partial<CanteenData>) => {
     try {
-      const updatePayload: Partial<CanteenData> & { items?: string[] } = { ...updates };
+      // Separate items from other updates
+      const { items: updatedItems, ...otherUpdates } = updates;
+
+      // Initialize payload with non-item updates, ensuring 'items' is typed as string[] for Appwrite
+      const updatePayload: Partial<Omit<CanteenData, 'items'>> & { items?: string[] } = otherUpdates;
       
       // Serialize items if they are being updated
-      if (updates.items) {
-          updatePayload.items = serializeItems(updates.items);
+      if (updatedItems) {
+          updatePayload.items = serializeItems(updatedItems);
       }
       
       await databases.updateDocument(

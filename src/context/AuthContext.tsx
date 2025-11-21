@@ -21,7 +21,7 @@ interface UserProfile extends Models.Document {
   role: "user" | "developer"; // Appwrite system role
   gender: "male" | "female" | "prefer-not-to-say"; // New field
   userType: "student" | "staff"; // New field
-  // Dynamic Leveling Fields
+  // Dynamic Leveling Fields (maxXp is calculated client-side but might be stored)
   level: number;
   currentXp: number;
   maxXp: number;
@@ -121,11 +121,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateUserProfile = async (profileId: string, data: Partial<UserProfile>) => {
     try {
+      // Filter out derived fields like maxXp before sending to DB
+      const { maxXp, ...dataToSave } = data;
+
       const updatedDoc = await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
         profileId,
-        data
+        dataToSave
       );
       
       // Ensure we use the data returned from the database, which should include all fields
@@ -133,13 +136,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Recalculate Max XP based on the potentially new level, ensuring defaults if fields are missing
       const level = updatedProfileData.level ?? 1;
-      const maxXp = calculateMaxXpForLevel(level);
+      const calculatedMaxXp = calculateMaxXpForLevel(level);
 
       const updatedProfile: UserProfile = {
         ...updatedProfileData,
         level: level,
         currentXp: updatedProfileData.currentXp ?? 0,
-        maxXp: maxXp,
+        maxXp: calculatedMaxXp,
       };
       setUserProfile(updatedProfile);
       // Do NOT show success toast here, let the caller (like addXp or EditProfileForm) handle it.
@@ -163,12 +166,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       // Only update if there's a change in XP or level
-      if (newLevel !== currentLevel || newCurrentXp !== userProfile.currentXp || newMaxXp !== userProfile.maxXp) {
+      if (newLevel !== currentLevel || newCurrentXp !== userProfile.currentXp) {
         // Use updateUserProfile to handle the database update and local state sync
+        // We only send level and currentXp to the database.
         await updateUserProfile(userProfile.$id, {
           level: newLevel,
           currentXp: newCurrentXp,
-          maxXp: newMaxXp, // Ensure maxXp is saved back to the database
         });
       }
 
