@@ -11,9 +11,10 @@ import { ServicePost } from "@/hooks/useServiceListings";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
-import { Loader2, DollarSign } from "lucide-react";
+import { Loader2, DollarSign, Truck } from "lucide-react"; // ADDED Truck
 import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"; // Import Dialog components
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
 
 interface PlaceFoodOrderFormProps {
   offering: ServicePost;
@@ -26,6 +27,8 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
   const [quantity, setQuantity] = useState(1);
   const [deliveryLocation, setDeliveryLocation] = useState(userProfile?.mobileNumber || ""); // Using mobile number field for location placeholder
   const [notes, setNotes] = useState("");
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // NEW
+  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // NEW
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -84,6 +87,8 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
           notes: notes.trim(),
           status: "Pending Confirmation", // We keep this status for the provider flow, but payment is initiated now.
           collegeName: userProfile.collegeName, // NEW: Add collegeName
+          ambassadorDelivery: ambassadorDelivery, // NEW
+          ambassadorMessage: ambassadorMessage || null, // NEW
         }
       );
       
@@ -149,6 +154,14 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
             disabled={isSubmitting}
           />
         </div>
+
+        <AmbassadorDeliveryOption // NEW
+          ambassadorDelivery={ambassadorDelivery}
+          setAmbassadorDelivery={setAmbassadorDelivery}
+          ambassadorMessage={ambassadorMessage}
+          setAmbassadorMessage={setAmbassadorMessage}
+        />
+
         <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
             Cancel
@@ -173,6 +186,12 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
           <div className="space-y-3 py-2">
             <p className="text-sm text-foreground">Item: <span className="font-semibold">{offering.title} x{quantity}</span></p>
             <p className="text-xl font-bold text-secondary-neon">Total Amount: ₹{totalAmount.toFixed(2)}</p>
+            {ambassadorDelivery && ( // NEW
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <Truck className="h-4 w-4" /> Ambassador Delivery Requested
+                {ambassadorMessage && <span className="ml-1">({ambassadorMessage})</span>}
+              </p>
+            )}
             <p className="text-xs text-destructive-foreground">
                 Recipient: Natpe Thunai Developers (UPI ID: {DEVELOPER_UPI_ID})
             </p>

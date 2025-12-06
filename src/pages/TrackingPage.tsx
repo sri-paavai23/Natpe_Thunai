@@ -35,6 +35,8 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   commissionAmount?: number;
   netSellerAmount?: number;
   collegeName: string; // NEW: Add collegeName
+  ambassadorDelivery?: boolean; // NEW
+  ambassadorMessage?: string; // NEW
 }
 
 export interface FoodOrderItem extends BaseTrackingItem {
@@ -50,6 +52,8 @@ export interface FoodOrderItem extends BaseTrackingItem {
   deliveryLocation: string; // Added missing property
   notes: string; // Added missing property
   collegeName: string; // NEW: Add collegeName
+  ambassadorDelivery?: boolean; // NEW
+  ambassadorMessage?: string; // NEW
 }
 
 interface OtherActivityItem extends BaseTrackingItem {
@@ -106,6 +110,8 @@ const convertAppwriteTransactionToTrackingItem = (doc: Models.Document, currentU
     netSellerAmount: transactionDoc.netSellerAmount,
     isUserProvider: transactionDoc.sellerId === currentUserId,
     collegeName: transactionDoc.collegeName, // NEW: Add collegeName
+    ambassadorDelivery: transactionDoc.ambassadorDelivery, // NEW
+    ambassadorMessage: transactionDoc.ambassadorMessage, // NEW
   };
 };
 
@@ -134,6 +140,8 @@ const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: s
     deliveryLocation: doc.deliveryLocation, // Mapped missing property
     notes: doc.notes, // Mapped missing property
     collegeName: doc.collegeName, // NEW: Add collegeName
+    ambassadorDelivery: doc.ambassadorDelivery, // NEW
+    ambassadorMessage: doc.ambassadorMessage, // NEW
   };
 };
 
@@ -367,6 +375,12 @@ const TrackingPage = () => {
                     {marketItem && (
                       <div className="space-y-1 text-xs border-t border-border pt-2">
                         <p className="text-muted-foreground">Amount: <span className="font-semibold text-foreground">₹{marketItem.amount?.toFixed(2)}</span></p>
+                        {marketItem.ambassadorDelivery && ( // NEW
+                          <p className="text-muted-foreground flex items-center gap-1">
+                            <Truck className="h-3 w-3" /> Ambassador Delivery Requested
+                            {marketItem.ambassadorMessage && <span className="ml-1">({marketItem.ambassadorMessage})</span>}
+                          </p>
+                        )}
                         {isSellerOrProvider ? (
                           <>
                             <p className="text-muted-foreground">Buyer: {marketItem.buyerName || "N/A"}</p>
@@ -398,6 +412,12 @@ const TrackingPage = () => {
                         <p className="text-xs text-muted-foreground">Total: <span className="font-semibold text-foreground">₹{foodItem.totalAmount.toFixed(2)}</span> | Qty: {foodItem.quantity}</p>
                         <p className="text-xs text-muted-foreground">Delivery to: {foodItem.deliveryLocation}</p>
                         {foodItem.notes && <p className="text-xs text-muted-foreground">Notes: {foodItem.notes}</p>}
+                        {foodItem.ambassadorDelivery && ( // NEW
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Truck className="h-3 w-3" /> Ambassador Delivery Requested
+                            {foodItem.ambassadorMessage && <span className="ml-1">({foodItem.ambassadorMessage})</span>}
+                          </p>
+                        )}
                         
                         {/* Provider Actions */}
                         {isSellerOrProvider && foodItem.orderStatus !== "Delivered" && foodItem.orderStatus !== "Cancelled" && (

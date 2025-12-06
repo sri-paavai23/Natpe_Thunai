@@ -32,7 +32,16 @@ const ServiceListingPage = () => {
 
   const formattedCategory = formatCategoryTitle(category);
 
-  const handlePostService = async (data: Omit<ServicePost, "id" | "datePosted" | "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
+  const handlePostService = async (data: {
+    title: string;
+    description: string;
+    category: string;
+    price: string;
+    contact: string;
+    customOrderDescription?: string;
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
+  }) => {
     if (!user || !userProfile) {
       toast.error("You must be logged in to post a service.");
       return;

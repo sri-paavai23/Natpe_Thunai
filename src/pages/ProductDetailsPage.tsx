@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ID, Query, Models } from 'appwrite'; // Import Models
@@ -7,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2 } from 'lucide-react'; // Added Building2 icon
+import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2 } from 'lucide-react'; // Added Truck and Loader2 icons
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
 import { calculateCommissionRate } from '@/utils/commission'; // Import commission calculator
 import { DEVELOPER_UPI_ID } from '@/lib/config'; // Import DEVELOPER_UPI_ID
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"; // Import Dialog components
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
 
 export default function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
@@ -23,6 +27,10 @@ export default function ProductDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isConfirmPurchaseDialogOpen, setIsConfirmPurchaseDialogOpen] = useState(false); // NEW
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // NEW
+  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // NEW
+  const [isBargainPurchase, setIsBargainPurchase] = useState(false); // NEW
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -57,7 +65,7 @@ export default function ProductDetailsPage() {
 
   }, [productId]);
 
-  const handleInitiatePayment = async (isBargain: boolean = false) => {
+  const handleOpenConfirmPurchase = (bargain: boolean) => { // NEW
     if (!user || !userProfile) {
       toast.error("Please log in to proceed with a transaction.");
       navigate("/auth");
@@ -69,10 +77,17 @@ export default function ProductDetailsPage() {
       toast.error("You cannot buy/rent your own listing.");
       return;
     }
-    if (!userProfile.collegeName) { // NEW: Check for collegeName
+    if (!userProfile.collegeName) {
       toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
+
+    setIsBargainPurchase(bargain);
+    setIsConfirmPurchaseDialogOpen(true);
+  };
+
+  const handleInitiatePayment = async () => { // Modified to be called from dialog
+    if (!user || !userProfile || !product) return; // Should be checked by handleOpenConfirmPurchase
 
     setIsProcessing(true);
     
@@ -89,12 +104,12 @@ export default function ProductDetailsPage() {
     const transactionType = product.type === 'sell' ? 'buy' : 'rent';
     const discountRate = 0.15; // 15% fixed bargain discount
     
-    if (isBargain) {
+    if (isBargainPurchase) { // Use isBargainPurchase state
       amount = amount * (1 - discountRate);
     }
 
     const transactionAmount = parseFloat(amount.toFixed(2));
-    const transactionNote = isBargain 
+    const transactionNote = isBargainPurchase 
       ? `Bargain purchase of ${product.title}` 
       : `${transactionType} of ${product.title}`;
 
@@ -115,8 +130,10 @@ export default function ProductDetailsPage() {
           amount: transactionAmount,
           status: "initiated",
           type: transactionType,
-          isBargain: isBargain,
-          collegeName: userProfile.collegeName, // NEW: Add collegeName
+          isBargain: isBargainPurchase,
+          collegeName: userProfile.collegeName,
+          ambassadorDelivery: ambassadorDelivery, // NEW
+          ambassadorMessage: ambassadorMessage || null, // NEW
         }
       );
 
@@ -138,6 +155,7 @@ export default function ProductDetailsPage() {
       toast.error(error.message || "Failed to initiate transaction.");
     } finally {
       setIsProcessing(false);
+      setIsConfirmPurchaseDialogOpen(false); // Close dialog
     }
   };
 
@@ -191,6 +209,8 @@ export default function ProductDetailsPage() {
   const actionText = product.type === 'sell' ? 'Buy Now' : 'Rent Now';
   const originalPrice = product.price.replace(/[₹,]/g, '').split('/')[0].trim();
   const bargainPrice = (parseFloat(originalPrice) * 0.85).toFixed(2); // 15% discount
+  const currentPurchasePrice = isBargainPurchase ? parseFloat(bargainPrice) : parseFloat(originalPrice);
+
 
   return (
     <div className="container mx-auto p-6 pb-20">
@@ -225,7 +245,7 @@ export default function ProductDetailsPage() {
               <Button 
                 size="lg" 
                 className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-                onClick={() => handleInitiatePayment(false)}
+                onClick={() => handleOpenConfirmPurchase(false)} // Open dialog for direct purchase
                 disabled={isProcessing}
               >
                 <DollarSign className="mr-2 h-5 w-5" /> 
@@ -236,7 +256,7 @@ export default function ProductDetailsPage() {
                 variant="outline" 
                 size="lg" 
                 className="w-full border-primary text-primary hover:bg-primary/10"
-                onClick={handleBargainRequest}
+                onClick={() => handleOpenConfirmPurchase(true)} // Open dialog for bargain purchase
                 disabled={isProcessing}
               >
                 <MessageSquareText className="mr-2 h-5 w-5" /> 
@@ -289,6 +309,51 @@ export default function ProductDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* NEW: Confirmation Dialog for Purchase/Rent */}
+      <Dialog open={isConfirmPurchaseDialogOpen} onOpenChange={setIsConfirmPurchaseDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-secondary-neon" /> Confirm {product.type === 'sell' ? 'Purchase' : 'Rent'}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Review your order and select delivery options before proceeding to payment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-foreground">Item: <span className="font-semibold">{product.title}</span></p>
+            <p className="text-xl font-bold text-secondary-neon">
+              Price: ₹{currentPurchasePrice.toFixed(2)} {product.type === 'rent' ? '/day' : ''}
+            </p>
+            {isBargainPurchase && (
+              <p className="text-xs text-green-500 flex items-center gap-1">
+                <Badge variant="outline" className="bg-green-100 text-green-800">15% Bargain Applied</Badge>
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">Seller: {product.sellerName}</p>
+            <p className="text-xs text-destructive-foreground">
+                Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the seller.
+            </p>
+          </div>
+
+          <AmbassadorDeliveryOption
+            ambassadorDelivery={ambassadorDelivery}
+            setAmbassadorDelivery={setAmbassadorDelivery}
+            ambassadorMessage={ambassadorMessage}
+            setAmbassadorMessage={setAmbassadorMessage}
+          />
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConfirmPurchaseDialogOpen(false)} disabled={isProcessing} className="border-border text-primary-foreground hover:bg-muted">
+              Cancel
+            </Button>
+            <Button onClick={handleInitiatePayment} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

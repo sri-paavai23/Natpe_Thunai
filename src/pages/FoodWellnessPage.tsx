@@ -43,7 +43,16 @@ const FoodWellnessPage = () => {
   const postedOfferings = allPosts.filter(p => !p.isCustomOrder && OFFERING_CATEGORIES.includes(p.category));
   const postedCustomRequests = allPosts.filter(p => p.isCustomOrder);
 
-  const handlePostService = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
+  const handlePostService = async (data: {
+    title: string;
+    description: string;
+    category: string;
+    price: string;
+    contact: string;
+    customOrderDescription?: string;
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
+  }) => {
     if (!user || !userProfile) {
       toast.error("You must be logged in to post.");
       return;
@@ -73,14 +82,23 @@ const FoodWellnessPage = () => {
     }
   };
 
-  const handlePostCustomOrder = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
+  const handlePostCustomOrder = async (data: {
+    title: string;
+    description: string;
+    category: string;
+    price: string;
+    contact: string;
+    customOrderDescription?: string;
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
+  }) => {
     if (!user || !userProfile) {
       toast.error("You must be logged in to post a custom request.");
       return;
     }
 
     try {
-      const newRequest: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId"> = {
+      const newRequest = {
         ...data,
         posterId: user.$id,
         posterName: user.name,

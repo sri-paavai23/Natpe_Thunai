@@ -19,6 +19,8 @@ export interface FoodOrder extends Models.Document {
   notes: string; // Added missing property
   status: "Pending Confirmation" | "Confirmed" | "Preparing" | "Out for Delivery" | "Delivered" | "Cancelled";
   collegeName: string; // NEW: Add collegeName
+  ambassadorDelivery?: boolean; // NEW
+  ambassadorMessage?: string; // NEW
 }
 
 interface FoodOrdersState {

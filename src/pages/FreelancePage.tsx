@@ -23,8 +23,20 @@ const FreelancePage = () => {
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
 
   // This function is now just a placeholder/helper since posting should ideally happen on the specific category page
-  const handlePostService = () => {
-    toast.info("Service/Job Request posted successfully! (Simulated)");
+  const handlePostService = async (data: { // Changed to async and added data parameter
+    title: string;
+    description: string;
+    category: string;
+    price: string;
+    contact: string;
+    customOrderDescription?: string;
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
+  }) => {
+    // In a real app, this data would be sent to a backend or Appwrite collection.
+    // For now, we'll just simulate success.
+    console.log("Simulated service post:", data);
+    toast.info(`Service offering "${data.title}" posted successfully! (Simulated)`);
     setIsPostServiceDialogOpen(false);
   };
   

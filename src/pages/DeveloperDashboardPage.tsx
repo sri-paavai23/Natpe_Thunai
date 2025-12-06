@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send } from "lucide-react"; // NEW: Import Send icon
+import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck } from "lucide-react"; // NEW: Import Truck icon
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
@@ -35,10 +35,12 @@ interface Transaction {
   netSellerAmount?: number;
   $createdAt: string;
   collegeName: string; // NEW: Add collegeName
+  ambassadorDelivery?: boolean; // NEW
+  ambassadorMessage?: string; // NEW
 }
 
 const DeveloperDashboardPage = () => {
-  const { userProfile, user } = useAuth();
+  const { user, userProfile } = useAuth();
   // Fetch all messages (no collegeNameFilter passed)
   const { messages, isLoading: isMessagesLoading, error: messagesError, refetch: refetchMessages } = useDeveloperMessages(); 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -298,7 +300,7 @@ const DeveloperDashboardPage = () => {
         return "bg-blue-500 text-white";
       case "commission_deducted":
         return "bg-orange-500 text-white";
-      case "paid_to_seller":
+      case "paid_to_seller": // Corrected typo here
         return "bg-green-500 text-white";
       case "failed":
         return "bg-destructive text-destructive-foreground";
@@ -514,6 +516,7 @@ const DeveloperDashboardPage = () => {
                     <TableHead className="text-foreground">Commission</TableHead>
                     <TableHead className="text-foreground">Net to Seller</TableHead>
                     <TableHead className="text-foreground">Seller UPI</TableHead>
+                    <TableHead className="text-foreground">Delivery</TableHead> {/* NEW: Delivery Column */}
                     <TableHead className="text-foreground">Status</TableHead>
                     <TableHead className="text-right text-foreground">Actions</TableHead>
                   </TableRow>
@@ -529,6 +532,15 @@ const DeveloperDashboardPage = () => {
                       <TableCell className="text-foreground">₹{(tx.commissionAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.netSellerAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-muted-foreground">{tx.sellerUpiId}</TableCell>
+                      <TableCell> {/* NEW: Display Delivery Info */}
+                        {tx.ambassadorDelivery ? (
+                          <Badge variant="outline" className="flex items-center gap-1 bg-blue-100 text-blue-800">
+                            <Truck className="h-3 w-3" /> Ambassador
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">Direct</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge className={cn("px-2 py-1 text-xs font-semibold", getStatusBadgeClass(tx.status))}>
                           {tx.status.replace(/_/g, ' ')}

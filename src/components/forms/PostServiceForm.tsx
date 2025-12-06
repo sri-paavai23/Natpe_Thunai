@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite"; // NEW: Import Appwrite services
 import { ID } from 'appwrite'; // NEW: Import ID
 import { Loader2 } from "lucide-react"; // NEW: Import Loader2
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
 
 interface CategoryOption {
   value: string;
@@ -35,8 +36,10 @@ interface PostServiceFormProps {
     category: string;
     price: string;
     contact: string;
-    customOrderDescription?: string; // New optional field
-  }) => void;
+    customOrderDescription?: string;
+    ambassadorDelivery: boolean;
+    ambassadorMessage: string;
+  }) => Promise<void>; // Changed to return Promise<void>
   onCancel: () => void;
   initialCategory?: string; // Optional prop to pre-select category
   isCustomOrder?: boolean; // New prop to indicate if it's a custom order form
@@ -51,6 +54,8 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
   const [price, setPrice] = useState("");
   const [contact, setContact] = useState("");
   const [customOrderDescription, setCustomOrderDescription] = useState(""); // New state
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // NEW
+  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // NEW
   const [isPosting, setIsPosting] = useState(false); // NEW: Add loading state
 
   const categoriesToRender = categoryOptions || DEFAULT_CATEGORIES;
@@ -83,6 +88,8 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName, // NEW: Add collegeName
+        ambassadorDelivery: ambassadorDelivery, // NEW
+        ambassadorMessage: ambassadorMessage || null, // NEW
       };
 
       await databases.createDocument(
@@ -93,13 +100,15 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
       );
       
       toast.success(`Your ${isCustomOrder ? "custom request" : "service"} "${title}" has been posted!`);
-      onSubmit({ title, description, category, price, contact, customOrderDescription }); // Call original onSubmit prop
+      await onSubmit({ title, description, category, price, contact, customOrderDescription, ambassadorDelivery, ambassadorMessage }); // Call original onSubmit prop
       setTitle("");
       setDescription("");
       setCategory(initialCategory);
       setPrice("");
       setContact("");
       setCustomOrderDescription("");
+      setAmbassadorDelivery(false); // NEW
+      setAmbassadorMessage(""); // NEW
     } catch (error: any) {
       console.error("Error posting service:", error);
       toast.error(error.message || "Failed to post service listing.");
@@ -190,6 +199,14 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
           disabled={isPosting}
         />
       </div>
+
+      <AmbassadorDeliveryOption // NEW
+        ambassadorDelivery={ambassadorDelivery}
+        setAmbassadorDelivery={setAmbassadorDelivery}
+        ambassadorMessage={ambassadorMessage}
+        setAmbassadorMessage={setAmbassadorMessage}
+      />
+
       <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isPosting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
           Cancel
