@@ -44,7 +44,6 @@ import AmbassadorProgramPage from "./pages/AmbassadorProgramPage"; // NEW IMPORT
 // Import new Market sub-pages
 import ProductDetailsPage from "./pages/ProductDetailsPage";
 import PaymentConfirmationPage from "./pages/PaymentConfirmationPage"; // New Import
-import LookingForPage from "./pages/LookingForPage"; // NEW IMPORT
 
 // Import new Auth-related pages
 import VerifyEmailPage from "./pages/VerifyEmailPage";
@@ -136,7 +135,6 @@ const AppContent = () => {
         <Route path="/market" element={<MarketPage />} />
         <Route path="/market/product/:productId" element={<ProductDetailsPage />} />
         <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} /> {/* New Route */}
-        <Route path="/market/looking-for" element={<LookingForPage />} /> {/* NEW ROUTE */}
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/profile" element={<ProfilePage />} />

@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import MarketTabs from "@/components/MarketTabs";
 import MarketListingFormWrapper from "@/components/forms/MarketListingFormWrapper";
-import { PlusCircle, Search } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // NEW: Import Card components
+import { PlusCircle } from "lucide-react";
 
 export default function MarketPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -34,20 +32,6 @@ export default function MarketPage() {
             </DialogContent>
           </Dialog>
         </div>
-
-        {/* NEW: Card for "Looking For" posts */}
-        <Link to="/market/looking-for">
-          <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow">
-            <CardHeader className="p-0 pb-2">
-              <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-                <Search className="h-5 w-5 text-secondary-neon" /> Looking For...
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <p className="text-muted-foreground">Post requests for items or services you need, or see what others are looking for!</p>
-            </CardContent>
-          </Card>
-        </Link>
 
         <MarketTabs initialTab="all" />
       </div>
