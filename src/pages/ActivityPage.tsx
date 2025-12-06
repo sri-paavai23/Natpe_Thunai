@@ -32,7 +32,7 @@ const ActivityPage = () => {
             <CardTitle className="text-xl font-semibold text-card-foreground">Cash Exchange</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <p className="text-muted-foreground">Post requirements, accept deals, and manage your 30% commission flow transparently.</p>
+            <p className="text-muted-foreground">Post requirements, accept deals, and contribute to the developers if you are benefited through this service (non-commissioned).</p>
           </CardContent>
         </Card>
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleActivityClick("/tournaments", "Tournament Updates")}>

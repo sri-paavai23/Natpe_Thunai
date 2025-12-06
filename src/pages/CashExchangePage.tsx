@@ -49,10 +49,10 @@ const CashExchangePage = () => {
   const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
-  // Use dynamic commission rate from user profile
-  const userLevel = userProfile?.level ?? 1;
-  const dynamicCommissionRate = calculateCommissionRate(userLevel);
-  const dynamicCommissionRateDisplay = formatCommissionRate(dynamicCommissionRate);
+  // Removed dynamic commission rate from user profile as it's now a non-commissioned service.
+  // const userLevel = userProfile?.level ?? 1;
+  // const dynamicCommissionRate = calculateCommissionRate(userLevel);
+  // const dynamicCommissionRateDisplay = formatCommissionRate(dynamicCommissionRate);
 
 
   const fetchRequests = useCallback(async () => {
@@ -129,13 +129,13 @@ const CashExchangePage = () => {
 
     setIsPosting(true);
     try {
-      // Calculate commission based on the poster's current level
-      const commissionAmount = parsedAmount * dynamicCommissionRate;
+      // Commission is now 0 for cash exchange
+      const commissionAmount = 0; 
 
       const newRequestData = {
         type: postType,
         amount: parsedAmount,
-        commission: commissionAmount, // Use dynamic commission
+        commission: commissionAmount, // Set commission to 0
         notes: notes.trim(),
         status: postType === "group-contribution" ? "Group Contribution" : "Open",
         meetingLocation: meetingLocation.trim(),
@@ -273,7 +273,7 @@ const CashExchangePage = () => {
               </Badge>
             </p>
             <p className="text-sm text-muted-foreground">{req.notes}</p>
-            <p className="text-xs text-muted-foreground">Commission: ₹{req.commission.toFixed(2)}</p>
+            {/* Removed commission display as it's now 0 */}
             <p className="text-xs text-muted-foreground">Poster: {isPoster ? "You" : req.posterName}</p>
             {req.meetingLocation && <p className="text-xs text-muted-foreground">Meet: {req.meetingLocation} at {req.meetingTime}</p>}
             
@@ -317,7 +317,7 @@ const CashExchangePage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Post your cash requirements or offers. A dynamic commission rate of {dynamicCommissionRateDisplay} applies to successful exchanges.
+              Post your cash requirements or offers. This is a non-commissioned service. If you are benefited, consider contributing to the developers.
             </p>
             <Button
               className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
