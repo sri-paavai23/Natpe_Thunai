@@ -10,11 +10,11 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock } from "lucide-react";
+import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send } from "lucide-react"; // NEW: Import Send icon
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
-import { Query } from "appwrite";
+import { Query, ID } from "appwrite"; // NEW: Import ID for message creation
 import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation";
 import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages"; // NEW IMPORT
 import { calculateCommissionRate } from "@/utils/commission"; // NEW IMPORT
@@ -34,16 +34,20 @@ interface Transaction {
   commissionAmount?: number;
   netSellerAmount?: number;
   $createdAt: string;
+  collegeName: string; // NEW: Add collegeName
 }
 
 const DeveloperDashboardPage = () => {
   const { userProfile, user } = useAuth();
-  const { messages, isLoading: isMessagesLoading, error: messagesError } = useDeveloperMessages(); // Use message hook
+  // Fetch all messages (no collegeNameFilter passed)
+  const { messages, isLoading: isMessagesLoading, error: messagesError, refetch: refetchMessages } = useDeveloperMessages(); 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [blockedWords, setBlockedWords] = useState<string[]>(STATIC_BLOCKED_WORDS); 
   const [newBlockedWord, setNewBlockedWord] = useState("");
   const [targetUserIdAction, setTargetUserIdAction] = useState("");
+  const [developerReply, setDeveloperReply] = useState(""); // NEW: State for developer reply
+  const [isReplying, setIsReplying] = useState(false); // NEW: State for reply loading
 
   const isDeveloper = userProfile?.role === "developer";
 
@@ -56,6 +60,7 @@ const DeveloperDashboardPage = () => {
     const fetchTransactions = async () => {
       setLoadingTransactions(true);
       try {
+        // Fetch ALL transactions (no collegeName filter for developer dashboard)
         const response = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_TRANSACTIONS_COLLECTION_ID
@@ -246,6 +251,45 @@ const DeveloperDashboardPage = () => {
     }
   };
 
+  // NEW: Handle developer reply
+  const handleDeveloperReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedReply = developerReply.trim();
+
+    if (!trimmedReply) {
+      toast.error("Reply message cannot be empty.");
+      return;
+    }
+    if (!user || !userProfile) {
+      toast.error("Developer not logged in.");
+      return;
+    }
+
+    setIsReplying(true);
+    try {
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID,
+        ID.unique(),
+        {
+          senderId: user.$id,
+          senderName: user.name,
+          message: trimmedReply,
+          isDeveloper: true,
+          collegeName: userProfile.collegeName, // Developer's college, or can be 'Global'
+        }
+      );
+      setDeveloperReply("");
+      toast.success("Developer reply sent!");
+      refetchMessages(); // Refresh messages to show the new reply
+    } catch (error: any) {
+      console.error("Error sending developer reply:", error);
+      toast.error(error.message || "Failed to send reply.");
+    } finally {
+      setIsReplying(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: Transaction["status"]) => {
     switch (status) {
       case "initiated":
@@ -315,7 +359,7 @@ const DeveloperDashboardPage = () => {
                     msg.isDeveloper ? "bg-primary/10 border-primary" : "bg-background border-border"
                   )}>
                     <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="font-semibold text-foreground">{msg.senderName}</span>
+                      <span className="font-semibold text-foreground">{msg.senderName} ({msg.collegeName})</span> {/* NEW: Display collegeName */}
                       <span className="text-muted-foreground">{new Date(msg.$createdAt).toLocaleString()}</span>
                     </div>
                     <p className="text-sm text-foreground break-words">{msg.message}</p>
@@ -323,9 +367,20 @@ const DeveloperDashboardPage = () => {
                 ))}
               </div>
             )}
-            <Button onClick={messages.length > 0 ? () => toast.info("Simulating developer response...") : undefined} disabled={messages.length === 0} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                Reply (Simulated)
-            </Button>
+            <form onSubmit={handleDeveloperReply} className="flex gap-2 mt-4"> {/* NEW: Reply form */}
+              <Input
+                type="text"
+                placeholder="Reply to users..."
+                value={developerReply}
+                onChange={(e) => setDeveloperReply(e.target.value)}
+                className="flex-grow bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+                disabled={isReplying}
+              />
+              <Button type="submit" size="icon" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" disabled={isReplying}>
+                {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <span className="sr-only">Send Reply</span>
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
@@ -454,6 +509,7 @@ const DeveloperDashboardPage = () => {
                     <TableHead className="text-foreground">Product</TableHead>
                     <TableHead className="text-foreground">Buyer</TableHead>
                     <TableHead className="text-foreground">Seller</TableHead>
+                    <TableHead className="text-foreground">College</TableHead> {/* NEW: College Column */}
                     <TableHead className="text-foreground">Amount</TableHead>
                     <TableHead className="text-foreground">Commission</TableHead>
                     <TableHead className="text-foreground">Net to Seller</TableHead>
@@ -468,6 +524,7 @@ const DeveloperDashboardPage = () => {
                       <TableCell className="font-medium text-foreground">{tx.productTitle}</TableCell>
                       <TableCell className="text-muted-foreground">{tx.buyerName}</TableCell>
                       <TableCell className="text-muted-foreground">{tx.sellerName}</TableCell>
+                      <TableCell className="text-muted-foreground">{tx.collegeName}</TableCell> {/* NEW: Display collegeName */}
                       <TableCell className="text-foreground">₹{tx.amount.toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.commissionAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.netSellerAmount || 0).toFixed(2)}</TableCell>

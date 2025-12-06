@@ -32,6 +32,10 @@ const FreelancePage = () => {
     navigate("/services/post-job");
   };
 
+  const handleBrowseAllListings = () => { // NEW: Handler for "Browse All Listings"
+    navigate("/services/freelance/all");
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Freelance Section</h1>
@@ -73,7 +77,7 @@ const FreelancePage = () => {
             <Button
               variant="outline"
               className="w-full border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-              onClick={() => toast.info("Searching all freelance listings (feature coming soon)!")}
+              onClick={handleBrowseAllListings} // NEW: Use the new handler
             >
               <Search className="mr-2 h-4 w-4" /> Browse All Listings
             </Button>

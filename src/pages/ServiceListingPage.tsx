@@ -16,7 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 
 // Helper function to format category slug into readable title
 const formatCategoryTitle = (categorySlug: string | undefined) => {
-  if (!categorySlug) return "Service Listings";
+  if (!categorySlug || categorySlug === "all") return "All Service Listings"; // NEW: Handle "all" category
   return categorySlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
@@ -27,11 +27,12 @@ const ServiceListingPage = () => {
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   
   // Use the real-time hook, filtering by the URL category slug
-  const { services: listings, isLoading, error, refetch } = useServiceListings(category);
+  // The hook itself now handles collegeName filtering internally
+  const { services: listings, isLoading, error, refetch } = useServiceListings(category === "all" ? undefined : category); // NEW: Pass undefined for "all" category
 
   const formattedCategory = formatCategoryTitle(category);
 
-  const handlePostService = async (data: Omit<ServicePost, "id" | "datePosted" | "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName">) => {
+  const handlePostService = async (data: Omit<ServicePost, "id" | "datePosted" | "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
     if (!user || !userProfile) {
       toast.error("You must be logged in to post a service.");
       return;
@@ -43,7 +44,8 @@ const ServiceListingPage = () => {
         posterId: user.$id,
         posterName: user.name,
         // Ensure category matches the page context if not explicitly set in form
-        category: category || data.category, 
+        category: category === "all" ? data.category : category, // NEW: Handle "all" category
+        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
       };
 
       await databases.createDocument(
@@ -84,7 +86,7 @@ const ServiceListingPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Browse services offered by peers in the {formattedCategory} category.
+              Browse services offered by peers in the {formattedCategory} category for your college.
             </p>
             <Dialog open={isPostServiceDialogOpen} onOpenChange={setIsPostServiceDialogOpen}>
               <DialogTrigger asChild>
@@ -99,7 +101,7 @@ const ServiceListingPage = () => {
                 <PostServiceForm 
                   onSubmit={handlePostService} 
                   onCancel={() => setIsPostServiceDialogOpen(false)} 
-                  initialCategory={category}
+                  initialCategory={category === "all" ? "" : category} // NEW: Pass empty string for "all"
                 />
               </DialogContent>
             </Dialog>
@@ -138,7 +140,7 @@ const ServiceListingPage = () => {
                 </div>
               ))
             ) : (
-              <p className="text-center text-muted-foreground py-4">No services posted in this category yet. Be the first!</p>
+              <p className="text-center text-muted-foreground py-4">No services posted in this category yet for your college. Be the first!</p>
             )}
           </CardContent>
         </Card>

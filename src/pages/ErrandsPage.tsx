@@ -27,7 +27,7 @@ const ErrandsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
   
-  // Fetch only standard errands
+  // Fetch only standard errands for the user's college
   const { errands: postedErrands, isLoading, error } = useErrandListings(ERRAND_TYPES);
 
   // Content is age-gated if user is 25 or older
@@ -37,7 +37,7 @@ const ErrandsPage = () => {
     toast.info(`You selected "${errandType}". Post your errand using the button below.`);
   };
 
-  const handlePostErrand = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName">) => {
+  const handlePostErrand = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an errand.");
       return;
@@ -48,6 +48,7 @@ const ErrandsPage = () => {
         ...data,
         posterId: user.$id,
         posterName: user.name,
+        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
       };
 
       await databases.createDocument(
@@ -77,7 +78,7 @@ const ErrandsPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Need a helping hand with small tasks? Post your errand here!
+              Need a helping hand with small tasks? Post your errand here for your college peers!
             </p>
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
@@ -145,7 +146,7 @@ const ErrandsPage = () => {
                 </div>
               ))
             ) : (
-              <p className="text-center text-muted-foreground py-4">No errands posted yet. Be the first!</p>
+              <p className="text-center text-muted-foreground py-4">No errands posted yet for your college. Be the first!</p>
             )}
           </CardContent>
         </Card>

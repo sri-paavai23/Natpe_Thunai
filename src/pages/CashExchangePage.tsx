@@ -34,6 +34,7 @@ interface CashExchangeRequest extends Models.Document {
   contributions?: Contribution[];
   posterId: string; // ID of the user who posted the request/offer
   posterName: string; // Name of the user who posted
+  collegeName: string; // NEW: Add collegeName
 }
 
 const CashExchangePage = () => {
@@ -49,19 +50,22 @@ const CashExchangePage = () => {
   const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
-  // Removed dynamic commission rate from user profile as it's now a non-commissioned service.
-  // const userLevel = userProfile?.level ?? 1;
-  // const dynamicCommissionRate = calculateCommissionRate(userLevel);
-  // const dynamicCommissionRateDisplay = formatCommissionRate(dynamicCommissionRate);
-
-
   const fetchRequests = useCallback(async () => {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+      setLoading(false);
+      setExchangeRequests([]); // Clear requests if no college is set
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
-        [Query.orderDesc('$createdAt')]
+        [
+          Query.orderDesc('$createdAt'),
+          Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+        ]
       );
       setExchangeRequests(response.documents as unknown as CashExchangeRequest[]);
     } catch (error) {
@@ -70,15 +74,22 @@ const CashExchangePage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchRequests();
+
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
 
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CASH_EXCHANGE_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as CashExchangeRequest;
+
+        // NEW: Filter real-time updates by collegeName
+        if (payload.collegeName !== userProfile.collegeName) {
+            return;
+        }
 
         setExchangeRequests(prev => {
           const existingIndex = prev.findIndex(r => r.$id === payload.$id);
@@ -107,12 +118,12 @@ const CashExchangePage = () => {
     return () => {
       unsubscribe();
     };
-  }, [fetchRequests]);
+  }, [fetchRequests, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
+    if (!user || !userProfile) {
       toast.error("You must be logged in to post.");
       return;
     }
@@ -143,6 +154,7 @@ const CashExchangePage = () => {
         contributions: postType === "group-contribution" ? [] : undefined,
         posterId: user.$id,
         posterName: user.name,
+        collegeName: userProfile.collegeName, // NEW: Add collegeName
       };
 
       await databases.createDocument(
@@ -251,7 +263,7 @@ const CashExchangePage = () => {
     }
 
     if (filteredRequests.length === 0) {
-      return <p className="text-center text-muted-foreground py-4">No {type.replace('-', ' ')} posts yet.</p>;
+      return <p className="text-center text-muted-foreground py-4">No {type.replace('-', ' ')} posts yet for your college.</p>;
     }
 
     return filteredRequests.map((req) => {
@@ -317,7 +329,7 @@ const CashExchangePage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Post your cash requirements or offers. This is a non-commissioned service. If you are benefited, consider contributing to the developers.
+              Post your cash requirements or offers for your college. This is a non-commissioned service. If you are benefited, consider contributing to the developers.
             </p>
             <Button
               className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"

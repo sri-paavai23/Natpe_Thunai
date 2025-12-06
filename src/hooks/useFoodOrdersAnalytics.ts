@@ -13,7 +13,7 @@ interface FoodOrdersAnalyticsState {
   refetch: () => void;
 }
 
-export const useFoodOrdersAnalytics = (): FoodOrdersAnalyticsState => {
+export const useFoodOrdersAnalytics = (collegeName?: string): FoodOrdersAnalyticsState => { // NEW: Add collegeName parameter
   const [foodOrdersLastWeek, setFoodOrdersLastWeek] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +25,18 @@ export const useFoodOrdersAnalytics = (): FoodOrdersAnalyticsState => {
       const sevenDaysAgo = subDays(new Date(), 7);
       const isoDate = formatISO(sevenDaysAgo);
 
+      const queries = [
+        Query.greaterThanEqual('$createdAt', isoDate),
+        Query.limit(1) // We only need the total count
+      ];
+      if (collegeName) { // NEW: Apply collegeName filter if provided
+        queries.push(Query.equal('collegeName', collegeName));
+      }
+
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
-        [
-          Query.greaterThanEqual('$createdAt', isoDate),
-          Query.limit(1) // We only need the total count
-        ]
+        queries
       );
       setFoodOrdersLastWeek(response.total);
     } catch (err: any) {
@@ -41,7 +46,7 @@ export const useFoodOrdersAnalytics = (): FoodOrdersAnalyticsState => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [collegeName]); // NEW: Depend on collegeName
 
   useEffect(() => {
     fetchFoodOrdersLastWeek();

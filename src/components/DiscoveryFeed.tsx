@@ -15,7 +15,7 @@ const mockDeveloperDelete = (productId: string) => {
 
 const DiscoveryFeed: React.FC = () => {
   const { userProfile } = useAuth();
-  const { products: listings, isLoading, error } = useMarketListings(); // Use the hook
+  const { products: listings, isLoading, error } = useMarketListings(); // useMarketListings already filters by collegeName internally
 
   // Determine developer status
   const isDeveloper = userProfile?.role === "developer";
@@ -51,7 +51,7 @@ const DiscoveryFeed: React.FC = () => {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>No Listings Found</AlertTitle>
           <AlertDescription>
-            It looks like there are no products available right now.
+            It looks like there are no products available right now for your college.
           </AlertDescription>
         </Alert>
       </div>

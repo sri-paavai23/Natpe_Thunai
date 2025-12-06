@@ -9,12 +9,17 @@ import { useTotalUsers } from '@/hooks/useTotalUsers'; // NEW IMPORT
 import { useFoodOrdersAnalytics } from '@/hooks/useFoodOrdersAnalytics'; // NEW IMPORT
 import { useTotalTransactions } from '@/hooks/useTotalTransactions'; // NEW IMPORT
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton for loading states
+import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
 
 const AnalyticsCard = () => {
-  const { products, isLoading: isLoadingListings, error: listingsError } = useMarketListings();
-  const { totalUsers, isLoading: isLoadingUsers, error: usersError } = useTotalUsers();
-  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders, error: foodOrdersError } = useFoodOrdersAnalytics();
-  const { totalTransactions, isLoading: isLoadingTransactions, error: transactionsError } = useTotalTransactions();
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
+  const collegeName = userProfile?.collegeName; // Get the current user's college name
+
+  // Pass collegeName to the hooks for college-specific data
+  const { products, isLoading: isLoadingListings, error: listingsError } = useMarketListings(); // useMarketListings already filters internally
+  const { totalUsers, isLoading: isLoadingUsers, error: usersError } = useTotalUsers(collegeName); // Pass collegeName
+  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders, error: foodOrdersError } = useFoodOrdersAnalytics(collegeName); // Pass collegeName
+  const { totalTransactions, isLoading: isLoadingTransactions, error: transactionsError } = useTotalTransactions(collegeName); // Pass collegeName
 
   const isLoadingAny = isLoadingListings || isLoadingUsers || isLoadingFoodOrders || isLoadingTransactions;
   const hasError = listingsError || usersError || foodOrdersError || transactionsError;
@@ -27,7 +32,7 @@ const AnalyticsCard = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">
-        <p className="text-sm text-muted-foreground mb-3">Real-time insights into campus activity.</p>
+        <p className="text-sm text-muted-foreground mb-3">Real-time insights into your college's activity.</p>
         {hasError ? (
           <div className="text-center text-destructive py-4">
             <p>Error loading analytics data.</p>

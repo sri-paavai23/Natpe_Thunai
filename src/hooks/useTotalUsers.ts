@@ -12,7 +12,7 @@ interface TotalUsersState {
   refetch: () => void;
 }
 
-export const useTotalUsers = (): TotalUsersState => {
+export const useTotalUsers = (collegeName?: string): TotalUsersState => { // NEW: Add collegeName parameter
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,10 +21,15 @@ export const useTotalUsers = (): TotalUsersState => {
     setIsLoading(true);
     setError(null);
     try {
+      const queries = [Query.limit(1)]; // We only need the total count, not all documents
+      if (collegeName) { // NEW: Apply collegeName filter if provided
+        queries.push(Query.equal('collegeName', collegeName));
+      }
+
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.limit(1)] // We only need the total count, not all documents
+        queries
       );
       setTotalUsers(response.total);
     } catch (err: any) {
@@ -34,15 +39,10 @@ export const useTotalUsers = (): TotalUsersState => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [collegeName]); // NEW: Depend on collegeName
 
   useEffect(() => {
     fetchTotalUsers();
-
-    // Optional: Subscribe to real-time updates for user profiles if you want the count to update live
-    // For a dashboard, a periodic refetch might be sufficient, or subscribe to 'create'/'delete' events.
-    // For simplicity, we'll rely on manual refetch or component remount for now.
-
   }, [fetchTotalUsers]);
 
   return { totalUsers, isLoading, error, refetch: fetchTotalUsers };

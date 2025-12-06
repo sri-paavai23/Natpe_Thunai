@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText } from 'lucide-react';
+import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2 } from 'lucide-react'; // Added Building2 icon
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
@@ -69,6 +69,10 @@ export default function ProductDetailsPage() {
       toast.error("You cannot buy/rent your own listing.");
       return;
     }
+    if (!userProfile.collegeName) { // NEW: Check for collegeName
+      toast.error("Your profile is missing college information. Please update your profile first.");
+      return;
+    }
 
     setIsProcessing(true);
     
@@ -112,6 +116,7 @@ export default function ProductDetailsPage() {
           status: "initiated",
           type: transactionType,
           isBargain: isBargain,
+          collegeName: userProfile.collegeName, // NEW: Add collegeName
         }
       );
 
@@ -255,6 +260,10 @@ export default function ProductDetailsPage() {
               <div className="flex items-center text-sm text-muted-foreground mt-1">
                 <MapPin className="h-4 w-4 mr-1" />
                 <span>Located in {product.location}</span>
+              </div>
+              <div className="flex items-center text-sm text-muted-foreground mt-1">
+                <Building2 className="h-4 w-4 mr-1" /> {/* NEW: College icon */}
+                <span>College: {product.collegeName}</span> {/* NEW: Display collegeName */}
               </div>
             </CardContent>
           </Card>

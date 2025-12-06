@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from '@/lib/appwrite';
 import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
 export interface ErrandPost extends Models.Document {
   title: string;
@@ -14,6 +15,7 @@ export interface ErrandPost extends Models.Document {
   contact: string;
   posterId: string;
   posterName: string;
+  collegeName: string; // NEW: Add collegeName
 }
 
 interface ErrandListingsState {
@@ -24,15 +26,25 @@ interface ErrandListingsState {
 }
 
 export const useErrandListings = (filterTypes: string[] = []): ErrandListingsState => {
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   const [errands, setErrands] = useState<ErrandPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchErrands = useCallback(async () => {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+      setIsLoading(false);
+      setErrands([]); // Clear errands if no college is set
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     
-    const queries = [Query.orderDesc('$createdAt')];
+    const queries = [
+      Query.orderDesc('$createdAt'),
+      Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+    ];
     
     if (filterTypes.length > 0) {
       // Appwrite only supports 10 queries, so we use a single 'or' query if possible
@@ -53,18 +65,23 @@ export const useErrandListings = (filterTypes: string[] = []): ErrandListingsSta
     } finally {
       setIsLoading(false);
     }
-  }, [filterTypes]);
+  }, [filterTypes, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchErrands();
+
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
 
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_ERRANDS_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as ErrandPost;
         
-        // Check if the payload matches the current filter
+        // Check if the payload matches the current filter AND collegeName
         const matchesFilter = filterTypes.length === 0 || filterTypes.includes(payload.type);
+        const matchesCollege = payload.collegeName === userProfile.collegeName; // NEW: Check collegeName
+
+        if (!matchesCollege) return; // NEW: Skip if not from current college
 
         setErrands(prev => {
           const existingIndex = prev.findIndex(e => e.$id === payload.$id);
@@ -96,7 +113,7 @@ export const useErrandListings = (filterTypes: string[] = []): ErrandListingsSta
     return () => {
       unsubscribe();
     };
-  }, [fetchErrands, filterTypes]);
+  }, [fetchErrands, filterTypes, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   return { errands, isLoading, error, refetch: fetchErrands };
 };

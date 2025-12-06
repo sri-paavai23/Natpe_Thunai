@@ -26,7 +26,7 @@ const ShortTermNeedsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
   
-  // Fetch only urgent requests
+  // Fetch only urgent requests for the user's college
   const { errands: postedUrgentRequests, isLoading, error } = useErrandListings(URGENT_TYPES);
 
   // Content is age-gated if user is 25 or older
@@ -36,7 +36,7 @@ const ShortTermNeedsPage = () => {
     toast.info(`You selected "${needType}". Post your urgent request using the button below.`);
   };
 
-  const handlePostErrand = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName">) => {
+  const handlePostErrand = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an urgent request.");
       return;
@@ -47,6 +47,7 @@ const ShortTermNeedsPage = () => {
         ...data,
         posterId: user.$id,
         posterName: user.name,
+        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
       };
 
       await databases.createDocument(
@@ -76,7 +77,7 @@ const ShortTermNeedsPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              For urgent tasks with extra charges. Get help when you need it most!
+              For urgent tasks with extra charges. Get help when you need it most from your college peers!
             </p>
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
@@ -138,7 +139,7 @@ const ShortTermNeedsPage = () => {
                 </div>
               ))
             ) : (
-              <p className="text-center text-muted-foreground py-4">No urgent requests posted yet. Be the first!</p>
+              <p className="text-center text-muted-foreground py-4">No urgent requests posted yet for your college. Be the first!</p>
             )}
           </CardContent>
         </Card>

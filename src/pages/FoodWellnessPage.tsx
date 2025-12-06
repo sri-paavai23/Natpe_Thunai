@@ -37,13 +37,13 @@ const FoodWellnessPage = () => {
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isPostCustomOrderDialogOpen, setIsPostCustomOrderDialogOpen] = useState(false);
   
-  // Fetch all food/wellness related posts
+  // Fetch all food/wellness related posts for the user's college
   const { services: allPosts, isLoading, error } = useServiceListings(undefined); 
 
   const postedOfferings = allPosts.filter(p => !p.isCustomOrder && OFFERING_CATEGORIES.includes(p.category));
   const postedCustomRequests = allPosts.filter(p => p.isCustomOrder);
 
-  const handlePostService = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName">) => {
+  const handlePostService = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
     if (!user || !userProfile) {
       toast.error("You must be logged in to post.");
       return;
@@ -55,6 +55,7 @@ const FoodWellnessPage = () => {
         posterId: user.$id,
         posterName: user.name,
         isCustomOrder: false,
+        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
       };
 
       await databases.createDocument(
@@ -72,7 +73,7 @@ const FoodWellnessPage = () => {
     }
   };
 
-  const handlePostCustomOrder = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName">) => {
+  const handlePostCustomOrder = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
     if (!user || !userProfile) {
       toast.error("You must be logged in to post a custom request.");
       return;
@@ -84,6 +85,7 @@ const FoodWellnessPage = () => {
         posterId: user.$id,
         posterName: user.name,
         isCustomOrder: true,
+        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
       };
 
       await databases.createDocument(
@@ -114,7 +116,7 @@ const FoodWellnessPage = () => {
       return <p className="text-center text-destructive py-4">Error loading requests: {error}</p>;
     }
     if (list.length === 0) {
-      return <p className="text-center text-muted-foreground py-4">No custom order requests posted yet.</p>;
+      return <p className="text-center text-muted-foreground py-4">No custom order requests posted yet for your college.</p>;
     }
 
     return list.map((post) => (
@@ -152,7 +154,7 @@ const FoodWellnessPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Post your homemade food or wellness remedies for peers to order.
+              Post your homemade food or wellness remedies for your college peers to order.
             </p>
             <Dialog open={isPostServiceDialogOpen} onOpenChange={setIsPostServiceDialogOpen}>
               <DialogTrigger asChild>
@@ -216,7 +218,7 @@ const FoodWellnessPage = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-center text-muted-foreground py-4">No food or wellness offerings posted yet.</p>
+              <p className="text-center text-muted-foreground py-4">No food or wellness offerings posted yet for your college.</p>
             )}
           </CardContent>
         </Card>

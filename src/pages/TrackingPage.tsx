@@ -34,6 +34,7 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   sellerId: string;
   commissionAmount?: number;
   netSellerAmount?: number;
+  collegeName: string; // NEW: Add collegeName
 }
 
 export interface FoodOrderItem extends BaseTrackingItem {
@@ -48,6 +49,7 @@ export interface FoodOrderItem extends BaseTrackingItem {
   quantity: number;
   deliveryLocation: string; // Added missing property
   notes: string; // Added missing property
+  collegeName: string; // NEW: Add collegeName
 }
 
 interface OtherActivityItem extends BaseTrackingItem {
@@ -103,6 +105,7 @@ const convertAppwriteTransactionToTrackingItem = (doc: Models.Document, currentU
     commissionAmount: transactionDoc.commissionAmount,
     netSellerAmount: transactionDoc.netSellerAmount,
     isUserProvider: transactionDoc.sellerId === currentUserId,
+    collegeName: transactionDoc.collegeName, // NEW: Add collegeName
   };
 };
 
@@ -130,6 +133,7 @@ const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: s
     quantity: doc.quantity,
     deliveryLocation: doc.deliveryLocation, // Mapped missing property
     notes: doc.notes, // Mapped missing property
+    collegeName: doc.collegeName, // NEW: Add collegeName
   };
 };
 
@@ -151,9 +155,9 @@ const TrackingPage = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const fetchMarketTransactions = useCallback(async () => {
-    if (!user?.$id) {
+    if (!user?.$id || !userProfile?.collegeName) { // NEW: Only fetch if user and collegeName are available
       setLoadingTransactions(false);
-      return;
+      return [];
     }
 
     setLoadingTransactions(true);
@@ -166,6 +170,7 @@ const TrackingPage = () => {
             Query.equal('buyerId', user.$id),
             Query.equal('sellerId', user.$id)
           ]),
+          Query.equal('collegeName', userProfile.collegeName), // NEW: Filter by collegeName
           Query.orderDesc('$createdAt')
         ]
       );
@@ -176,14 +181,20 @@ const TrackingPage = () => {
       toast.error("Failed to load market transactions.");
       return [];
     }
-  }, [user]);
+  }, [user?.$id, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   const mergeAndSetItems = useCallback(async () => {
     const fetchedTransactions = await fetchMarketTransactions();
     
+    // foodOrders is already filtered by collegeName internally by useFoodOrders hook
     const foodOrderItems = foodOrders.map(o => convertAppwriteFoodOrderToTrackingItem(o, user!.$id));
 
-    const mergedItems = [...fetchedTransactions, ...foodOrderItems, ...dummyOtherItems];
+    // Filter dummy items by collegeName (assuming dummy items also have a collegeName or are global)
+    // For now, we'll assume dummy items are global or don't have collegeName, so they won't be filtered.
+    // In a real scenario, dummy items should also have a collegeName attribute.
+    const collegeFilteredDummyItems = dummyOtherItems; // No collegeName on dummy items, so they are "global" for now.
+    
+    const mergedItems = [...fetchedTransactions, ...foodOrderItems, ...collegeFilteredDummyItems];
     
     // Sort by creation date (newest first)
     mergedItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -429,7 +440,7 @@ const TrackingPage = () => {
                 );
               })
             ) : (
-              <p className="text-center text-muted-foreground py-4">No activities to track yet.</p>
+              <p className="text-center text-muted-foreground py-4">No activities to track yet for your college.</p>
             )}
           </CardContent>
         </Card>

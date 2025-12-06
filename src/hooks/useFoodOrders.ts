@@ -18,6 +18,7 @@ export interface FoodOrder extends Models.Document {
   deliveryLocation: string; // Added missing property
   notes: string; // Added missing property
   status: "Pending Confirmation" | "Confirmed" | "Preparing" | "Out for Delivery" | "Delivered" | "Cancelled";
+  collegeName: string; // NEW: Add collegeName
 }
 
 interface FoodOrdersState {
@@ -28,21 +29,22 @@ interface FoodOrdersState {
 }
 
 export const useFoodOrders = (): FoodOrdersState => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
-    if (!user) {
+    if (!user?.$id || !userProfile?.collegeName) { // NEW: Only fetch if user and collegeName are available
         setIsLoading(false);
+        setOrders([]); // Clear orders if no user or college is set
         return;
     }
     setIsLoading(true);
     setError(null);
     
     try {
-      // Fetch orders where the current user is the buyer OR the provider
+      // Fetch orders where the current user is the buyer OR the provider AND from their college
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
@@ -51,6 +53,7 @@ export const useFoodOrders = (): FoodOrdersState => {
                 Query.equal('buyerId', user.$id),
                 Query.equal('providerId', user.$id)
             ]),
+            Query.equal('collegeName', userProfile.collegeName), // NEW: Filter by collegeName
             Query.orderDesc('$createdAt')
         ]
       );
@@ -62,20 +65,20 @@ export const useFoodOrders = (): FoodOrdersState => {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user?.$id, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchOrders();
 
-    if (!user) return;
+    if (!user?.$id || !userProfile?.collegeName) return; // NEW: Only subscribe if user and collegeName are available
 
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_ORDERS_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as FoodOrder;
         
-        // Only process if the current user is involved
-        if (payload.buyerId !== user.$id && payload.providerId !== user.$id) {
+        // Only process if the current user is involved AND from their college
+        if ((payload.buyerId !== user.$id && payload.providerId !== user.$id) || payload.collegeName !== userProfile.collegeName) { // NEW: Check collegeName
             return;
         }
 
@@ -101,7 +104,7 @@ export const useFoodOrders = (): FoodOrdersState => {
     return () => {
       unsubscribe();
     };
-  }, [fetchOrders, user]);
+  }, [fetchOrders, user?.$id, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   return { orders, isLoading, error, refetch: fetchOrders };
 };

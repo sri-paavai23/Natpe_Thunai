@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from '@/lib/appwrite';
 import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
 export interface DeveloperMessage extends Models.Document {
   senderId: string;
   senderName: string;
   message: string;
   isDeveloper: boolean;
+  collegeName: string; // NEW: Add collegeName
 }
 
 interface DeveloperMessagesState {
@@ -28,21 +30,46 @@ const filterRecentMessages = (messages: DeveloperMessage[]): DeveloperMessage[] 
   return messages.filter(msg => new Date(msg.$createdAt).getTime() >= cutoffTime);
 };
 
-export const useDeveloperMessages = (): DeveloperMessagesState => {
+export const useDeveloperMessages = (collegeNameFilter?: string): DeveloperMessagesState => { // NEW: Add collegeNameFilter parameter
+  const { userProfile } = useAuth(); // NEW: Use useAuth to get current user's college
   const [allMessages, setAllMessages] = useState<DeveloperMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMessages = useCallback(async () => {
+    // NEW: If a collegeNameFilter is provided, and it's not the current user's college,
+    // or if the current user's college is not set, don't fetch.
+    // This ensures regular users only see their college's messages.
+    // The DeveloperDashboard will call this hook without a collegeNameFilter.
+    if (collegeNameFilter && userProfile?.collegeName && collegeNameFilter !== userProfile.collegeName) {
+        setIsLoading(false);
+        setAllMessages([]);
+        return;
+    }
+    if (!collegeNameFilter && !userProfile?.collegeName && userProfile?.role !== 'developer') {
+        // If no filter is provided and user is not developer and has no college, don't fetch
+        setIsLoading(false);
+        setAllMessages([]);
+        return;
+    }
+
+
     setIsLoading(true);
     setError(null);
     
     try {
-      // Fetch all messages, ordered by creation time descending
+      const queries = [Query.orderDesc('$createdAt')];
+      if (collegeNameFilter) { // NEW: Apply collegeName filter if provided
+        queries.push(Query.equal('collegeName', collegeNameFilter));
+      } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) {
+        // For regular users, if no explicit filter is passed, use their collegeName
+        queries.push(Query.equal('collegeName', userProfile.collegeName));
+      }
+
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID,
-        [Query.orderDesc('$createdAt')]
+        queries
       );
       
       setAllMessages(response.documents as unknown as DeveloperMessage[]);
@@ -52,15 +79,31 @@ export const useDeveloperMessages = (): DeveloperMessagesState => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [collegeNameFilter, userProfile?.collegeName, userProfile?.role]); // NEW: Depend on collegeNameFilter and userProfile
 
   useEffect(() => {
     fetchMessages();
+
+    // NEW: Determine subscription filter based on collegeNameFilter or userProfile
+    let subscriptionFilterCollege = '';
+    if (collegeNameFilter) {
+        subscriptionFilterCollege = collegeNameFilter;
+    } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) {
+        subscriptionFilterCollege = userProfile.collegeName;
+    }
+
+    // Only subscribe if there's a valid college to filter by, or if it's a developer viewing all
+    if (!subscriptionFilterCollege && userProfile?.role !== 'developer') return;
 
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as DeveloperMessage;
+
+        // NEW: Filter real-time updates by collegeName if a filter is active
+        if (subscriptionFilterCollege && payload.collegeName !== subscriptionFilterCollege) {
+            return;
+        }
 
         setAllMessages(prev => {
           const existingIndex = prev.findIndex(m => m.$id === payload.$id);
@@ -93,7 +136,7 @@ export const useDeveloperMessages = (): DeveloperMessagesState => {
       unsubscribe();
       clearInterval(intervalId);
     };
-  }, [fetchMessages]);
+  }, [fetchMessages, collegeNameFilter, userProfile?.collegeName, userProfile?.role]); // NEW: Depend on collegeNameFilter and userProfile
 
   // Apply the 48-hour filter before returning
   const recentMessages = filterRecentMessages(allMessages);

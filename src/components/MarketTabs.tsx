@@ -23,7 +23,7 @@ interface MarketTabsProps {
 
 const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
   const [activeTab, setActiveTab] = useState<Product['type'] | 'all'>(initialTab);
-  const { products, isLoading, error } = useMarketListings(); // Use the hook
+  const { products, isLoading, error } = useMarketListings(); // useMarketListings already filters by collegeName internally
 
   const items = filterProducts(products, activeTab);
 
@@ -43,7 +43,7 @@ const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
     }
 
     if (items.length === 0) {
-      return <p className="p-4 text-center text-gray-500">No listings found for this category.</p>;
+      return <p className="p-4 text-center text-gray-500">No listings found for this category in your college.</p>;
     }
 
     return (
