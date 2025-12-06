@@ -5,8 +5,8 @@ import { account, databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLEC
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { Models, Query } from "appwrite"; // Import Query
-import { calculateMaxXpForLevel, checkAndApplyLevelUp } from "@/utils/leveling"; // NEW IMPORT
+import { Models, Query } from "appwrite";
+import { calculateMaxXpForLevel, checkAndApplyLevelUp } from "@/utils/leveling";
 
 interface AppwriteUser extends Models.User<Models.Preferences> {}
 
@@ -18,10 +18,10 @@ interface UserProfile extends Models.Document {
   mobileNumber: string;
   upiId: string;
   collegeIdPhotoId?: string;
-  role: "user" | "developer"; // Appwrite system role
-  gender: "male" | "female" | "prefer-not-to-say"; // New field
-  userType: "student" | "staff"; // New field
-  // Dynamic Leveling Fields (maxXp is calculated client-side but might be stored)
+  role: "user" | "developer";
+  gender: "male" | "female" | "prefer-not-to-say";
+  userType: "student" | "staff";
+  collegeName: string; // NEW: Added collegeName
   level: number;
   currentXp: number;
   maxXp: number;
@@ -32,11 +32,11 @@ interface AuthContextType {
   isLoading: boolean;
   user: AppwriteUser | null;
   userProfile: UserProfile | null;
-  isVerified: boolean; // Added verification status
+  isVerified: boolean;
   login: () => Promise<void>;
   logout: () => void;
   updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
-  addXp: (amount: number) => Promise<void>; // NEW METHOD
+  addXp: (amount: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,26 +48,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const navigate = useNavigate();
 
-  const isVerified = user?.emailVerification ?? false; // Calculate verification status
+  const isVerified = user?.emailVerification ?? false;
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', userId)] // Use Query to fetch specific user profile
+        [Query.equal('userId', userId)]
       );
-      const profile = response.documents[0] as unknown as UserProfile | undefined; // Assuming userId is unique
+      const profile = response.documents[0] as unknown as UserProfile | undefined;
       if (profile) {
-        // Calculate dynamic Max XP based on fetched level, or default to 100 if level is 1
         const level = profile.level ?? 1;
-        const maxXp = calculateMaxXpForLevel(level); // Use dynamic calculation
+        const maxXp = calculateMaxXpForLevel(level);
 
         const completeProfile: UserProfile = {
           ...profile,
           level: level,
           currentXp: profile.currentXp ?? 0,
           maxXp: maxXp,
+          collegeName: profile.collegeName || "Unknown College", // Ensure collegeName is set
         };
         setUserProfile(completeProfile);
       } else {
@@ -101,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loginUser = async () => {
     setIsLoading(true);
-    await checkUserSession(); // Re-check session and fetch profile after login
+    await checkUserSession();
     setIsLoading(false);
   };
 
@@ -121,7 +121,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const updateUserProfile = async (profileId: string, data: Partial<UserProfile>) => {
     try {
-      // Filter out derived fields like maxXp before sending to DB
       const { maxXp, ...dataToSave } = data;
 
       const updatedDoc = await databases.updateDocument(
@@ -131,10 +130,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         dataToSave
       );
       
-      // Ensure we use the data returned from the database, which should include all fields
       const updatedProfileData = updatedDoc as unknown as UserProfile;
       
-      // Recalculate Max XP based on the potentially new level, ensuring defaults if fields are missing
       const level = updatedProfileData.level ?? 1;
       const calculatedMaxXp = calculateMaxXpForLevel(level);
 
@@ -143,9 +140,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         level: level,
         currentXp: updatedProfileData.currentXp ?? 0,
         maxXp: calculatedMaxXp,
+        collegeName: updatedProfileData.collegeName || "Unknown College", // Ensure collegeName is set
       };
       setUserProfile(updatedProfile);
-      // Do NOT show success toast here, let the caller (like addXp or EditProfileForm) handle it.
     } catch (error: any) {
       console.error("Error updating user profile:", error);
       throw new Error(error.message || "Failed to update profile.");
@@ -165,10 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { newLevel, newCurrentXp, newMaxXp } = checkAndApplyLevelUp(currentLevel, currentXp, maxXp);
 
     try {
-      // Only update if there's a change in XP or level
       if (newLevel !== currentLevel || newCurrentXp !== userProfile.currentXp) {
-        // Use updateUserProfile to handle the database update and local state sync
-        // We only send level and currentXp to the database.
         await updateUserProfile(userProfile.$id, {
           level: newLevel,
           currentXp: newCurrentXp,
@@ -181,7 +175,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         toast.info(`+${amount} XP earned!`);
       }
     } catch (error) {
-      // Error is already logged and thrown by updateUserProfile, just toast the failure here.
       toast.error("Failed to update XP/Level.");
     }
   };

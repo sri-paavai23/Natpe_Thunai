@@ -5,24 +5,22 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign } from "lucide-react"; // Added DollarSign
+import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign, Building2 } from "lucide-react"; // Added Building2 icon
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import EditProfileForm from "@/components/forms/EditProfileForm"; // Import the new form
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avatar generator
-import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission"; // Import commission utils
+import EditProfileForm from "@/components/forms/EditProfileForm";
+import { useAuth } from "@/context/AuthContext";
+import { generateAvatarUrl } from "@/utils/avatarGenerator";
+import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
 
 const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  // Use the public username (user.name) for the main display name and avatar seed
   const publicUsername = user?.name || "CampusExplorer";
-  const userEmail = user?.email || "N/A"; // Define userEmail here
+  const userEmail = user?.email || "N/A";
   
-  // Use dynamic data from userProfile, defaulting to Level 1 / 0 XP
   const userLevel = userProfile?.level ?? 1;
   const currentXp = userProfile?.currentXp ?? 0;
   const maxXp = userProfile?.maxXp ?? 100;
@@ -46,8 +44,9 @@ const ProfileDetailsPage = () => {
     age: number;
     mobileNumber: string;
     upiId: string;
-    gender: "male" | "female" | "prefer-not-to-say"; // Added gender
-    userType: "student" | "staff"; // Added userType
+    gender: "male" | "female" | "prefer-not-to-say";
+    userType: "student" | "staff";
+    collegeName: string; // NEW: Added collegeName
   }) => {
     if (userProfile) {
       await updateUserProfile(userProfile.$id, data);
@@ -137,6 +136,9 @@ const ProfileDetailsPage = () => {
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-secondary-neon" /> Type: <span className="font-semibold text-foreground capitalize">{userProfile.userType}</span>
                 </p>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-secondary-neon" /> College: <span className="font-semibold text-foreground">{userProfile.collegeName}</span>
+                </p>
               </div>
             )}
           </CardContent>
@@ -157,8 +159,9 @@ const ProfileDetailsPage = () => {
                 age: userProfile.age,
                 mobileNumber: userProfile.mobileNumber,
                 upiId: userProfile.upiId,
-                gender: userProfile.gender, // Pass gender
-                userType: userProfile.userType, // Pass userType
+                gender: userProfile.gender,
+                userType: userProfile.userType,
+                collegeName: userProfile.collegeName, // NEW: Pass collegeName
               }}
               onSave={handleSaveProfile}
               onCancel={() => setIsEditDialogOpen(false)}

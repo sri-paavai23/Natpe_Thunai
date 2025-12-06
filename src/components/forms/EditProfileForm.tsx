@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Import RadioGroup
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 import { useAuth } from "@/context/AuthContext";
+import { indianColleges } from "@/lib/collegeData"; // Import the static college list
 
 interface EditProfileFormProps {
   initialData: {
@@ -16,8 +18,9 @@ interface EditProfileFormProps {
     age: number;
     mobileNumber: string;
     upiId: string;
-    gender: "male" | "female" | "prefer-not-to-say"; // Added gender
-    userType: "student" | "staff"; // Added userType
+    gender: "male" | "female" | "prefer-not-to-say";
+    userType: "student" | "staff";
+    collegeName: string; // NEW: Added collegeName
   };
   onSave: (data: {
     firstName: string;
@@ -25,8 +28,9 @@ interface EditProfileFormProps {
     age: number;
     mobileNumber: string;
     upiId: string;
-    gender: "male" | "female" | "prefer-not-to-say"; // Added gender
-    userType: "student" | "staff"; // Added userType
+    gender: "male" | "female" | "prefer-not-to-say";
+    userType: "student" | "staff";
+    collegeName: string; // NEW: Added collegeName
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -41,8 +45,9 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
   const [age, setAge] = useState(String(initialData.age));
   const [mobileNumber, setMobileNumber] = useState(initialData.mobileNumber);
   const [upiId, setUpiId] = useState(initialData.upiId);
-  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">(initialData.gender); // New state
-  const [userType, setUserType] = useState<"student" | "staff">(initialData.userType); // New state
+  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">(initialData.gender);
+  const [userType, setUserType] = useState<"student" | "staff">(initialData.userType);
+  const [collegeName, setCollegeName] = useState(initialData.collegeName); // NEW: State for college name
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -53,12 +58,13 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
     setUpiId(initialData.upiId);
     setGender(initialData.gender);
     setUserType(initialData.userType);
+    setCollegeName(initialData.collegeName); // NEW: Set college name
   }, [initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    if (!firstName || !lastName || !age || !mobileNumber || !upiId || !gender || !userType) {
+    if (!firstName || !lastName || !age || !mobileNumber || !upiId || !gender || !userType || !collegeName) { // NEW: Validate collegeName
       toast.error("Please fill in all required fields.");
       setLoading(false);
       return;
@@ -78,11 +84,12 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
         age: parsedAge,
         mobileNumber,
         upiId,
-        gender, // Pass gender
-        userType, // Pass userType
+        gender,
+        userType,
+        collegeName, // NEW: Pass collegeName
       });
       toast.success("Profile updated successfully!");
-      onCancel(); // Close dialog on success
+      onCancel();
     } catch (error: any) {
       toast.error(error.message || "Failed to update profile.");
       console.error("Profile update error:", error);
@@ -157,8 +164,20 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
           required
         />
       </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="collegeName" className="text-left sm:text-right text-foreground">Your College</Label>
+        <Select value={collegeName} onValueChange={setCollegeName} required>
+          <SelectTrigger className="col-span-3 w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
+            <SelectValue placeholder="Select your college" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
+            {indianColleges.map((college) => (
+              <SelectItem key={college} value={college}>{college}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-      {/* Gender Selection */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label className="text-left sm:text-right text-foreground">Gender</Label>
         <RadioGroup value={gender} onValueChange={(value: "male" | "female" | "prefer-not-to-say") => setGender(value)} className="col-span-3 flex flex-wrap gap-4">
@@ -177,7 +196,6 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({
         </RadioGroup>
       </div>
 
-      {/* User Type Selection */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
         <Label className="text-left sm:text-right text-foreground">User Type</Label>
         <RadioGroup value={userType} onValueChange={(value: "student" | "staff") => setUserType(value)} className="col-span-3 flex flex-wrap gap-4">

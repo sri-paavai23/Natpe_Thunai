@@ -9,11 +9,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { account, databases, storage, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_COLLEGE_ID_BUCKET_ID } from "@/lib/appwrite";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { APP_HOST_URL } from "@/lib/config"; // Import APP_HOST_URL
+import { APP_HOST_URL } from "@/lib/config";
+import { indianColleges } from "@/lib/collegeData"; // Import the static college list
 
 // Helper function to generate a random username
 const generateRandomUsername = (): string => {
@@ -49,13 +51,13 @@ const AuthPage = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say"); // New state for gender
-  const [userType, setUserType] = useState<"student" | "staff">("student"); // New state for user type
+  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say");
+  const [userType, setUserType] = useState<"student" | "staff">("student");
+  const [collegeName, setCollegeName] = useState(""); // NEW: State for college name
 
-  const { login, isAuthenticated, isLoading } = useAuth(); // Destructure isAuthenticated and isLoading
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already authenticated
   React.useEffect(() => {
     if (!isLoading && isAuthenticated) {
       navigate("/home", { replace: true });
@@ -76,7 +78,6 @@ const AuthPage = () => {
         await account.createEmailPasswordSession(email, password);
         login();
         toast.success("Logged in successfully!");
-        // Redirection handled by useEffect now, but we keep the login call
       } else {
         if (!termsAccepted) {
           toast.error("You must accept the terms and conditions.");
@@ -90,6 +91,11 @@ const AuthPage = () => {
         }
         if (!collegeIdPhoto) {
           toast.error("Please upload your college ID card photo.");
+          setLoading(false);
+          return;
+        }
+        if (!collegeName) { // NEW: Check for college name
+          toast.error("Please select your college.");
           setLoading(false);
           return;
         }
@@ -110,8 +116,6 @@ const AuthPage = () => {
             console.error("Error uploading college ID photo:", uploadError);
             toast.error("Failed to upload college ID photo. Please try again.");
             setLoading(false);
-            // Even if photo upload fails, we might still want to create the user profile
-            // but for now, we'll stop if it's a required field.
             return; 
           }
         }
@@ -129,9 +133,13 @@ const AuthPage = () => {
               mobileNumber,
               upiId,
               collegeIdPhotoId: collegeIdPhotoFileId,
-              role: "user", // Explicitly set Appwrite system role to "user"
-              gender, // New field
-              userType, // New field
+              role: "user",
+              gender,
+              userType,
+              collegeName, // NEW: Save college name
+              level: 1, // Initialize level
+              currentXp: 0, // Initialize XP
+              maxXp: 100, // Initialize max XP for level 1
             }
           );
           toast.success("User profile saved.");
@@ -139,8 +147,6 @@ const AuthPage = () => {
         } catch (profileError: any) {
           console.error("Error creating user profile document:", profileError);
           toast.error(`Failed to create user profile: ${profileError.message}. Please check Appwrite collection permissions.`);
-          // If profile creation fails, we should ideally delete the created user account
-          // to prevent orphaned accounts, but for simplicity, we'll just log and toast.
           setLoading(false);
           return;
         }
@@ -153,7 +159,6 @@ const AuthPage = () => {
         await account.createEmailPasswordSession(email, password);
         login();
         toast.success("You are now logged in!");
-        // Redirection handled by useEffect now
         
         setFirstName("");
         setLastName("");
@@ -166,6 +171,7 @@ const AuthPage = () => {
         setTermsAccepted(false);
         setGender("prefer-not-to-say");
         setUserType("student");
+        setCollegeName(""); // NEW: Clear college name
       }
     } catch (error: any) {
       toast.error(error.message || "An error occurred during authentication.");
@@ -254,6 +260,19 @@ const AuthPage = () => {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="collegeName" className="text-foreground">Your College</Label>
+                  <Select value={collegeName} onValueChange={setCollegeName} required>
+                    <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
+                      <SelectValue placeholder="Select your college" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
+                      {indianColleges.map((college) => (
+                        <SelectItem key={college} value={college}>{college}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label htmlFor="collegeIdPhoto" className="text-foreground">College ID Card Photo</Label>
                   <Input
                     id="collegeIdPhoto"
@@ -266,7 +285,6 @@ const AuthPage = () => {
                   {collegeIdPhoto && <p className="text-xs text-muted-foreground mt-1">File selected: {collegeIdPhoto.name}</p>}
                 </div>
 
-                {/* Gender Selection */}
                 <div>
                   <Label className="mb-2 block text-foreground">Gender</Label>
                   <RadioGroup value={gender} onValueChange={(value: "male" | "female" | "prefer-not-to-say") => setGender(value)} className="flex flex-wrap gap-4">
@@ -285,7 +303,6 @@ const AuthPage = () => {
                   </RadioGroup>
                 </div>
 
-                {/* User Type Selection */}
                 <div>
                   <Label className="mb-2 block text-foreground">Are you a?</Label>
                   <RadioGroup value={userType} onValueChange={(value: "student" | "staff") => setUserType(value)} className="flex flex-wrap gap-4">
