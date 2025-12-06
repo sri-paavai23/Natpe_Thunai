@@ -329,10 +329,10 @@ const CashExchangePage = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "requests" | "offers" | "group-contributions")} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-primary-blue-light text-primary-foreground h-auto">
-            <TabsTrigger value="requests" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Requests</TabsTrigger>
-            <TabsTrigger value="offers" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Offers</TabsTrigger>
-            <TabsTrigger value="group-contributions" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Group</TabsTrigger>
+          <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-primary-blue-light text-primary-foreground h-auto p-1 rounded-md shadow-sm scrollbar-hide">
+            <TabsTrigger value="requests" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Requests</TabsTrigger>
+            <TabsTrigger value="offers" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Offers</TabsTrigger>
+            <TabsTrigger value="group-contributions" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Group</TabsTrigger>
           </TabsList>
           <div className="mt-4 space-y-4">
             <TabsContent value="requests">

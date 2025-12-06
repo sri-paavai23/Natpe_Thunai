@@ -4,6 +4,7 @@ import ProductListingCard from "@/components/ProductListingCard";
 import { Product } from "@/lib/mockData"; // Import Product interface
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMarketListings } from '@/hooks/useMarketListings'; // Import the new hook
+import { cn } from '@/lib/utils'; // Import cn for utility classes
 
 // Helper function to filter products by type
 const filterProducts = (products: Product[], type: Product['type'] | 'all'): Product[] => {
@@ -56,12 +57,12 @@ const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
 
   return (
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Product['type'] | 'all')} className="w-full">
-      <TabsList className="grid w-full grid-cols-5">
-        <TabsTrigger value="all">All</TabsTrigger>
-        <TabsTrigger value="sell">Sell</TabsTrigger>
-        <TabsTrigger value="rent">Rent</TabsTrigger>
-        <TabsTrigger value="gift">Handcrafts & Gifts</TabsTrigger>
-        <TabsTrigger value="sports">Sports</TabsTrigger>
+      <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-muted p-1 text-muted-foreground rounded-md shadow-sm scrollbar-hide">
+        <TabsTrigger value="all" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">All</TabsTrigger>
+        <TabsTrigger value="sell" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sell</TabsTrigger>
+        <TabsTrigger value="rent" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Rent</TabsTrigger>
+        <TabsTrigger value="gift" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Handcrafts & Gifts</TabsTrigger>
+        <TabsTrigger value="sports" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sports</TabsTrigger>
       </TabsList>
       
       <TabsContent value={activeTab}>

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
+import { cn } from '@/lib/utils'; // Import cn for utility classes
 
 interface MarketListingFormWrapperProps {
   onClose: () => void;
@@ -78,11 +79,11 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
         <DialogTitle className="text-foreground">Create New Listing</DialogTitle>
       </DialogHeader>
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "sell" | "rent" | "gift" | "sports")}>
-        <TabsList className="grid w-full grid-cols-4 h-auto bg-muted">
-          <TabsTrigger value="sell" className="text-xs sm:text-sm">Sell</TabsTrigger>
-          <TabsTrigger value="rent" className="text-xs sm:text-sm">Rent</TabsTrigger>
-          <TabsTrigger value="gift" className="text-xs sm:text-sm">Handcrafts & Gifts</TabsTrigger>
-          <TabsTrigger value="sports" className="text-xs sm:text-sm">Sports Gear</TabsTrigger>
+        <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-muted p-1 text-muted-foreground rounded-md shadow-sm scrollbar-hide">
+          <TabsTrigger value="sell" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sell</TabsTrigger>
+          <TabsTrigger value="rent" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Rent</TabsTrigger>
+          <TabsTrigger value="gift" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Handcrafts & Gifts</TabsTrigger>
+          <TabsTrigger value="sports" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sports Gear</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sell" className="mt-4">
