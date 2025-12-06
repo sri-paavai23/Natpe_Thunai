@@ -44,23 +44,16 @@ const ProfilePage = () => {
             <p className="text-muted-foreground">Manage your wallet, payment methods, and view your dynamic commission policy.</p>
           </CardContent>
         </Card>
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border">
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Settings</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 space-y-4">
-            <p className="text-muted-foreground">Customize your app experience, including a Dark Mode toggle.</p>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="dark-mode" className="text-foreground">Dark Mode</Label>
-              <Switch
-                id="dark-mode"
-                checked={theme === "dark"}
-                onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-                className="data-[state=checked]:bg-secondary-neon data-[state=unchecked]:bg-muted-foreground"
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Removed the Settings Card and integrated the Dark Mode toggle directly */}
+        <div className="bg-card p-4 rounded-lg shadow-md border border-border flex items-center justify-between">
+          <Label htmlFor="dark-mode" className="text-foreground text-xl font-semibold">Dark Mode</Label>
+          <Switch
+            id="dark-mode"
+            checked={theme === "dark"}
+            onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+            className="data-[state=checked]:bg-secondary-neon data-[state=unchecked]:bg-muted-foreground"
+          />
+        </div>
         <DeveloperChatbox />
         {isDeveloper && ( // Conditionally render for developers
           <Link to="/developer-dashboard">
