@@ -30,6 +30,7 @@ These variables are used by your client-side React application and must be set i
 | `VITE_APPWRITE_AMBASSADOR_APPLICATIONS_COLLECTION_ID` | Collection ID for ambassador applications. | `ambassador_applications` |
 | `VITE_APPWRITE_REPORTS_COLLECTION_ID` | Collection ID for user-submitted reports. | `reports` |
 | `VITE_APPWRITE_SERVICE_REVIEWS_COLLECTION_ID` | Collection ID for service reviews. | `service_reviews` |
+| `VITE_APP_CREATION_DATE` | **NEW:** The ISO 8601 timestamp when the application was first launched. This is the starting point for the 4-year graduation countdown. | `2024-01-01T00:00:00Z` |
 
 **Important Security Note:**
 The `APPWRITE_API_KEY` is a sensitive secret and **must NOT be exposed in client-side code or environment variables accessible by the browser.** It should only be used in secure server-side environments, such as Appwrite Functions. For example, the `processPaymentAndNotify` Appwrite Function uses this key.
@@ -42,3 +43,27 @@ You must register your deployed domain in the Appwrite Console to prevent CORS (
 2.  Navigate to **Platform** -> **Web**.
 3.  Add your Vercel domain (e.g., `https://your-app-name.vercel.app`) as a new Web platform.
 4.  Ensure the **Host URL** and **Redirect URLs** are correctly configured to allow traffic from your deployed application.
+
+### 3. Appwrite Function: `deleteGraduatedAccounts` (Mandatory for Graduation Meter)
+
+This function is crucial for the "Graduation Meter" feature. It automatically deletes student accounts after 4 years from the `APP_CREATION_DATE`.
+
+**Deployment Steps:**
+
+1.  **Create Function**: In your Appwrite Console, navigate to **Functions** and create a new function.
+    *   **Name**: `deleteGraduatedAccounts`
+    *   **Runtime**: `Node.js` (latest version, e.g., `Node.js 18`)
+    *   **Entrypoint**: `src/index.js`
+    *   **Command**: `npm install`
+2.  **Upload Code**: Upload the contents of `appwrite/functions/deleteGraduatedAccounts/src/index.js` to this function.
+3.  **Environment Variables (for the Function)**: Set the following environment variables directly in the function's settings:
+    *   `APPWRITE_ENDPOINT`: Your Appwrite endpoint (e.g., `https://cloud.appwrite.io/v1`)
+    *   `APPWRITE_PROJECT_ID`: Your Appwrite Project ID
+    *   `APPWRITE_API_KEY`: **A sensitive API key with permissions to read `user_profiles` documents and delete `users` and `user_profiles` documents.**
+    *   `APPWRITE_DATABASE_ID`: Your Appwrite Database ID
+    *   `APPWRITE_USER_PROFILES_COLLECTION_ID`: Your `user_profiles` collection ID
+    *   `APP_CREATION_DATE`: **Must match the `VITE_APP_CREATION_DATE` set in your frontend environment.** (e.g., `2024-01-01T00:00:00Z`)
+4.  **Permissions**: Configure the function's permissions to allow it to read documents from `user_profiles` and delete user accounts.
+5.  **Schedule**: Set up a schedule for the function to run periodically (e.g., once every 24 hours) to check for graduated accounts.
+
+**Important**: Ensure the `APPWRITE_API_KEY` used for the function has the necessary permissions (`users.write`, `databases.read`, `databases.write`) but is kept secure and never exposed client-side.

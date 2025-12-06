@@ -8,16 +8,17 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { useNavigate, Link } from "react-router-dom"; // Import Link
+import { useNavigate, Link } from "react-router-dom";
 import DeveloperChatbox from "@/components/DeveloperChatbox";
 import { useAuth } from "@/context/AuthContext";
+import GraduationMeter from "@/components/GraduationMeter"; // NEW: Import GraduationMeter
 
 const ProfilePage = () => {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
-  const { logout, userProfile } = useAuth(); // Get userProfile to check role
+  const { logout, userProfile } = useAuth();
 
-  const isDeveloper = userProfile?.role === "developer"; // Check if the user is a developer
+  const isDeveloper = userProfile?.role === "developer";
 
   const handleProfileSectionClick = (path: string, sectionName: string) => {
     toast.info(`Navigating to "${sectionName}"...`);
@@ -28,6 +29,9 @@ const ProfilePage = () => {
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">My Zone (Profile)</h1>
       <div className="max-w-md mx-auto space-y-6">
+        {/* NEW: Graduation Meter */}
+        <GraduationMeter />
+
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleProfileSectionClick("/profile/details", "User Profile")}>
           <CardHeader className="p-0 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground">User Profile</CardTitle>
@@ -44,7 +48,6 @@ const ProfilePage = () => {
             <p className="text-muted-foreground">Manage your wallet, payment methods, and view your dynamic commission policy.</p>
           </CardContent>
         </Card>
-        {/* Removed the Settings Card and integrated the Dark Mode toggle directly */}
         <div className="bg-card p-4 rounded-lg shadow-md border border-border flex items-center justify-between">
           <Label htmlFor="dark-mode" className="text-foreground text-xl font-semibold">Dark Mode</Label>
           <Switch
@@ -55,7 +58,7 @@ const ProfilePage = () => {
           />
         </div>
         <DeveloperChatbox />
-        {isDeveloper && ( // Conditionally render for developers
+        {isDeveloper && (
           <Link to="/developer-dashboard">
             <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow">
               <CardHeader className="p-0 pb-2">
