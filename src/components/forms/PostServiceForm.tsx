@@ -62,12 +62,9 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, i
 
   const handleSubmit = async (e: React.FormEvent) => { // NEW: Make handleSubmit async
     e.preventDefault();
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to post a service.");
-      return;
-    }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+      toast.error("You must be logged in with a complete profile to post a service.");
       return;
     }
     if (!title || !description || !category || !price || !contact) {

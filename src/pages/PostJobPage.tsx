@@ -25,12 +25,9 @@ const PostJobPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => { // NEW: Make handleSubmit async
     e.preventDefault();
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to post a job.");
-      return;
-    }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+      toast.error("You must be logged in with a complete profile to post a job.");
       return;
     }
     if (!jobTitle || !jobDescription || !jobCategory || !compensation || !contactEmail) {

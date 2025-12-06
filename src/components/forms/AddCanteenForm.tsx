@@ -8,6 +8,8 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
 import { Loader2 } from "lucide-react"; // NEW: Import Loader2
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_CANTEEN_COLLECTION_ID } from "@/lib/appwrite";
+import { ID } from 'appwrite'; // Corrected: Import ID directly from 'appwrite'
 
 interface AddCanteenFormProps {
   onSubmit: (canteenName: string, collegeName: string) => Promise<void>; // Changed to return Promise<void> and accept collegeName
@@ -16,19 +18,22 @@ interface AddCanteenFormProps {
 }
 
 const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onCancel, loading }) => {
-  const { userProfile } = useAuth(); // NEW: Use useAuth hook
+  const { user, userProfile } = useAuth(); // NEW: Use useAuth hook
   const [canteenName, setCanteenName] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+      toast.error("You must be logged in with a complete profile to add a canteen.");
+      return;
+    }
     if (!canteenName.trim()) {
       toast.error("Canteen name cannot be empty.");
       return;
     }
-    if (!userProfile?.collegeName) { // NEW: Check for collegeName
-      toast.error("Your profile is missing college information. Please update your profile first.");
-      return;
-    }
+    
+    // The onSubmit prop now handles the actual Appwrite call, so we just pass the data.
     await onSubmit(canteenName.trim(), userProfile.collegeName); // NEW: Pass collegeName
     setCanteenName(""); // Clear input after submission attempt
   };

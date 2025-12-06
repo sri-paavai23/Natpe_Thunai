@@ -37,7 +37,12 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
   const bargainedPrice = originalPriceValue * (1 - discountRate);
 
   const handleInitiateBargainPayment = async () => {
-    if (!user || !userProfile || !service) return;
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName || !service) {
+      toast.error("User session expired or profile incomplete. Please log in again and ensure your profile is complete.");
+      setIsProcessing(false);
+      return;
+    }
 
     setIsProcessing(true);
 

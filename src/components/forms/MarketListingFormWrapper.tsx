@@ -22,12 +22,9 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
   const { user, userProfile } = useAuth();
 
   const handleListingSubmit = async (data: any, type: "Sell" | "Rent" | "Gift/Craft" | "Sports Gear") => {
-    if (!user || !userProfile) {
-      toast.error("You must be logged in and have a complete profile to create a listing.");
-      return;
-    }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+      toast.error("You must be logged in with a complete profile to create a listing.");
       return;
     }
 
@@ -88,7 +85,7 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
           <TabsTrigger value="sell" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sell</TabsTrigger>
           <TabsTrigger value="rent" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Rent</TabsTrigger>
           <TabsTrigger value="gift" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Handcrafts & Gifts</TabsTrigger>
-          <TabsTrigger value="sports" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sports Gear</TabsTrigger>
+          <TabsTrigger value="sports" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sports</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sell" className="mt-4">

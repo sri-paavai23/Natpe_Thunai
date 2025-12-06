@@ -41,7 +41,7 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
   onRegister,
   onCancel,
 }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [teamName, setTeamName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [players, setPlayers] = useState<Player[]>(
@@ -91,8 +91,9 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
   };
   
   const handlePaymentInitiation = async () => {
-    if (!user) {
-        toast.error("User session expired. Please log in again.");
+    // Added explicit check for user.$id and userProfile.collegeName
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+        toast.error("User session expired or profile incomplete. Please log in again and ensure your profile is complete.");
         return;
     }
     

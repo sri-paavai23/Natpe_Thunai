@@ -39,12 +39,9 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to place an order.");
-      return;
-    }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+      toast.error("You must be logged in with a complete profile to place an order.");
       return;
     }
     if (quantity <= 0 || !deliveryLocation.trim()) {
@@ -62,7 +59,12 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
     setIsConfirming(false);
     setIsSubmitting(true);
 
-    if (!user || !userProfile) return;
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile) {
+      toast.error("User session expired or profile incomplete. Please log in again and ensure your profile is complete.");
+      setIsSubmitting(false);
+      return;
+    }
 
     const orderTitle = `${offering.title} x${quantity}`;
     const transactionNote = `Food Order: ${orderTitle}`;

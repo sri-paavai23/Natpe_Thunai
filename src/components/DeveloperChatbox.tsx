@@ -35,12 +35,9 @@ const DeveloperChatbox = () => {
       toast.error("Message cannot be empty.");
       return;
     }
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to send a message.");
-      return;
-    }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
+    // Added explicit check for user.$id
+    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
+      toast.error("You must be logged in with a complete profile to send a message.");
       return;
     }
     
