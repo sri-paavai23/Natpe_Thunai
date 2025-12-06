@@ -340,7 +340,7 @@ const AuthPage = () => {
                     I agree to the <Link to="/profile/policies" className="text-secondary-neon hover:underline">terms and conditions</Link>
                   </Label>
                 </div>
-                <p className="text-xs text-destructive-foreground text-center font-medium">
+                <p className="text-xs text-destructive text-center font-medium"> {/* Changed text-destructive-foreground to text-destructive */}
                   Your Name, Age, Mobile Number, UPI ID, and College ID Photo are collected for developer safety assurance only and will NOT be shared publicly. Only your chosen username will be visible.
                 </p>
               </>
