@@ -14,7 +14,8 @@ import { databases, APPWRITE_DATABASE_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import { containsBlockedWords } from "@/lib/moderation"; // Import moderation utility
-import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission"; // Import dynamic commission
+import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
+import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
 
 const DeveloperChatbox = () => {
   const { user, userProfile } = useAuth();
@@ -72,8 +73,6 @@ const DeveloperChatbox = () => {
     // In a real app, this would link to a GitHub repo, documentation, or a contact form.
   };
 
-  const developerUpiId = "8903480105@superyes";
-
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
       <CardHeader className="p-4 pb-2">
@@ -113,7 +112,7 @@ const DeveloperChatbox = () => {
           </p>
           <div className="flex flex-col items-center space-y-2 p-3 border border-border rounded-md bg-background">
             <img src="/qr.jpg" alt="Developer UPI QR Code" className="w-32 h-32 object-contain rounded-md" />
-            <p className="text-sm font-medium text-foreground">UPI ID: <span className="text-secondary-neon">{developerUpiId}</span></p>
+            <p className="text-sm font-medium text-foreground">UPI ID: <span className="text-secondary-neon">{DEVELOPER_UPI_ID}</span></p>
             <p className="text-xs text-muted-foreground text-center">Scan or use this UPI ID for all payments.</p>
           </div>
         </div>
@@ -122,7 +121,7 @@ const DeveloperChatbox = () => {
 
         {/* Contribute to Application */}
         <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <h3 className="lg font-semibold text-foreground flex items-center gap-2">
             <Code className="h-4 w-4 text-secondary-neon" /> Contribute to the Application
           </h3>
           <p className="text-sm text-muted-foreground">

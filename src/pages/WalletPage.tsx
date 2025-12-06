@@ -4,20 +4,24 @@ import React from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Wallet, TrendingUp, Loader2 } from "lucide-react"; // Removed Banknote icon
+import { DollarSign, Wallet, TrendingUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
-import { useWalletBalance } from "@/hooks/useWalletBalance"; // NEW IMPORT
+import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
 
 const WalletPage = () => {
   const { userProfile } = useAuth();
-  const { earnedBalance, spentBalance, isLoading, error } = useWalletBalance(); // Use the new hook
+  const { earnedBalance, spentBalance, isLoading, error } = useWalletBalance();
   
   // Dynamic Commission Calculation
   const userLevel = userProfile?.level ?? 1;
   const dynamicCommissionRateValue = calculateCommissionRate(userLevel);
   const dynamicCommissionRateDisplay = formatCommissionRate(dynamicCommissionRateValue);
+
+  // Dummy data for wallet
+  const currentBalance = 1250.75; // This is still dummy, but the request was to make earned/spent functional.
 
   // Removed handleAddFunds function as it's no longer needed.
 
