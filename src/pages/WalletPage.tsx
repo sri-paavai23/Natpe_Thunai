@@ -4,10 +4,10 @@ import React from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Wallet, Banknote, TrendingUp } from "lucide-react"; // Added TrendingUp
+import { DollarSign, Wallet, Banknote, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission"; // Import commission utils
+import { useAuth } from "@/context/AuthContext";
+import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
 
 const WalletPage = () => {
   const { userProfile } = useAuth();
@@ -19,7 +19,7 @@ const WalletPage = () => {
 
   // Dummy data for wallet
   const currentBalance = 1250.75;
-  const developerUpiId = "8903480105@superyes"; // Updated developer UPI ID
+  const developerUpiId = "8903480105@superyes";
 
   const handleAddFunds = () => {
     const addFundsAmount = 500; // Example fixed amount for adding funds
@@ -77,10 +77,10 @@ const WalletPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <p className="text-sm">
+            <p className="text-sm text-gray-800">
               Your current commission rate is <span className="font-bold">{dynamicCommissionRateDisplay}</span> (Level {userLevel}). This rate is applied to all successful transactions facilitated through Natpe🤝Thunai.
             </p>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-xs text-gray-600 mt-2">
               This rate decreases as your user level increases. For full details, please refer to the Dynamic Commission Policy in the Policies section.
             </p>
           </CardContent>
