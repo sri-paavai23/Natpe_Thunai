@@ -34,11 +34,14 @@ const ProfileDetailsPage = () => {
   const isVerified = true; // Placeholder for verification status
   // const badges = ["Top Seller", "Early Adopter"]; // Removed static badges
 
-  const avatarUrl = generateAvatarUrl(
-    publicUsername,
-    userProfile?.gender || "prefer-not-to-say",
-    userProfile?.userType || "student"
-  );
+  // Ensure userProfile and its properties are available before generating avatar
+  const avatarUrl = userProfile 
+    ? generateAvatarUrl(
+        publicUsername,
+        userProfile.gender || "prefer-not-to-say", // Default if not set
+        userProfile.userType || "student" // Default if not set
+      )
+    : generateAvatarUrl(publicUsername, "prefer-not-to-say", "student"); // Fallback if no userProfile
 
   const handleSaveProfile = async (data: {
     firstName: string;
@@ -146,7 +149,7 @@ const ProfileDetailsPage = () => {
           <DialogHeader>
             <DialogTitle className="text-foreground">Edit Profile Details</DialogTitle>
           </DialogHeader>
-          {userProfile && (
+          {userProfile ? ( // Only render form if userProfile is available
             <EditProfileForm
               initialData={{
                 firstName: userProfile.firstName,
@@ -156,11 +159,13 @@ const ProfileDetailsPage = () => {
                 upiId: userProfile.upiId,
                 gender: userProfile.gender,
                 userType: userProfile.userType,
-                collegeName: userProfile.collegeName, // NEW: Pass collegeName
+                collegeName: userProfile.collegeName,
               }}
               onSave={handleSaveProfile}
               onCancel={() => setIsEditDialogOpen(false)}
             />
+          ) : (
+            <p className="text-center text-muted-foreground py-4">Loading profile data...</p>
           )}
         </DialogContent>
       </Dialog>
