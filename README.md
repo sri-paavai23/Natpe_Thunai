@@ -28,6 +28,7 @@ These variables are used by your client-side React application and must be set i
 | `VITE_APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID` | Collection ID for developer messages. | `developer_messages` |
 | `VITE_APPWRITE_FOOD_ORDERS_COLLECTION_ID` | Collection ID for food orders. | `food_orders` |
 | `VITE_APPWRITE_AMBASSADOR_APPLICATIONS_COLLECTION_ID` | Collection ID for ambassador applications. | `ambassador_applications` |
+| `VITE_APPWRITE_REPORTS_COLLECTION_ID` | Collection ID for user-submitted reports. | `reports` |
 
 **Important Security Note:**
 The `APPWRITE_API_KEY` is a sensitive secret and **must NOT be exposed in client-side code or environment variables accessible by the browser.** It should only be used in secure server-side environments, such as Appwrite Functions. For example, the `processPaymentAndNotify` Appwrite Function uses this key.

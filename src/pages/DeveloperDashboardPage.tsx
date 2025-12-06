@@ -10,14 +10,15 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck } from "lucide-react"; // NEW: Import Truck icon
+import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck, Flag } from "lucide-react"; // NEW: Import Flag icon
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
-import { Query, ID } from "appwrite"; // NEW: Import ID for message creation
+import { Query, ID } from "appwrite";
 import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation";
-import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages"; // NEW IMPORT
-import { calculateCommissionRate } from "@/utils/commission"; // NEW IMPORT
+import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages";
+import { calculateCommissionRate } from "@/utils/commission";
+import { useReports, Report } from "@/hooks/useReports"; // NEW IMPORT
 
 interface Transaction {
   $id: string;
@@ -34,22 +35,22 @@ interface Transaction {
   commissionAmount?: number;
   netSellerAmount?: number;
   $createdAt: string;
-  collegeName: string; // NEW: Add collegeName
-  ambassadorDelivery?: boolean; // NEW
-  ambassadorMessage?: string; // NEW
+  collegeName: string;
+  ambassadorDelivery?: boolean;
+  ambassadorMessage?: string;
 }
 
 const DeveloperDashboardPage = () => {
   const { user, userProfile } = useAuth();
-  // Fetch all messages (no collegeNameFilter passed)
   const { messages, isLoading: isMessagesLoading, error: messagesError, refetch: refetchMessages } = useDeveloperMessages(); 
+  const { reports, isLoading: isReportsLoading, error: reportsError, refetch: refetchReports, updateReportStatus } = useReports(); // NEW: Use reports hook
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [blockedWords, setBlockedWords] = useState<string[]>(STATIC_BLOCKED_WORDS); 
   const [newBlockedWord, setNewBlockedWord] = useState("");
   const [targetUserIdAction, setTargetUserIdAction] = useState("");
-  const [developerReply, setDeveloperReply] = useState(""); // NEW: State for developer reply
-  const [isReplying, setIsReplying] = useState(false); // NEW: State for reply loading
+  const [developerReply, setDeveloperReply] = useState("");
+  const [isReplying, setIsReplying] = useState(false);
 
   const isDeveloper = userProfile?.role === "developer";
 
@@ -62,7 +63,6 @@ const DeveloperDashboardPage = () => {
     const fetchTransactions = async () => {
       setLoadingTransactions(true);
       try {
-        // Fetch ALL transactions (no collegeName filter for developer dashboard)
         const response = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_TRANSACTIONS_COLLECTION_ID
@@ -78,7 +78,6 @@ const DeveloperDashboardPage = () => {
 
     fetchTransactions();
 
-    // Realtime subscription for transactions
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
       (response) => {
@@ -97,7 +96,7 @@ const DeveloperDashboardPage = () => {
     );
 
     return () => {
-      unsubscribe(); // Unsubscribe on component unmount
+      unsubscribe();
     };
   }, [isDeveloper]);
 
@@ -126,7 +125,6 @@ const DeveloperDashboardPage = () => {
     }
     if (!window.confirm(`Are you sure you want to SUSPEND user ID: ${userId}? This action is reversible.`)) return;
 
-    // NOTE: Client SDK cannot update another user's status. Simulating action.
     toast.warning(`Simulated suspension of user ${userId}. Actual suspension must be performed via Appwrite Console or Function.`);
   };
 
@@ -138,7 +136,6 @@ const DeveloperDashboardPage = () => {
     if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE user ID: ${userId}? This action is irreversible.`)) return;
 
     try {
-      // 1. Find and delete the user profile document first
       const profileResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
@@ -155,8 +152,6 @@ const DeveloperDashboardPage = () => {
         toast.info(`User profile ${profileId} deleted.`);
       }
 
-      // 2. Delete the user account
-      // NOTE: Client SDK cannot delete another user's account. Simulating action.
       toast.warning(`Simulated deletion of user ${userId}. Actual deletion must be performed via Appwrite Console or Function.`);
       
       toast.success(`User ${userId} has been deleted (simulated).`);
@@ -175,7 +170,6 @@ const DeveloperDashboardPage = () => {
 
     setLoadingTransactions(true);
     try {
-      // 1. Fetch Seller's Profile to get their current level
       const sellerProfileResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
@@ -191,14 +185,11 @@ const DeveloperDashboardPage = () => {
       const sellerProfile = sellerProfileResponse.documents[0] as any;
       const sellerLevel = sellerProfile.level ?? 1;
       
-      // 2. Calculate dynamic commission rate
       const commissionRate = calculateCommissionRate(sellerLevel);
       
-      // 3. Calculate amounts
       const commissionAmount = transaction.amount * commissionRate;
       const netSellerAmount = transaction.amount - commissionAmount;
 
-      // 4. Update transaction document
       await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
@@ -278,12 +269,12 @@ const DeveloperDashboardPage = () => {
           senderName: user.name,
           message: trimmedReply,
           isDeveloper: true,
-          collegeName: userProfile.collegeName, // Developer's college, or can be 'Global'
+          collegeName: userProfile.collegeName,
         }
       );
       setDeveloperReply("");
       toast.success("Developer reply sent!");
-      refetchMessages(); // Refresh messages to show the new reply
+      refetchMessages();
     } catch (error: any) {
       console.error("Error sending developer reply:", error);
       toast.error(error.message || "Failed to send reply.");
@@ -292,17 +283,21 @@ const DeveloperDashboardPage = () => {
     }
   };
 
-  const getStatusBadgeClass = (status: Transaction["status"]) => {
+  const getStatusBadgeClass = (status: Transaction["status"] | Report["status"]) => {
     switch (status) {
       case "initiated":
+      case "Pending":
         return "bg-yellow-500 text-white";
       case "payment_confirmed_to_developer":
+      case "Reviewed":
         return "bg-blue-500 text-white";
       case "commission_deducted":
         return "bg-orange-500 text-white";
-      case "paid_to_seller": // Corrected typo here
+      case "paid_to_seller":
+      case "Resolved":
         return "bg-green-500 text-white";
       case "failed":
+      case "Dismissed":
         return "bg-destructive text-destructive-foreground";
       default:
         return "bg-muted text-muted-foreground";
@@ -319,7 +314,7 @@ const DeveloperDashboardPage = () => {
     );
   }
 
-  if (loadingTransactions && isMessagesLoading) {
+  if (loadingTransactions && isMessagesLoading && isReportsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
@@ -361,7 +356,7 @@ const DeveloperDashboardPage = () => {
                     msg.isDeveloper ? "bg-primary/10 border-primary" : "bg-background border-border"
                   )}>
                     <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="font-semibold text-foreground">{msg.senderName} ({msg.collegeName})</span> {/* NEW: Display collegeName */}
+                      <span className="font-semibold text-foreground">{msg.senderName} ({msg.collegeName})</span>
                       <span className="text-muted-foreground">{new Date(msg.$createdAt).toLocaleString()}</span>
                     </div>
                     <p className="text-sm text-foreground break-words">{msg.message}</p>
@@ -369,7 +364,7 @@ const DeveloperDashboardPage = () => {
                 ))}
               </div>
             )}
-            <form onSubmit={handleDeveloperReply} className="flex gap-2 mt-4"> {/* NEW: Reply form */}
+            <form onSubmit={handleDeveloperReply} className="flex gap-2 mt-4">
               <Input
                 type="text"
                 placeholder="Reply to users..."
@@ -383,6 +378,93 @@ const DeveloperDashboardPage = () => {
                 <span className="sr-only">Send Reply</span>
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        <Separator className="my-6" />
+
+        {/* --- Reports Section --- */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Flag className="h-5 w-5 text-destructive" /> User Reports
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 overflow-x-auto">
+            {isReportsLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading reports...</p>
+              </div>
+            ) : reportsError ? (
+              <p className="text-center text-destructive py-4">Error loading reports: {reportsError}</p>
+            ) : reports.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4">No new reports found.</p>
+            ) : (
+              <Table className="min-w-[1000px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-foreground">Product</TableHead>
+                    <TableHead className="text-foreground">Reporter</TableHead>
+                    <TableHead className="text-foreground">Seller</TableHead>
+                    <TableHead className="text-foreground">College</TableHead>
+                    <TableHead className="text-foreground">Reason</TableHead>
+                    <TableHead className="text-foreground">Message</TableHead>
+                    <TableHead className="text-foreground">Status</TableHead>
+                    <TableHead className="text-right text-foreground">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reports.map((report) => (
+                    <TableRow key={report.$id}>
+                      <TableCell className="font-medium text-foreground">{report.productTitle}</TableCell>
+                      <TableCell className="text-muted-foreground">{report.reporterName}</TableCell>
+                      <TableCell className="text-muted-foreground">{report.sellerId}</TableCell> {/* Display seller ID for now */}
+                      <TableCell className="text-muted-foreground">{report.collegeName}</TableCell>
+                      <TableCell className="text-muted-foreground">{report.reason}</TableCell>
+                      <TableCell className="text-muted-foreground max-w-[200px] truncate">{report.message || "N/A"}</TableCell>
+                      <TableCell>
+                        <Badge className={cn("px-2 py-1 text-xs font-semibold", getStatusBadgeClass(report.status))}>
+                          {report.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right space-y-1 min-w-[150px]">
+                        {report.status === "Pending" && (
+                          <>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => updateReportStatus(report.$id, "Reviewed")}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                            >
+                              Mark Reviewed
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => updateReportStatus(report.$id, "Dismissed")}
+                              className="w-full bg-red-600 hover:bg-red-700 text-white text-xs"
+                            >
+                              Dismiss
+                            </Button>
+                          </>
+                        )}
+                        {(report.status === "Reviewed" || report.status === "Dismissed") && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => updateReportStatus(report.$id, "Resolved")}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white text-xs"
+                          >
+                            Mark Resolved
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
 
@@ -511,12 +593,12 @@ const DeveloperDashboardPage = () => {
                     <TableHead className="text-foreground">Product</TableHead>
                     <TableHead className="text-foreground">Buyer</TableHead>
                     <TableHead className="text-foreground">Seller</TableHead>
-                    <TableHead className="text-foreground">College</TableHead> {/* NEW: College Column */}
+                    <TableHead className="text-foreground">College</TableHead>
                     <TableHead className="text-foreground">Amount</TableHead>
                     <TableHead className="text-foreground">Commission</TableHead>
                     <TableHead className="text-foreground">Net to Seller</TableHead>
                     <TableHead className="text-foreground">Seller UPI</TableHead>
-                    <TableHead className="text-foreground">Delivery</TableHead> {/* NEW: Delivery Column */}
+                    <TableHead className="text-foreground">Delivery</TableHead>
                     <TableHead className="text-foreground">Status</TableHead>
                     <TableHead className="text-right text-foreground">Actions</TableHead>
                   </TableRow>
@@ -527,12 +609,12 @@ const DeveloperDashboardPage = () => {
                       <TableCell className="font-medium text-foreground">{tx.productTitle}</TableCell>
                       <TableCell className="text-muted-foreground">{tx.buyerName}</TableCell>
                       <TableCell className="text-muted-foreground">{tx.sellerName}</TableCell>
-                      <TableCell className="text-muted-foreground">{tx.collegeName}</TableCell> {/* NEW: Display collegeName */}
+                      <TableCell className="text-muted-foreground">{tx.collegeName}</TableCell>
                       <TableCell className="text-foreground">₹{tx.amount.toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.commissionAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.netSellerAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-muted-foreground">{tx.sellerUpiId}</TableCell>
-                      <TableCell> {/* NEW: Display Delivery Info */}
+                      <TableCell>
                         {tx.ambassadorDelivery ? (
                           <Badge variant="outline" className="flex items-center gap-1 bg-blue-100 text-blue-800">
                             <Truck className="h-3 w-3" /> Ambassador

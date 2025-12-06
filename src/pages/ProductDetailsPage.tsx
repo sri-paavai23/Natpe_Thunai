@@ -9,28 +9,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2 } from 'lucide-react'; // Added Truck and Loader2 icons
+import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2, Flag } from 'lucide-react'; // Added Flag icon
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
 import { calculateCommissionRate } from '@/utils/commission'; // Import commission calculator
 import { DEVELOPER_UPI_ID } from '@/lib/config'; // Import DEVELOPER_UPI_ID
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"; // Import Dialog components
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog"; // Import Dialog components and DialogTrigger
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
+import ReportListingForm from "@/components/forms/ReportListingForm"; // NEW: Import ReportListingForm
 
 export default function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth(); // NEW: Get incrementAmbassadorDeliveriesCount
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isConfirmPurchaseDialogOpen, setIsConfirmPurchaseDialogOpen] = useState(false); // NEW
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // NEW
-  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // NEW
-  const [isBargainPurchase, setIsBargainPurchase] = useState(false); // NEW
+  const [isConfirmPurchaseDialogOpen, setIsConfirmPurchaseDialogOpen] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false); // NEW: State for report dialog
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
+  const [ambassadorMessage, setAmbassadorMessage] = useState("");
+  const [isBargainPurchase, setIsBargainPurchase] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -65,7 +67,7 @@ export default function ProductDetailsPage() {
 
   }, [productId]);
 
-  const handleOpenConfirmPurchase = (bargain: boolean) => { // NEW
+  const handleOpenConfirmPurchase = (bargain: boolean) => {
     if (!user || !userProfile) {
       toast.error("Please log in to proceed with a transaction.");
       navigate("/auth");
@@ -86,8 +88,8 @@ export default function ProductDetailsPage() {
     setIsConfirmPurchaseDialogOpen(true);
   };
 
-  const handleInitiatePayment = async () => { // Modified to be called from dialog
-    if (!user || !userProfile || !product) return; // Should be checked by handleOpenConfirmPurchase
+  const handleInitiatePayment = async () => {
+    if (!user || !userProfile || !product) return;
 
     setIsProcessing(true);
     
@@ -104,7 +106,7 @@ export default function ProductDetailsPage() {
     const transactionType = product.type === 'sell' ? 'buy' : 'rent';
     const discountRate = 0.15; // 15% fixed bargain discount
     
-    if (isBargainPurchase) { // Use isBargainPurchase state
+    if (isBargainPurchase) {
       amount = amount * (1 - discountRate);
     }
 
@@ -132,8 +134,8 @@ export default function ProductDetailsPage() {
           type: transactionType,
           isBargain: isBargainPurchase,
           collegeName: userProfile.collegeName,
-          ambassadorDelivery: ambassadorDelivery, // NEW
-          ambassadorMessage: ambassadorMessage || null, // NEW
+          ambassadorDelivery: ambassadorDelivery,
+          ambassadorMessage: ambassadorMessage || null,
         }
       );
 
@@ -312,10 +314,34 @@ export default function ProductDetailsPage() {
               </AlertDescription>
             </Alert>
           )}
+
+          {/* NEW: Report Listing Button */}
+          <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full mt-6 border-destructive text-destructive hover:bg-destructive/10">
+                <Flag className="mr-2 h-4 w-4" /> Report Listing
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Report Listing: {product.title}</DialogTitle>
+                <DialogDescription className="text-muted-foreground">
+                  Help us keep Natpe🤝Thunai safe by reporting inappropriate content.
+                </DialogDescription>
+              </DialogHeader>
+              <ReportListingForm
+                productId={product.$id}
+                productTitle={product.title}
+                sellerId={product.sellerId}
+                onReportSubmitted={() => setIsReportDialogOpen(false)}
+                onCancel={() => setIsReportDialogOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      {/* NEW: Confirmation Dialog for Purchase/Rent */}
+      {/* Confirmation Dialog for Purchase/Rent */}
       <Dialog open={isConfirmPurchaseDialogOpen} onOpenChange={setIsConfirmPurchaseDialogOpen}>
         <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
           <DialogHeader>
