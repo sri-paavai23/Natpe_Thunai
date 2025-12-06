@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ProductListingCard from "@/components/ProductListingCard";
 import { Product } from "@/lib/mockData"; // Import Product interface
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMarketListings } from '@/hooks/useMarketListings'; // Fixed: Import the new hook
+import { useMarketListings } from '@/hooks/useMarketListings'; // Import the new hook
 
 // Helper function to filter products by type
 const filterProducts = (products: Product[], type: Product['type'] | 'all'): Product[] => {
@@ -56,13 +56,12 @@ const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
 
   return (
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Product['type'] | 'all')} className="w-full">
-      {/* Updated TabsList for mobile responsiveness */}
-      <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-primary-blue-light text-primary-foreground h-auto p-1">
-        <TabsTrigger value="all" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">All</TabsTrigger>
-        <TabsTrigger value="sell" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Sell</TabsTrigger>
-        <TabsTrigger value="rent" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Rent</TabsTrigger>
-        <TabsTrigger value="gift" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Handcrafts & Gifts</TabsTrigger>
-        <TabsTrigger value="sports" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Sports</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-5">
+        <TabsTrigger value="all">All</TabsTrigger>
+        <TabsTrigger value="sell">Sell</TabsTrigger>
+        <TabsTrigger value="rent">Rent</TabsTrigger>
+        <TabsTrigger value="gift">Handcrafts & Gifts</TabsTrigger>
+        <TabsTrigger value="sports">Sports</TabsTrigger>
       </TabsList>
       
       <TabsContent value={activeTab}>

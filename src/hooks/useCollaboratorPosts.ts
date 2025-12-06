@@ -1,59 +1,87 @@
+"use client";
+
 import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_COLLABORATORS_COLLECTION_ID } from '@/lib/appwrite'; // Fixed: Corrected import
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_COLLABORATORS_COLLECTION_ID } from '@/lib/appwrite';
 import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
 
 export interface CollaboratorPost extends Models.Document {
   title: string;
   description: string;
-  skillsRequired: string[];
-  contactEmail: string;
-  status: "Open" | "Filled" | "Completed";
+  skillsNeeded: string;
+  contact: string;
   posterId: string;
   posterName: string;
-  projectType: string; // e.g., "Academic", "Startup", "Event"
-  deadline?: string; // Optional deadline
 }
 
-export const useCollaboratorPosts = () => {
-  const [collaboratorPosts, setCollaboratorPosts] = useState<CollaboratorPost[]>([]);
+interface CollaboratorPostsState {
+  posts: CollaboratorPost[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export const useCollaboratorPosts = (): CollaboratorPostsState => {
+  const [posts, setPosts] = useState<CollaboratorPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCollaboratorPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    
     try {
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_COLLABORATORS_COLLECTION_ID,
         [Query.orderDesc('$createdAt')]
       );
-      setCollaboratorPosts(response.documents as unknown as CollaboratorPost[]);
+      setPosts(response.documents as unknown as CollaboratorPost[]);
     } catch (err: any) {
       console.error("Error fetching collaborator posts:", err);
       setError(err.message || "Failed to load collaborator posts.");
-      toast.error(err.message || "Failed to load collaborator posts.");
+      toast.error("Failed to load collaborator posts.");
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchCollaboratorPosts();
+    fetchPosts();
 
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_COLLABORATORS_COLLECTION_ID}.documents`,
       (response) => {
-        // For simplicity, re-fetch all items on any change
-        fetchCollaboratorPosts();
+        const payload = response.payload as unknown as CollaboratorPost;
+
+        setPosts(prev => {
+          const existingIndex = prev.findIndex(p => p.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New collaboration post: ${payload.title}`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Collaboration post updated: ${payload.title}`);
+              return prev.map(p => p.$id === payload.$id ? payload : p);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Collaboration post removed: ${payload.title}`);
+              return prev.filter(p => p.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [fetchCollaboratorPosts]);
+  }, [fetchPosts]);
 
-  return { collaboratorPosts, isLoading, error, refreshCollaboratorPosts: fetchCollaboratorPosts };
+  return { posts, isLoading, error, refetch: fetchPosts };
 };

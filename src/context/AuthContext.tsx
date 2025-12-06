@@ -1,246 +1,202 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Account, Models, Query } from 'appwrite'; // Import Query
-import { client, databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
-import { toast } from 'sonner';
-import { checkAndApplyLevelUp, calculateMaxXpForLevel } from '@/utils/leveling';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { account, databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from "@/lib/appwrite";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { Models, Query } from "appwrite"; // Import Query
+import { calculateMaxXpForLevel, checkAndApplyLevelUp } from "@/utils/leveling"; // NEW IMPORT
 
-// Extend the Appwrite User interface to include custom profile data
-export interface UserProfile extends Models.Document {
+interface AppwriteUser extends Models.User<Models.Preferences> {}
+
+interface UserProfile extends Models.Document {
   userId: string;
-  name: string;
-  email: string;
-  mobileNumber?: string;
-  role: 'user' | 'developer' | 'ambassador';
+  firstName: string;
+  lastName: string;
+  age: number;
+  mobileNumber: string;
+  upiId: string;
+  collegeIdPhotoId?: string;
+  role: "user" | "developer"; // Appwrite system role
+  gender: "male" | "female" | "prefer-not-to-say"; // New field
+  userType: "student" | "staff"; // New field
+  // Dynamic Leveling Fields (maxXp is calculated client-side but might be stored)
   level: number;
   currentXp: number;
-  profilePictureUrl?: string;
-  address?: string;
-  collegeName?: string;
-  department?: string;
-  walletBalance?: number;
-  totalEarned?: number;
-  totalSpent?: number;
-  gender?: 'male' | 'female' | 'other' | 'prefer-not-to-say'; // Added
-  userType?: 'student' | 'faculty' | 'alumni'; // Added
-  upiId?: string; // Added
-  age?: number; // Added
-  firstName?: string; // Added
-  lastName?: string; // Added
-  isVerified?: boolean; // Added
+  maxXp: number;
 }
 
 interface AuthContextType {
-  user: Models.User<Models.Preferences> | null;
-  userProfile: UserProfile | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
-  isAuthenticated: boolean; // Added
-  isVerified: boolean; // Added
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, mobileNumber: string, collegeName: string, department: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
-  addXp: (amount: number) => Promise<void>;
+  user: AppwriteUser | null;
+  userProfile: UserProfile | null;
+  isVerified: boolean; // Added verification status
+  login: () => Promise<void>;
+  logout: () => void;
+  updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
+  addXp: (amount: number) => Promise<void>; // NEW METHOD
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const account = new Account(client);
-
-export const AuthProvider = ({ children }: { ReactNode }) => {
-  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<AppwriteUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const navigate = useNavigate();
 
-  const fetchUser = useCallback(async () => {
-    try {
-      const loggedInUser = await account.get();
-      setUser(loggedInUser);
-      await fetchUserProfile(loggedInUser.$id);
-    } catch (error) {
-      setUser(null);
-      setUserProfile(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const isVerified = user?.emailVerification ?? false; // Calculate verification status
 
   const fetchUserProfile = useCallback(async (userId: string) => {
     try {
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [
-          Query.equal('userId', userId), // Fixed: Use Query.equal
-        ]
+        [Query.equal('userId', userId)] // Use Query to fetch specific user profile
       );
-      if (response.documents.length > 0) {
-        setUserProfile(response.documents[0] as UserProfile); // Fixed: Cast to UserProfile
+      const profile = response.documents[0] as unknown as UserProfile | undefined; // Assuming userId is unique
+      if (profile) {
+        // Calculate dynamic Max XP based on fetched level, or default to 100 if level is 1
+        const level = profile.level ?? 1;
+        const maxXp = calculateMaxXpForLevel(level); // Use dynamic calculation
+
+        const completeProfile: UserProfile = {
+          ...profile,
+          level: level,
+          currentXp: profile.currentXp ?? 0,
+          maxXp: maxXp,
+        };
+        setUserProfile(completeProfile);
       } else {
-        // If no profile exists, create a basic one
-        const newProfile = await databases.createDocument(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_USER_PROFILES_COLLECTION_ID,
-          userId, // Use userId as document ID for easy lookup
-          {
-            userId: userId,
-            name: user?.name || 'New User', // Fallback if user object not fully loaded yet
-            email: user?.email || '',
-            role: 'user',
-            level: 1,
-            currentXp: 0,
-            walletBalance: 0,
-            totalEarned: 0,
-            totalSpent: 0,
-            isVerified: false, // Default to false
-          }
-        );
-        setUserProfile(newProfile as UserProfile); // Fixed: Cast to UserProfile
+        console.warn("User profile not found for user:", userId);
+        setUserProfile(null);
       }
     } catch (error) {
-      console.error("Error fetching or creating user profile:", error);
+      console.error("Error fetching user profile:", error);
       setUserProfile(null);
     }
-  }, [user?.name, user?.email]); // Added user.name and user.email to dependencies
+  }, []);
+
+  const checkUserSession = useCallback(async () => {
+    try {
+      const currentUser = await account.get();
+      setIsAuthenticated(true);
+      setUser(currentUser);
+      await fetchUserProfile(currentUser.$id);
+    } catch (error) {
+      setIsAuthenticated(false);
+      setUser(null);
+      setUserProfile(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchUserProfile]);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    checkUserSession();
+  }, [checkUserSession]);
 
-  const login = async (email: string, password: string) => {
+  const loginUser = async () => {
     setIsLoading(true);
-    try {
-      await account.createSession(email, password); // Fixed: createSession
-      await fetchUser();
-      toast.success("Logged in successfully!");
-    } catch (error: any) {
-      toast.error(error.message || "Login failed.");
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const register = async (email: string, password: string, name: string, mobileNumber: string, collegeName: string, department: string) => {
-    setIsLoading(true);
-    try {
-      const newUser = await account.create("unique()", email, password, name);
-      await databases.createDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_USER_PROFILES_COLLECTION_ID,
-        newUser.$id, // Use user ID as document ID
-        {
-          userId: newUser.$id,
-          name: name,
-          email: email,
-          mobileNumber: mobileNumber,
-          role: 'user',
-          level: 1,
-          currentXp: 0,
-          address: '',
-          collegeName: collegeName,
-          department: department,
-          walletBalance: 0,
-          totalEarned: 0,
-          totalSpent: 0,
-          firstName: name.split(' ')[0] || '',
-          lastName: name.split(' ').slice(1).join(' ') || '',
-          age: 0,
-          upiId: '',
-          gender: 'prefer-not-to-say',
-          userType: 'student',
-          isVerified: false, // Default to false
-        }
-      );
-      await account.createSession(email, password); // Fixed: createSession
-      await fetchUser();
-      toast.success("Registration successful! Welcome to Natpe🤝Thunai.");
-    } catch (error: any) {
-      toast.error(error.message || "Registration failed.");
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
+    await checkUserSession(); // Re-check session and fetch profile after login
+    setIsLoading(false);
   };
 
   const logout = async () => {
-    setIsLoading(true);
     try {
-      await account.deleteSession('current');
+      await account.deleteSession("current");
+      setIsAuthenticated(false);
       setUser(null);
       setUserProfile(null);
+      toast.success("Logged out successfully!");
+      navigate("/auth", { replace: true });
     } catch (error: any) {
-      toast.error(error.message || "Logout failed.");
-      throw error;
-    } finally {
-      setIsLoading(false);
+      toast.error(error.message || "Failed to log out.");
+      console.error("Logout error:", error);
     }
   };
 
-  const updateUserProfile = async (data: Partial<UserProfile>) => {
-    if (!userProfile) {
-      toast.error("No user profile found to update.");
-      return;
-    }
+  const updateUserProfile = async (profileId: string, data: Partial<UserProfile>) => {
     try {
+      // Filter out derived fields like maxXp before sending to DB
+      const { maxXp, ...dataToSave } = data;
+
       const updatedDoc = await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        userProfile.$id,
-        data
+        profileId,
+        dataToSave
       );
-      setUserProfile(updatedDoc as UserProfile); // Fixed: Cast to UserProfile
-      toast.success("Profile updated successfully!");
+      
+      // Ensure we use the data returned from the database, which should include all fields
+      const updatedProfileData = updatedDoc as unknown as UserProfile;
+      
+      // Recalculate Max XP based on the potentially new level, ensuring defaults if fields are missing
+      const level = updatedProfileData.level ?? 1;
+      const calculatedMaxXp = calculateMaxXpForLevel(level);
+
+      const updatedProfile: UserProfile = {
+        ...updatedProfileData,
+        level: level,
+        currentXp: updatedProfileData.currentXp ?? 0,
+        maxXp: calculatedMaxXp,
+      };
+      setUserProfile(updatedProfile);
+      // Do NOT show success toast here, let the caller (like addXp or EditProfileForm) handle it.
     } catch (error: any) {
       console.error("Error updating user profile:", error);
-      toast.error(error.message || "Failed to update profile.");
-      throw error;
+      throw new Error(error.message || "Failed to update profile.");
     }
   };
 
   const addXp = async (amount: number) => {
-    if (!userProfile) {
-      toast.error("Cannot add XP: User profile not loaded.");
+    if (!userProfile || !user) {
+      toast.error("Cannot add XP: User not logged in or profile missing.");
       return;
     }
 
-    const newCurrentXp = userProfile.currentXp + amount;
-    const maxXp = calculateMaxXpForLevel(userProfile.level);
+    let currentLevel = userProfile.level;
+    let currentXp = userProfile.currentXp + amount;
+    let maxXp = userProfile.maxXp;
 
-    const { newLevel, newCurrentXp: updatedXp, newMaxXp } = checkAndApplyLevelUp(
-      userProfile.level,
-      newCurrentXp,
-      maxXp
-    );
+    const { newLevel, newCurrentXp, newMaxXp } = checkAndApplyLevelUp(currentLevel, currentXp, maxXp);
 
     try {
-      const updatedProfile = await databases.updateDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_USER_PROFILES_COLLECTION_ID,
-        userProfile.$id,
-        {
+      // Only update if there's a change in XP or level
+      if (newLevel !== currentLevel || newCurrentXp !== userProfile.currentXp) {
+        // Use updateUserProfile to handle the database update and local state sync
+        // We only send level and currentXp to the database.
+        await updateUserProfile(userProfile.$id, {
           level: newLevel,
-          currentXp: updatedXp,
-        }
-      );
-      setUserProfile(updatedProfile as UserProfile); // Fixed: Cast to UserProfile
-      if (newLevel > userProfile.level) {
-        toast.success(`Congratulations! You've leveled up to Level ${newLevel}!`);
-      } else {
-        toast.info(`You earned ${amount} XP!`);
+          currentXp: newCurrentXp,
+        });
       }
-    } catch (error: any) {
-      console.error("Error adding XP:", error);
-      toast.error(error.message || "Failed to add XP.");
+
+      if (newLevel > currentLevel) {
+        toast.success(`LEVEL UP! You reached Level ${newLevel}! Commission rate reduced.`);
+      } else {
+        toast.info(`+${amount} XP earned!`);
+      }
+    } catch (error) {
+      // Error is already logged and thrown by updateUserProfile, just toast the failure here.
+      toast.error("Failed to update XP/Level.");
     }
   };
 
-  const isAuthenticated = !!user;
-  const isVerified = userProfile?.isVerified ?? false;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
+        <p className="ml-3 text-lg text-muted-foreground">Loading application...</p>
+      </div>
+    );
+  }
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, isLoading, isAuthenticated, isVerified, login, register, logout, updateUserProfile, addXp }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, userProfile, isVerified, login: loginUser, logout, updateUserProfile, addXp }}>
       {children}
     </AuthContext.Provider>
   );
@@ -249,7 +205,7 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

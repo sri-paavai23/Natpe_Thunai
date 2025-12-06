@@ -1,281 +1,438 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Package, ShoppingCart, Wrench, MessageSquareWarning, XCircle } from "lucide-react";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, APPWRITE_SERVICE_REQUESTS_COLLECTION_ID } from "@/lib/appwrite"; // Fixed: Corrected import
-import { Query, Models } from "appwrite";
+import { Package, Truck, XCircle, MessageSquareText, DollarSign, Loader2, Utensils, CheckCircle, ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { Models, Query } from "appwrite";
+import { calculateCommissionRate } from "@/utils/commission";
+import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders"; // NEW IMPORT
+import { Button } from "@/components/ui/button";
 
-interface Transaction extends Models.Document {
-  productId: string;
+// --- Tracking Item Interfaces ---
+
+interface BaseTrackingItem {
+  id: string;
+  description: string;
+  date: string;
+  status: string; // Generic status string
+  isUserProvider: boolean;
+}
+
+export interface MarketTransactionItem extends BaseTrackingItem {
+  type: "Transaction";
   productTitle: string;
-  buyerId: string;
-  buyerName: string;
-  sellerId: string;
-  sellerName: string;
   amount: number;
-  status: string; // e.g., "Pending", "Completed", "Cancelled"
-  type: "buy" | "rent" | "service"; // Added type for filtering
-  isBargain: boolean;
-  // Add other relevant fields like UTR ID, payment proof, etc.
-}
-
-interface FoodOrder extends Models.Document {
-  offeringId: string;
-  offeringTitle: string;
-  providerId: string;
-  providerName: string;
-  buyerId: string;
+  sellerName: string;
   buyerName: string;
-  quantity: number;
-  totalAmount: number;
-  deliveryLocation: string;
-  notes: string;
-  status: string; // e.g., "Pending Confirmation", "Confirmed", "Preparing", "Out for Delivery", "Delivered", "Cancelled"
+  buyerId: string;
+  sellerId: string;
+  commissionAmount?: number;
+  netSellerAmount?: number;
 }
 
-interface ServiceRequest extends Models.Document {
-  serviceId: string;
-  serviceTitle: string;
-  providerId: string;
+export interface FoodOrderItem extends BaseTrackingItem {
+  type: "Food Order";
+  offeringTitle: string;
+  totalAmount: number;
   providerName: string;
-  requesterId: string;
-  requesterName: string;
-  status: string; // e.g., "Pending", "Accepted", "Rejected", "Completed", "Cancelled"
-  requestDetails: string;
-  proposedPrice: number;
-  // Add other relevant fields
+  buyerName: string;
+  buyerId: string;
+  providerId: string;
+  orderStatus: FoodOrder["status"]; // Specific status for food orders
+  quantity: number;
+  deliveryLocation: string; // Added missing property
+  notes: string; // Added missing property
 }
+
+interface OtherActivityItem extends BaseTrackingItem {
+  type: "Order" | "Service" | "Cancellation" | "Complaint";
+}
+
+type TrackingItem = MarketTransactionItem | FoodOrderItem | OtherActivityItem;
+
+// --- Conversion Functions ---
+
+// Helper function to map Appwrite transaction status to TrackingItem status
+const mapAppwriteStatusToTrackingStatus = (appwriteStatus: string): string => {
+  switch (appwriteStatus) {
+    case "initiated":
+      return "Initiated (Awaiting Payment)";
+    case "payment_confirmed_to_developer":
+      return "Payment Confirmed (Processing)";
+    case "commission_deducted":
+      return "Commission Deducted (Awaiting Seller Pay)";
+    case "paid_to_seller":
+      return "Completed";
+    case "failed":
+      return "Cancelled";
+    default:
+      return "Pending";
+  }
+};
+
+// Helper function to convert Appwrite transaction document to TrackingItem
+const convertAppwriteTransactionToTrackingItem = (doc: Models.Document, currentUserId: string): MarketTransactionItem => {
+  const transactionDoc = doc as any;
+  const isBuyer = transactionDoc.buyerId === currentUserId;
+
+  let description = `Payment for ${transactionDoc.productTitle}`;
+  if (isBuyer) {
+    description = `Purchase of ${transactionDoc.productTitle}`;
+  } else if (transactionDoc.sellerId === currentUserId) {
+    description = `Sale of ${transactionDoc.productTitle}`;
+  }
+
+  return {
+    id: transactionDoc.$id,
+    type: "Transaction",
+    description: description,
+    status: mapAppwriteStatusToTrackingStatus(transactionDoc.status),
+    date: new Date(transactionDoc.$createdAt).toLocaleDateString(),
+    productTitle: transactionDoc.productTitle,
+    amount: transactionDoc.amount,
+    sellerName: transactionDoc.sellerName,
+    buyerName: transactionDoc.buyerName,
+    buyerId: transactionDoc.buyerId,
+    sellerId: transactionDoc.sellerId,
+    commissionAmount: transactionDoc.commissionAmount,
+    netSellerAmount: transactionDoc.netSellerAmount,
+    isUserProvider: transactionDoc.sellerId === currentUserId,
+  };
+};
+
+// New conversion function for Food Orders
+const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: string): FoodOrderItem => {
+  const isBuyer = doc.buyerId === currentUserId;
+  const description = isBuyer 
+    ? `Order placed for ${doc.offeringTitle}` 
+    : `Order received for ${doc.offeringTitle}`;
+
+  return {
+    id: doc.$id,
+    type: "Food Order",
+    description: description,
+    status: doc.status, // Use specific order status
+    date: new Date(doc.$createdAt).toLocaleDateString(),
+    offeringTitle: doc.offeringTitle,
+    totalAmount: doc.totalAmount,
+    providerName: doc.providerName,
+    buyerName: doc.buyerName,
+    buyerId: doc.buyerId,
+    providerId: doc.providerId,
+    orderStatus: doc.status,
+    isUserProvider: doc.providerId === currentUserId,
+    quantity: doc.quantity,
+    deliveryLocation: doc.deliveryLocation, // Mapped missing property
+    notes: doc.notes, // Mapped missing property
+  };
+};
+
+const dummyOtherItems: OtherActivityItem[] = [
+  { id: "t1", type: "Order", description: "Gaming Headset from The Exchange", status: "In Progress", date: "2024-07-20", isUserProvider: false },
+  { id: "t2", type: "Service", description: "Resume Building Service", status: "Completed", date: "2024-07-18", isUserProvider: false },
+  { id: "t3", type: "Cancellation", description: "Rent request for Bicycle", status: "Pending", date: "2024-07-22", isUserProvider: false },
+  { id: "t4", type: "Complaint", description: "Issue with food delivery", status: "Resolved", date: "2024-07-15", isUserProvider: false },
+  { id: "t5", type: "Order", description: "Textbook: Advanced Physics", status: "Pending", date: "2024-07-23", isUserProvider: false },
+];
+
 
 const TrackingPage = () => {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"purchases" | "sales" | "foodOrders" | "serviceRequests">("purchases");
-  const [loading, setLoading] = useState(true);
-  const [purchases, setPurchases] = useState<Transaction[]>([]);
-  const [sales, setSales] = useState<Transaction[]>([]);
-  const [foodOrders, setFoodOrders] = useState<FoodOrder[]>([]);
-  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const { user, userProfile } = useAuth();
+  const { orders: foodOrders, isLoading: isLoadingFood, refetch: refetchFoodOrders } = useFoodOrders();
+  
+  const [trackingItems, setTrackingItems] = useState<TrackingItem[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const fetchTrackingData = useCallback(async () => {
-    if (!user) {
-      setLoading(false);
+  const fetchMarketTransactions = useCallback(async () => {
+    if (!user?.$id) {
+      setLoadingTransactions(false);
       return;
     }
 
-    setLoading(true);
+    setLoadingTransactions(true);
     try {
-      // Fetch Purchases (where user is buyer)
-      const purchasesResponse = await databases.listDocuments(
+      const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
-        [Query.equal("buyerId", user.$id), Query.orderDesc('$createdAt')]
+        [
+          Query.or([
+            Query.equal('buyerId', user.$id),
+            Query.equal('sellerId', user.$id)
+          ]),
+          Query.orderDesc('$createdAt')
+        ]
       );
-      setPurchases(purchasesResponse.documents as unknown as Transaction[]);
 
-      // Fetch Sales (where user is seller)
-      const salesResponse = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_TRANSACTIONS_COLLECTION_ID,
-        [Query.equal("sellerId", user.$id), Query.orderDesc('$createdAt')]
-      );
-      setSales(salesResponse.documents as unknown as Transaction[]);
-
-      // Fetch Food Orders (where user is buyer)
-      const foodOrdersResponse = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
-        [Query.equal("buyerId", user.$id), Query.orderDesc('$createdAt')]
-      );
-      setFoodOrders(foodOrdersResponse.documents as unknown as FoodOrder[]);
-
-      // Fetch Service Requests (where user is requester)
-      const serviceRequestsResponse = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICE_REQUESTS_COLLECTION_ID,
-        [Query.equal("requesterId", user.$id), Query.orderDesc('$createdAt')]
-      );
-      setServiceRequests(serviceRequestsResponse.documents as unknown as ServiceRequest[]);
-
+      return response.documents.map((doc: Models.Document) => convertAppwriteTransactionToTrackingItem(doc, user.$id));
     } catch (error) {
-      console.error("Error fetching tracking data:", error);
-      toast.error("Failed to load tracking data.");
-    } finally {
-      setLoading(false);
+      console.error("Error fetching market transactions:", error);
+      toast.error("Failed to load market transactions.");
+      return [];
     }
   }, [user]);
 
+  const mergeAndSetItems = useCallback(async () => {
+    const fetchedTransactions = await fetchMarketTransactions();
+    
+    const foodOrderItems = foodOrders.map(o => convertAppwriteFoodOrderToTrackingItem(o, user!.$id));
+
+    const mergedItems = [...fetchedTransactions, ...foodOrderItems, ...dummyOtherItems];
+    
+    // Sort by creation date (newest first)
+    mergedItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    setTrackingItems(mergedItems);
+    setLoadingTransactions(false);
+  }, [fetchMarketTransactions, foodOrders, user]);
+
   useEffect(() => {
-    fetchTrackingData();
+    if (user) {
+      mergeAndSetItems();
+    }
+  }, [user, mergeAndSetItems]);
 
-    // Realtime subscriptions (simplified for brevity, would need more specific handling for each collection)
-    const unsubscribeTransactions = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
-      (response) => {
-        // Re-fetch all data on any transaction change for simplicity
-        fetchTrackingData();
-      }
-    );
-    const unsubscribeFoodOrders = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_ORDERS_COLLECTION_ID}.documents`,
-      (response) => {
-        fetchTrackingData();
-      }
-    );
-    const unsubscribeServiceRequests = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICE_REQUESTS_COLLECTION_ID}.documents`,
-      (response) => {
-        fetchTrackingData();
-      }
-    );
+  // --- Status Update Handlers ---
 
-    return () => {
-      unsubscribeTransactions();
-      unsubscribeFoodOrders();
-      unsubscribeServiceRequests();
-    };
-  }, [fetchTrackingData]);
+  const handleUpdateFoodOrderStatus = async (orderId: string, currentStatus: FoodOrder["status"]) => {
+    if (isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
 
-  const renderEmptyState = (message: string) => (
-    <p className="text-center text-muted-foreground py-8">{message}</p>
-  );
+    let nextStatus: FoodOrder["status"];
+    let successMessage: string;
 
-  const renderLoadingState = () => (
-    <div className="flex items-center justify-center py-8">
-      <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
-      <p className="ml-3 text-muted-foreground">Loading your activities...</p>
-    </div>
-  );
+    if (currentStatus === "Pending Confirmation") {
+      nextStatus = "Confirmed";
+      successMessage = "Order confirmed! Start preparing.";
+    } else if (currentStatus === "Confirmed") {
+      nextStatus = "Preparing";
+      successMessage = "Order status updated to Preparing.";
+    } else if (currentStatus === "Preparing") {
+      nextStatus = "Out for Delivery";
+      successMessage = "Order is out for delivery!";
+    } else {
+      setIsUpdatingStatus(false);
+      return;
+    }
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case "Completed":
-      case "Delivered":
-      case "Accepted":
-        return "bg-green-500 text-white";
-      case "Pending":
-      case "Pending Confirmation":
-      case "Confirmed":
-      case "Preparing":
-      case "Out for Delivery":
-        return "bg-orange-500 text-white";
-      case "Cancelled":
-      case "Rejected":
-        return "bg-red-500 text-white";
-      default:
-        return "bg-gray-500 text-white";
+    try {
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
+        orderId,
+        { status: nextStatus }
+      );
+      toast.success(successMessage);
+      refetchFoodOrders(); // Trigger refetch to update local state immediately
+    } catch (error: any) {
+      console.error("Error updating order status:", error);
+      toast.error(error.message || "Failed to update order status.");
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
-  const renderPurchases = () => {
-    if (loading) return renderLoadingState();
-    if (purchases.length === 0) return renderEmptyState("No purchases found.");
+  const handleConfirmDelivery = async (orderId: string) => {
+    if (isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
 
-    return purchases.map((item) => (
-      <Card key={item.$id} className="bg-card border-border p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div>
-          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-secondary-neon" /> {item.productTitle}
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Seller: {item.sellerName}</p>
-          <p className="text-sm text-muted-foreground">Amount: ₹{item.amount.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground">Type: {item.type.charAt(0).toUpperCase() + item.type.slice(1)}</p>
-        </div>
-        <Badge className={cn("mt-2 sm:mt-0", getStatusBadgeClass(item.status))}>{item.status}</Badge>
-      </Card>
-    ));
+    try {
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
+        orderId,
+        { status: "Delivered" }
+      );
+      toast.success("Delivery confirmed! Enjoy your meal.");
+      refetchFoodOrders();
+    } catch (error: any) {
+      console.error("Error confirming delivery:", error);
+      toast.error(error.message || "Failed to confirm delivery.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
-  const renderSales = () => {
-    if (loading) return renderLoadingState();
-    if (sales.length === 0) return renderEmptyState("No sales found.");
+  // --- UI Helpers ---
 
-    return sales.map((item) => (
-      <Card key={item.$id} className="bg-card border-border p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div>
-          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Package className="h-4 w-4 text-secondary-neon" /> {item.productTitle}
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Buyer: {item.buyerName}</p>
-          <p className="text-sm text-muted-foreground">Amount: ₹{item.amount.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground">Type: {item.type.charAt(0).toUpperCase() + item.type.slice(1)}</p>
-        </div>
-        <Badge className={cn("mt-2 sm:mt-0", getStatusBadgeClass(item.status))}>{item.status}</Badge>
-      </Card>
-    ));
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case "Pending Confirmation":
+      case "Initiated (Awaiting Payment)":
+        return "bg-yellow-500 text-white";
+      case "Payment Confirmed (Processing)":
+      case "Confirmed":
+        return "bg-blue-500 text-white";
+      case "Commission Deducted (Awaiting Seller Pay)":
+      case "Preparing":
+        return "bg-orange-500 text-white";
+      case "Out for Delivery":
+        return "bg-purple-500 text-white";
+      case "Completed":
+      case "Delivered":
+      case "Resolved":
+        return "bg-secondary-neon text-primary-foreground";
+      case "Cancelled":
+        return "bg-destructive text-destructive-foreground";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
   };
 
-  const renderFoodOrders = () => {
-    if (loading) return renderLoadingState();
-    if (foodOrders.length === 0) return renderEmptyState("No food orders found.");
-
-    return foodOrders.map((item) => (
-      <Card key={item.$id} className="bg-card border-border p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div>
-          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-secondary-neon" /> {item.offeringTitle} (x{item.quantity})
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Provider: {item.providerName}</p>
-          <p className="text-sm text-muted-foreground">Total: ₹{item.totalAmount.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground">Delivery: {item.deliveryLocation}</p>
-        </div>
-        <Badge className={cn("mt-2 sm:mt-0", getStatusBadgeClass(item.status))}>{item.status}</Badge>
-      </Card>
-    ));
+  const getIcon = (type: TrackingItem["type"]) => {
+    switch (type) {
+      case "Order":
+        return <Package className="h-4 w-4 text-secondary-neon" />;
+      case "Service":
+        return <Truck className="h-4 w-4 text-secondary-neon" />;
+      case "Cancellation":
+        return <XCircle className="h-4 w-4 text-destructive" />;
+      case "Complaint":
+        return <MessageSquareText className="h-4 w-4 text-yellow-500" />;
+      case "Transaction":
+        return <DollarSign className="h-4 w-4 text-green-500" />;
+      case "Food Order":
+        return <Utensils className="h-4 w-4 text-red-500" />;
+      default:
+        return null;
+    }
   };
 
-  const renderServiceRequests = () => {
-    if (loading) return renderLoadingState();
-    if (serviceRequests.length === 0) return renderEmptyState("No service requests found.");
-
-    return serviceRequests.map((item) => (
-      <Card key={item.$id} className="bg-card border-border p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center">
-        <div>
-          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-secondary-neon" /> {item.serviceTitle}
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Provider: {item.providerName}</p>
-          <p className="text-sm text-muted-foreground">Proposed Price: ₹{item.proposedPrice.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground">Details: {item.requestDetails.substring(0, 50)}...</p>
-        </div>
-        <Badge className={cn("mt-2 sm:mt-0", getStatusBadgeClass(item.status))}>{item.status}</Badge>
-      </Card>
-    ));
-  };
+  const userLevel = userProfile?.level ?? 1;
+  const dynamicCommissionRate = calculateCommissionRate(userLevel);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Your Activities</h1>
-      <div className="max-w-2xl mx-auto space-y-6">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "purchases" | "sales" | "foodOrders" | "serviceRequests")} className="w-full">
-          {/* Updated TabsList for mobile responsiveness */}
-          <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-primary-blue-light text-primary-foreground h-auto p-1">
-            <TabsTrigger value="purchases" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Purchases</TabsTrigger>
-            <TabsTrigger value="sales" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Sales</TabsTrigger>
-            <TabsTrigger value="foodOrders" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Food Orders</TabsTrigger>
-            <TabsTrigger value="serviceRequests" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Service Requests</TabsTrigger>
-          </TabsList>
-          <div className="mt-4 space-y-4">
-            <TabsContent value="purchases" className="space-y-3">
-              {renderPurchases()}
-            </TabsContent>
-            <TabsContent value="sales" className="space-y-3">
-              {renderSales()}
-            </TabsContent>
-            <TabsContent value="foodOrders" className="space-y-3">
-              {renderFoodOrders()}
-            </TabsContent>
-            <TabsContent value="serviceRequests" className="space-y-3">
-              {renderServiceRequests()}
-            </TabsContent>
-          </div>
-        </Tabs>
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Tracking</h1>
+      <div className="max-w-md mx-auto space-y-6">
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Your Activities (Real-time)</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+            {(loadingTransactions || isLoadingFood) ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading your activities...</p>
+              </div>
+            ) : trackingItems.length > 0 ? (
+              trackingItems.map((item) => {
+                const isSellerOrProvider = item.isUserProvider;
+                const commissionRateDisplay = (dynamicCommissionRate * 100).toFixed(2);
+                
+                // Determine if it's a Food Order for specific logic
+                const isFoodOrder = item.type === "Food Order";
+                const foodItem = isFoodOrder ? (item as FoodOrderItem) : null;
+
+                // Calculate expected net amount if commission hasn't been deducted yet (Market only)
+                const marketItem = item.type === "Transaction" ? (item as MarketTransactionItem) : null;
+                
+                // Use dynamicCommissionRate for calculation if commissionAmount/netSellerAmount are missing (i.e., status is 'initiated' or 'payment_confirmed_to_developer')
+                const expectedCommission = marketItem?.amount ? marketItem.amount * dynamicCommissionRate : 0;
+                const expectedNet = marketItem?.amount ? marketItem.amount - expectedCommission : 0;
+
+                return (
+                  <div key={item.id} className="flex flex-col space-y-3 p-3 border border-border rounded-md bg-background">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0 mt-1">
+                        {getIcon(item.type)}
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <p className="font-medium text-foreground truncate">{item.description}</p>
+                        <p className="text-sm text-muted-foreground">{item.type} - {item.date}</p>
+                        <Badge className={cn("mt-1", getStatusBadgeClass(item.status))}>
+                          {item.status}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* --- Market Transaction Details --- */}
+                    {marketItem && (
+                      <div className="space-y-1 text-xs border-t border-border pt-2">
+                        <p className="text-muted-foreground">Amount: <span className="font-semibold text-foreground">₹{marketItem.amount?.toFixed(2)}</span></p>
+                        {isSellerOrProvider ? (
+                          <>
+                            <p className="text-muted-foreground">Buyer: {marketItem.buyerName || "N/A"}</p>
+                            {marketItem.status === "Initiated (Awaiting Payment)" && (
+                              <p className="text-yellow-500">Awaiting buyer payment confirmation to developer.</p>
+                            )}
+                            {marketItem.status === "Payment Confirmed (Processing)" && (
+                              <p className="text-blue-500">Payment confirmed by buyer. Developer processing commission ({commissionRateDisplay}%).</p>
+                            )}
+                            {marketItem.status === "Commission Deducted (Awaiting Seller Pay)" && (
+                              <p className="text-orange-500">
+                                Commission deducted (₹{marketItem.commissionAmount?.toFixed(2) || expectedCommission.toFixed(2)}). 
+                                Awaiting transfer of net amount: ₹{marketItem.netSellerAmount?.toFixed(2) || expectedNet.toFixed(2)}.
+                              </p>
+                            )}
+                            {marketItem.status === "Completed" && (
+                              <p className="text-green-500">Payment complete. Net amount ₹{marketItem.netSellerAmount?.toFixed(2)} transferred.</p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-muted-foreground">Seller: {marketItem.sellerName || "N/A"}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* --- Food Order Details & Actions --- */}
+                    {foodItem && (
+                      <div className="space-y-2 border-t border-border pt-2">
+                        <p className="text-xs text-muted-foreground">Total: <span className="font-semibold text-foreground">₹{foodItem.totalAmount.toFixed(2)}</span> | Qty: {foodItem.quantity}</p>
+                        <p className="text-xs text-muted-foreground">Delivery to: {foodItem.deliveryLocation}</p>
+                        {foodItem.notes && <p className="text-xs text-muted-foreground">Notes: {foodItem.notes}</p>}
+                        
+                        {/* Provider Actions */}
+                        {isSellerOrProvider && foodItem.orderStatus !== "Delivered" && foodItem.orderStatus !== "Cancelled" && (
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              onClick={() => handleUpdateFoodOrderStatus(foodItem.id, foodItem.orderStatus)}
+                              disabled={isUpdatingStatus}
+                              className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
+                            >
+                              {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                                <>
+                                  <ArrowRight className="h-3 w-3 mr-1" /> 
+                                  {foodItem.orderStatus === "Pending Confirmation" && "Confirm Order"}
+                                  {foodItem.orderStatus === "Confirmed" && "Start Preparing"}
+                                  {foodItem.orderStatus === "Preparing" && "Mark Out for Delivery"}
+                                  {foodItem.orderStatus === "Out for Delivery" && "Awaiting Buyer Confirmation"}
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Buyer Actions */}
+                        {!isSellerOrProvider && foodItem.orderStatus === "Out for Delivery" && (
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              onClick={() => handleConfirmDelivery(foodItem.id)}
+                              disabled={isUpdatingStatus}
+                              className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 text-xs"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" /> Confirm Delivery
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No activities to track yet.</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
       <MadeWithDyad />
     </div>

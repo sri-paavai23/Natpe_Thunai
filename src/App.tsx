@@ -1,123 +1,183 @@
-"use client";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router-dom";
+import Index from "./pages/Index";
+import NotFound from "./pages/NotFound";
+import AuthPage from "./pages/AuthPage";
+import HomePage from "./pages/HomePage";
+import MarketPage from "./pages/MarketPage";
+import ServicesPage from "./pages/ServicesPage";
+import ActivityPage from "./pages/ActivityPage";
+import ProfilePage from "./pages/ProfilePage";
+import TournamentPage from "./pages/TournamentPage";
+import ComingSoonPage from "./pages/ComingSoonPage";
+import BottomNavbar from "./components/layout/BottomNavbar";
+import Header from "./components/layout/Header";
+import React from "react";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { Loader2 } from "lucide-react"; // Import Loader2
+import VerificationBanner from "./components/VerificationBanner"; // Import VerificationBanner
+import { useOnlineStatus } from "./hooks/useOnlineStatus"; // Import useOnlineStatus
 
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Header from './components/layout/Header';
-import Footer from './components/layout/Footer';
-import IndexPage from './pages/Index';
-import AuthPage from './pages/AuthPage';
-import HomePage from './pages/Home';
-import MarketPage from './pages/MarketPage';
-import ServicesPage from './pages/ServicesPage';
-import FoodPage from './pages/FoodPage';
-import ActivityPage from './pages/ActivityPage';
-import ProfilePage from './pages/ProfilePage';
-import CreateListingPage from './pages/CreateListingPage';
-import WalletPage from './pages/WalletPage';
-import TournamentsPage from './pages/TournamentsPage';
-import TrackingPage from './pages/TrackingPage';
-import CashExchangePage from './pages/CashExchangePage';
-import DeveloperDashboardPage from './pages/DeveloperDashboardPage';
-import VerificationBanner from './components/VerificationBanner';
-import { Toaster } from 'sonner';
-import ErrandPage from './pages/ErrandsPage';
-import ShortTermNeedsPage from './pages/ShortTermNeedsPage';
-import CollaboratorsPage from './pages/CollaboratorsPage';
+// Import new Activity sub-pages
+import TrackingPage from "./pages/TrackingPage";
+import CashExchangePage from "./pages/CashExchangePage";
 
-// A wrapper for the main layout, including Header and Footer
-const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isVerified } = useAuth(); // Fixed: Use isAuthenticated and isVerified
-  const location = useLocation();
-  const noHeaderFooterPaths = ["/", "/auth"];
+// Import new Profile sub-pages
+import ProfileDetailsPage from "./pages/ProfileDetailsPage";
+import WalletPage from "./pages/WalletPage";
+import PoliciesPage from "./pages/PoliciesPage";
 
-  const showHeaderFooter = !noHeaderFooterPaths.includes(location.pathname);
+// Import new Services sub-pages
+import FreelancePage from "./pages/FreelancePage";
+import ErrandsPage from "./pages/ErrandsPage";
+import ShortTermNeedsPage from "./pages/ShortTermNeedsPage";
+import FoodWellnessPage from "./pages/FoodWellnessPage";
+import TicketBookingPage from "./pages/TicketBookingPage";
+import CollaboratorsPage from "./pages/CollaboratorsPage";
+import PostJobPage from "./pages/PostJobPage";
+import ServiceListingPage from "./pages/ServiceListingPage"; // New Import
+import AmbassadorProgramPage from "./pages/AmbassadorProgramPage"; // NEW IMPORT
+
+// Import new Market sub-pages
+import ProductDetailsPage from "./pages/ProductDetailsPage";
+import PaymentConfirmationPage from "./pages/PaymentConfirmationPage"; // New Import
+
+// Import new Auth-related pages
+import VerifyEmailPage from "./pages/VerifyEmailPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+
+// Import new Developer Dashboard page
+import DeveloperDashboardPage from "./pages/DeveloperDashboardPage";
+
+// Import Offline Page
+import OfflinePage from "./pages/OfflinePage";
+
+
+const queryClient = new QueryClient();
+
+const AppLayout = () => {
+  const { isAuthenticated, isVerified } = useAuth();
+
+  if (!isAuthenticated) {
+    // If not authenticated, redirect to auth page
+    return <Navigate to="/auth" replace />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
-      {showHeaderFooter && <Header />}
-      {isAuthenticated && !isVerified && showHeaderFooter && <VerificationBanner />}
-      <main className="flex-grow">
-        {children}
-      </main>
-      {showHeaderFooter && <Footer />}
+      <Header />
+      {!isVerified && <VerificationBanner />}
+      <div className="flex-grow">
+        <Outlet />
+      </div>
+      <BottomNavbar />
     </div>
   );
 };
 
-// A protected route component
-const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: Array<'user' | 'developer' | 'ambassador'> }) => {
-  const { user, userProfile, isLoading, isAuthenticated } = useAuth(); // Fixed: Use isAuthenticated
-  
+// New layout for developer-only routes
+const DeveloperLayout = () => {
+  const { isAuthenticated, userProfile, isLoading } = useAuth();
+
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>; // Or a spinner
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
+        <p className="ml-3 text-lg text-muted-foreground">Loading application...</p>
+      </div>
+    );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || userProfile?.role !== "developer") {
     return <Navigate to="/auth" replace />;
   }
 
-  if (userProfile && !allowedRoles.includes(userProfile.role)) {
-    return <Navigate to="/home" replace />; // Redirect unauthorized roles
-  }
-
-  return children;
-};
-
-// Developer-specific layout/route
-const DeveloperLayout = () => {
-  const { isAuthenticated, userProfile, isLoading } = useAuth(); // Fixed: Use isAuthenticated
-  
-  if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading developer access...</div>;
-  }
-
-  if (!isAuthenticated || userProfile?.role !== 'developer') {
-    return <Navigate to="/home" replace />;
-  }
-
   return (
-    <AppLayout>
-      <DeveloperDashboardPage />
-    </AppLayout>
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <div className="flex-grow">
+        <Outlet />
+      </div>
+      <BottomNavbar />
+    </div>
   );
 };
 
-function App() {
-  return (
-    <Router>
-      <AuthProvider>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<IndexPage />} />
-            <Route path="/auth" element={<AuthPage />} />
-            
-            <Route path="/home" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><HomePage /></ProtectedRoute>} />
-            <Route path="/market" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><MarketPage /></ProtectedRoute>} />
-            <Route path="/services" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><ServicesPage /></ProtectedRoute>} />
-            <Route path="/food" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><FoodPage /></ProtectedRoute>} />
-            <Route path="/activity" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><ActivityPage /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><ProfilePage /></ProtectedRoute>} />
-            <Route path="/market/create" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><CreateListingPage /></ProtectedRoute>} />
-            <Route path="/wallet" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><WalletPage /></ProtectedRoute>} />
-            <Route path="/tournaments" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><TournamentsPage /></ProtectedRoute>} />
-            <Route path="/activity/tracking" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><TrackingPage /></ProtectedRoute>} />
-            <Route path="/activity/cash-exchange" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><CashExchangePage /></ProtectedRoute>} />
-            <Route path="/errands" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><ErrandPage /></ProtectedRoute>} />
-            <Route path="/short-term-needs" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><ShortTermNeedsPage /></ProtectedRoute>} />
-            <Route path="/collaborators" element={<ProtectedRoute allowedRoles={['user', 'developer', 'ambassador']}><CollaboratorsPage /></ProtectedRoute>} />
 
-            {/* Developer-specific route */}
-            <Route path="/developer-dashboard" element={<DeveloperLayout />} />
-            
-            {/* Catch-all route for 404 - redirect to home or a dedicated 404 page */}
-            <Route path="*" element={<Navigate to="/home" replace />} />
-          </Routes>
-        </AppLayout>
-        <Toaster richColors position="bottom-right" />
-      </AuthProvider>
-    </Router>
+const AppContent = () => {
+  const isOnline = useOnlineStatus();
+
+  if (!isOnline) {
+    return <OfflinePage />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/auth" element={<AuthPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      
+      {/* Protected Routes for all authenticated users */}
+      <Route element={<AppLayout />}>
+        <Route path="/home" element={<HomePage />} />
+        <Route path="/market" element={<MarketPage />} />
+        <Route path="/market/product/:productId" element={<ProductDetailsPage />} />
+        <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} /> {/* New Route */}
+        <Route path="/services" element={<ServicesPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/tournaments" element={<TournamentPage />} />
+
+        {/* Activity Sub-pages */}
+        <Route path="/activity/tracking" element={<TrackingPage />} />
+        <Route path="/activity/cash-exchange" element={<CashExchangePage />} />
+
+        {/* Profile Sub-pages */}
+        <Route path="/profile/details" element={<ProfileDetailsPage />} />
+        <Route path="/profile/wallet" element={<WalletPage />} />
+        <Route path="/profile/policies" element={<PoliciesPage />} />
+
+        {/* Services Sub-pages */}
+        <Route path="/services/freelance" element={<FreelancePage />} />
+        <Route path="/services/freelance/:category" element={<ServiceListingPage />} /> {/* New Dynamic Route */}
+        <Route path="/services/errands" element={<ErrandsPage />} />
+        <Route path="/services/short-term" element={<ShortTermNeedsPage />} />
+        <Route path="/services/food-wellness" element={<FoodWellnessPage />} />
+        <Route path="/services/ticket-booking" element={<TicketBookingPage />} />
+        <Route path="/services/collaborators" element={<CollaboratorsPage />} />
+        <Route path="/services/post-job" element={<PostJobPage />} />
+        <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} /> {/* NEW ROUTE */}
+      </Route>
+
+      {/* Protected Routes for Developers Only */}
+      <Route element={<DeveloperLayout />}>
+        <Route path="/developer-dashboard" element={<DeveloperDashboardPage />} />
+      </Route>
+
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
-}
+};
+
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;
