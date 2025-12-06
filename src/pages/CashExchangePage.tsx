@@ -45,7 +45,7 @@ const CashExchangePage = () => {
   const [notes, setNotes] = useState("");
   const [meetingLocation, setMeetingLocation] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Fixed: useState(true)
   const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
@@ -329,10 +329,11 @@ const CashExchangePage = () => {
         </Card>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "requests" | "offers" | "group-contributions")} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-primary-blue-light text-primary-foreground h-auto">
-            <TabsTrigger value="requests" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Requests</TabsTrigger>
-            <TabsTrigger value="offers" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Offers</TabsTrigger>
-            <TabsTrigger value="group-contributions" className="data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs sm:text-sm">Group</TabsTrigger>
+          {/* Updated TabsList for mobile responsiveness */}
+          <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-primary-blue-light text-primary-foreground h-auto p-1">
+            <TabsTrigger value="requests" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Requests</TabsTrigger>
+            <TabsTrigger value="offers" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Offers</TabsTrigger>
+            <TabsTrigger value="group-contributions" className="flex-shrink-0 min-w-[120px] text-xs sm:text-sm data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground">Group</TabsTrigger>
           </TabsList>
           <div className="mt-4 space-y-4">
             <TabsContent value="requests">

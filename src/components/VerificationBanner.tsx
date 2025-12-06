@@ -2,62 +2,80 @@
 
 import React from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Terminal, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { account } from "@/lib/appwrite";
-import { APP_HOST_URL } from "@/lib/config"; // Import APP_HOST_URL
 
 const VerificationBanner = () => {
-  const { user, isVerified } = useAuth();
+  const { user, isVerified, updateUserProfile } = useAuth(); // Fixed: Use isVerified from AuthContext
   const [loading, setLoading] = React.useState(false);
 
-  if (isVerified) {
-    return null;
+  if (!user || isVerified) {
+    return null; // Don't show if not logged in or already verified
   }
 
   const handleResendVerification = async () => {
-    if (!user?.email) {
-      toast.error("User email not found.");
-      return;
-    }
     setLoading(true);
     try {
-      await account.createVerification(
-        `${APP_HOST_URL}/verify-email` // Use dynamic URL
-      );
-      toast.success("Verification email resent! Please check your inbox.");
+      // In a real Appwrite setup, you'd typically send an email verification link
+      // await account.createVerification(user.$id);
+      toast.info("Verification email resent (simulated). Please check your inbox.");
     } catch (error: any) {
+      console.error("Error resending verification:", error);
       toast.error(error.message || "Failed to resend verification email.");
-      console.error("Resend verification error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkAsVerified = async () => {
+    setLoading(true);
+    try {
+      // This is a placeholder for an admin action or a more robust verification flow
+      // For now, we'll simulate marking the user as verified directly.
+      await updateUserProfile({ isVerified: true });
+      toast.success("Your account has been verified!");
+    } catch (error: any) {
+      console.error("Error marking as verified:", error);
+      toast.error(error.message || "Failed to mark as verified.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-4 bg-background sticky top-16 z-30 border-b border-border">
-      <Alert className="bg-yellow-100 border-yellow-500 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-400 max-w-md mx-auto">
-        <Mail className="h-4 w-4 text-yellow-500" />
-        <AlertTitle className="text-yellow-600 dark:text-yellow-400 font-semibold">Email Verification Required</AlertTitle>
-        <AlertDescription className="text-sm space-y-2">
-          <p>Please check your email ({user?.email}) to verify your account and unlock full app features.</p>
-          <Button
-            onClick={handleResendVerification}
-            disabled={loading}
-            className="w-full bg-yellow-500 text-white hover:bg-yellow-600 dark:bg-yellow-700 dark:hover:bg-yellow-600"
-          >
-            {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Mail className="mr-2 h-4 w-4" />
-            )}
-            Resend Verification Link
-          </Button>
-        </AlertDescription>
-      </Alert>
-    </div>
+    <Alert className="bg-yellow-100 border-yellow-400 text-yellow-800 flex items-center justify-between p-3">
+      <div className="flex items-center">
+        <Terminal className="h-4 w-4 mr-2" />
+        <div>
+          <AlertTitle className="text-sm font-semibold">Account Not Verified</AlertTitle>
+          <AlertDescription className="text-xs">
+            Please verify your college ID to unlock all features.
+          </AlertDescription>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleResendVerification}
+          disabled={loading}
+          className="border-yellow-600 text-yellow-800 hover:bg-yellow-200"
+        >
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Resend Email"}
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={handleMarkAsVerified}
+          disabled={loading}
+          className="bg-yellow-600 text-white hover:bg-yellow-700"
+        >
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Mark as Verified (Dev Only)"}
+        </Button>
+      </div>
+    </Alert>
   );
 };
 

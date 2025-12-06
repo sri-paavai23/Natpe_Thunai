@@ -1,54 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { MadeWithDyad } from "@/components/made-with-dyad";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
 import { useNavigate } from "react-router-dom";
-import { Loader2, Handshake } from "lucide-react"; // Import Handshake icon
-import { account } from "@/lib/appwrite"; // Import Appwrite account service
-import { useAuth } from "@/context/AuthContext"; // Import useAuth hook
+import { Loader2 } from "lucide-react";
 
-const Index = () => {
+const IndexPage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading, login } = useAuth(); // Use AuthContext
+  const { isAuthenticated, isLoading } = useAuth(); // Fixed: Use isAuthenticated and isLoading from AuthContext
   const [localLoading, setLocalLoading] = useState(true); // Local loading for splash screen delay
 
   useEffect(() => {
-    // If AuthContext is still loading, wait for it
-    if (isLoading) return;
-
-    // Once AuthContext has determined auth status, handle redirection
     const timer = setTimeout(() => {
-      if (isAuthenticated) {
-        navigate("/home", { replace: true });
-      } else {
-        navigate("/auth", { replace: true });
-      }
-    }, 1500); // Simulate a loading delay even after auth check
+      setLocalLoading(false);
+    }, 2000); // Simulate a 2-second splash screen
 
     return () => clearTimeout(timer);
-  }, [isLoading, isAuthenticated, navigate]);
-
-  // This component will only render its content if AuthContext is done loading
-  // and after its own local loading delay.
-  // The global AuthProvider handles the initial full-screen loading.
-  // This local loading is just for the splash screen animation.
-  useEffect(() => {
-    const splashTimer = setTimeout(() => {
-      setLocalLoading(false);
-    }, 500); // Short delay for logo animation
-    return () => clearTimeout(splashTimer);
   }, []);
 
+  useEffect(() => {
+    if (!isLoading && !localLoading) {
+      if (isAuthenticated) {
+        navigate("/home");
+      } else {
+        navigate("/auth");
+      }
+    }
+  }, [isAuthenticated, isLoading, localLoading, navigate]);
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary to-background-dark text-primary-foreground">
-      <img src="/app-logo.png" alt="Natpe🤝Thunai Logo" className="h-24 w-24 rounded-full object-cover mb-4 animate-fade-in" />
-      <p className="text-4xl font-extrabold tracking-tight text-secondary-neon flex items-center gap-2">
-        Natpe <Handshake className="h-8 w-8" /> Thunai
-      </p>
-      <p className="text-lg text-foreground mt-2">Creating communities and fostering friendships</p>
-      {localLoading && <Loader2 className="h-8 w-8 animate-spin text-secondary-neon mt-6" />}
-    </div>
-  );
+  if (isLoading || localLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-primary-blue-light to-secondary-neon text-primary-foreground">
+        <Loader2 className="h-16 w-16 animate-spin text-primary-foreground mb-4" />
+        <h1 className="text-4xl font-bold">Natpe🤝Thunai</h1>
+        <p className="text-lg mt-2">Connecting Campus Life</p>
+        <MadeWithDyad className="mt-8" />
+      </div>
+    );
+  }
+
+  return null; // Should not render anything after redirection
 };
 
-export default Index;
+export default IndexPage;

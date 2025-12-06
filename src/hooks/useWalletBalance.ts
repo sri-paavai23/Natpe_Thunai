@@ -1,21 +1,40 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from '@/lib/appwrite';
 import { Query, Models } from 'appwrite';
 import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
-import { MarketTransactionItem, FoodOrderItem } from '@/pages/TrackingPage'; // Re-using interfaces from TrackingPage
 
-interface WalletBalanceState {
-  earnedBalance: number;
-  spentBalance: number;
-  isLoading: boolean;
-  error: string | null;
-  refetch: () => void;
+// Define interfaces directly in this file as they are not exported from TrackingPage
+interface Transaction extends Models.Document {
+  productId: string;
+  productTitle: string;
+  buyerId: string;
+  buyerName: string;
+  sellerId: string;
+  sellerName: string;
+  amount: number;
+  status: string;
+  type: "buy" | "rent" | "service";
+  isBargain: boolean;
 }
 
-export const useWalletBalance = (): WalletBalanceState => {
+interface FoodOrder extends Models.Document {
+  offeringId: string;
+  offeringTitle: string;
+  providerId: string;
+  providerName: string;
+  buyerId: string;
+  buyerName: string;
+  quantity: number;
+  totalAmount: number;
+  deliveryLocation: string;
+  notes: string;
+  status: string;
+}
+
+export const useWalletBalance = () => {
   const { user } = useAuth();
   const [earnedBalance, setEarnedBalance] = useState(0);
   const [spentBalance, setSpentBalance] = useState(0);
@@ -23,7 +42,7 @@ export const useWalletBalance = (): WalletBalanceState => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchBalances = useCallback(async () => {
-    if (!user?.$id) {
+    if (!user) {
       setEarnedBalance(0);
       setSpentBalance(0);
       setIsLoading(false);
@@ -36,50 +55,46 @@ export const useWalletBalance = (): WalletBalanceState => {
     let totalSpent = 0;
 
     try {
-      // Fetch Market Transactions (Buy/Sell)
-      const marketTransactionsResponse = await databases.listDocuments(
+      // Fetch transactions where user is the seller (earned)
+      const salesResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
         [
-          Query.or([
-            Query.equal('buyerId', user.$id),
-            Query.equal('sellerId', user.$id)
-          ]),
-          Query.limit(100) // Fetch a reasonable number of transactions
+          Query.equal('sellerId', user.$id),
+          Query.equal('status', 'Completed'), // Only count completed transactions
+          Query.select(['amount']) // Only fetch amount to optimize
         ]
       );
-
-      marketTransactionsResponse.documents.forEach((doc: Models.Document) => {
-        const tx = doc as unknown as MarketTransactionItem;
-        if (tx.sellerId === user.$id && tx.status === 'paid_to_seller' && tx.netSellerAmount !== undefined) {
-          totalEarned += tx.netSellerAmount;
-        }
-        if (tx.buyerId === user.$id && tx.status !== 'failed') { // Count all non-failed purchases as spent
-          totalSpent += tx.amount;
-        }
+      salesResponse.documents.forEach(doc => {
+        totalEarned += (doc as unknown as Transaction).amount;
       });
 
-      // Fetch Food Orders
+      // Fetch transactions where user is the buyer (spent)
+      const purchasesResponse = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        [
+          Query.equal('buyerId', user.$id),
+          Query.equal('status', 'Completed'), // Only count completed transactions
+          Query.select(['amount'])
+        ]
+      );
+      purchasesResponse.documents.forEach(doc => {
+        totalSpent += (doc as unknown as Transaction).amount;
+      });
+
+      // Fetch food orders where user is the buyer (spent)
       const foodOrdersResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
         [
-          Query.or([
-            Query.equal('buyerId', user.$id),
-            Query.equal('providerId', user.$id)
-          ]),
-          Query.limit(100) // Fetch a reasonable number of orders
+          Query.equal('buyerId', user.$id),
+          Query.equal('status', 'Delivered'), // Only count delivered food orders
+          Query.select(['totalAmount'])
         ]
       );
-
-      foodOrdersResponse.documents.forEach((doc: Models.Document) => {
-        const order = doc as unknown as FoodOrderItem;
-        if (order.providerId === user.$id && order.status === 'Delivered') {
-          totalEarned += order.totalAmount;
-        }
-        if (order.buyerId === user.$id && order.status === 'Delivered') { // Count delivered orders as spent
-          totalSpent += order.totalAmount;
-        }
+      foodOrdersResponse.documents.forEach(doc => {
+        totalSpent += (doc as unknown as FoodOrder).totalAmount;
       });
 
       setEarnedBalance(totalEarned);
@@ -87,8 +102,8 @@ export const useWalletBalance = (): WalletBalanceState => {
 
     } catch (err: any) {
       console.error("Error fetching wallet balances:", err);
-      setError(err.message || "Failed to load wallet balances.");
-      toast.error("Failed to load wallet balances.");
+      setError(err.message || "Failed to fetch wallet balances.");
+      toast.error(err.message || "Failed to fetch wallet balances.");
     } finally {
       setIsLoading(false);
     }
@@ -97,18 +112,20 @@ export const useWalletBalance = (): WalletBalanceState => {
   useEffect(() => {
     fetchBalances();
 
-    // Setup real-time subscriptions for transactions and food orders
+    // Setup real-time listeners for relevant collections
     const unsubscribeTransactions = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
-      () => {
-        fetchBalances(); // Refetch balances on any transaction change
+      (response) => {
+        // Re-fetch balances on any transaction change
+        fetchBalances();
       }
     );
 
     const unsubscribeFoodOrders = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_ORDERS_COLLECTION_ID}.documents`,
-      () => {
-        fetchBalances(); // Refetch balances on any food order change
+      (response) => {
+        // Re-fetch balances on any food order change
+        fetchBalances();
       }
     );
 
@@ -118,5 +135,5 @@ export const useWalletBalance = (): WalletBalanceState => {
     };
   }, [fetchBalances]);
 
-  return { earnedBalance, spentBalance, isLoading, error, refetch: fetchBalances };
+  return { earnedBalance, spentBalance, isLoading, error, refreshBalances: fetchBalances };
 };
