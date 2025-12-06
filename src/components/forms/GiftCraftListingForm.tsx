@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle } from "lucide-react";
-import { usePriceAnalysis } from "@/hooks/usePriceAnalysis"; // Import the new hook
+import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react"; // Import HelpCircle
+import { usePriceAnalysis } from "@/hooks/usePriceAnalysis";
+import { Link } from "react-router-dom"; // Import Link
 
 interface GiftCraftListingFormProps {
   onSubmit: (product: {
@@ -109,7 +110,12 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
         />
       </div>
       <div>
-        <Label htmlFor="imageUrl" className="text-foreground">Image URL (Optional)</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="imageUrl" className="text-foreground">Image URL (Optional)</Label>
+          <Link to="/help/image-to-url" className="text-xs text-secondary-neon hover:underline flex items-center gap-1">
+            <HelpCircle className="h-3 w-3" /> How to get URL?
+          </Link>
+        </div>
         <Input
           id="imageUrl"
           type="text"

@@ -56,6 +56,9 @@ import DeveloperDashboardPage from "./pages/DeveloperDashboardPage";
 // Import Offline Page
 import OfflinePage from "./pages/OfflinePage";
 
+// NEW: Import ImageToUrlHelpPage
+import ImageToUrlHelpPage from "./pages/ImageToUrlHelpPage";
+
 
 const queryClient = new QueryClient();
 
@@ -122,6 +125,9 @@ const AppContent = () => {
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      
+      {/* NEW: Route for Image to URL Help Page */}
+      <Route path="/help/image-to-url" element={<ImageToUrlHelpPage />} />
       
       {/* Protected Routes for all authenticated users */}
       <Route element={<AppLayout />}>
