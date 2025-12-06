@@ -2,21 +2,20 @@
 
 /**
  * Calculates the total XP required to reach the next level.
- * Uses a slower, more gradual growth curve to ensure steady progression.
+ * Uses a linear growth curve for more gradual progression.
  * @param currentLevel The user's current level (must be >= 1).
  * @returns The total XP required for the next level.
  */
 export const calculateMaxXpForLevel = (currentLevel: number): number => {
-  const BASE_XP = 100;
-  const GROWTH_FACTOR = 1.2; // Reduced growth factor from 1.5 to 1.2 for slower progression
+  const BASE_XP = 100; // XP required for Level 1
+  const XP_INCREMENT_PER_LEVEL = 50; // Additional XP required for each subsequent level
 
   if (currentLevel <= 1) {
     return BASE_XP;
   }
 
-  // Formula: BASE_XP * (GROWTH_FACTOR ^ (currentLevel - 1))
-  // We round to the nearest integer for cleaner display.
-  return Math.round(BASE_XP * Math.pow(GROWTH_FACTOR, currentLevel - 1));
+  // Formula: BASE_XP + (currentLevel - 1) * XP_INCREMENT_PER_LEVEL
+  return BASE_XP + (currentLevel - 1) * XP_INCREMENT_PER_LEVEL;
 };
 
 /**

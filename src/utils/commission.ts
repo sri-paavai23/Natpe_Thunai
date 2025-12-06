@@ -2,30 +2,48 @@
 
 /**
  * Calculates the dynamic commission rate based on the user's level.
- * Commission starts at 11.32% (Level 1) and decreases linearly to 5.37% (Level 10).
- * Levels above 10 maintain the minimum rate.
+ * Commission starts at 11.32% (Level 1) and decreases gradually based on defined breakpoints.
  * @param level The user's current level (must be >= 1).
  * @returns The commission rate as a percentage (e.g., 0.1132 for 11.32%).
  */
 export const calculateCommissionRate = (level: number): number => {
-  const MAX_LEVEL_FOR_REDUCTION = 10;
-  const START_RATE = 0.1132; // 11.32%
-  const MIN_RATE = 0.0537; // 5.37%
-  const RATE_DIFFERENCE = START_RATE - MIN_RATE;
-  const LEVEL_RANGE = MAX_LEVEL_FOR_REDUCTION - 1;
+  const START_RATE = 0.1132; // 11.32% at Level 1
+  const MIN_RATE = 0.0534; // 5.34% (absolute floor)
+  const MAX_LEVEL_FOR_MIN_RATE = 100; // Assuming minimum rate is reached at Level 100
 
-  if (level >= MAX_LEVEL_FOR_REDUCTION) {
-    return MIN_RATE;
-  }
   if (level <= 1) {
     return START_RATE;
   }
+  if (level >= MAX_LEVEL_FOR_MIN_RATE) {
+    return MIN_RATE;
+  }
 
-  // Linear reduction per level
-  const reductionPerLevel = RATE_DIFFERENCE / LEVEL_RANGE;
-  const currentReduction = (level - 1) * reductionPerLevel;
-  
-  return START_RATE - currentReduction;
+  // Define breakpoints (level, rate)
+  const breakpoints = [
+    { level: 1, rate: START_RATE },
+    { level: 7, rate: 0.1036 }, // 10.36%
+    { level: 20, rate: 0.1000 }, // 10.00%
+    { level: 50, rate: 0.0800 }, // 8.00%
+    { level: MAX_LEVEL_FOR_MIN_RATE, rate: MIN_RATE },
+  ];
+
+  // Find the segment the current level falls into
+  for (let i = 0; i < breakpoints.length - 1; i++) {
+    const p1 = breakpoints[i];
+    const p2 = breakpoints[i + 1];
+
+    if (level >= p1.level && level < p2.level) {
+      // Linear interpolation within this segment
+      const levelRange = p2.level - p1.level;
+      const rateRange = p1.rate - p2.rate; // Rate decreases
+      const reductionPerLevel = rateRange / levelRange;
+      
+      return p1.rate - (level - p1.level) * reductionPerLevel;
+    }
+  }
+
+  // Fallback, should not be reached if level is handled by initial checks or loop
+  return MIN_RATE;
 };
 
 /**
