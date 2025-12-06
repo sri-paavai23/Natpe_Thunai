@@ -21,10 +21,11 @@ interface UserProfile extends Models.Document {
   role: "user" | "developer";
   gender: "male" | "female" | "prefer-not-to-say";
   userType: "student" | "staff";
-  collegeName: string; // NEW: Added collegeName
+  collegeName: string;
   level: number;
   currentXp: number;
   maxXp: number;
+  ambassadorDeliveriesCount: number; // NEW: Track ambassador delivery usage
 }
 
 interface AuthContextType {
@@ -37,6 +38,8 @@ interface AuthContextType {
   logout: () => void;
   updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
   addXp: (amount: number) => Promise<void>;
+  deductXp: (amount: number, reason: string) => Promise<void>; // NEW: Deduct XP function
+  incrementAmbassadorDeliveriesCount: () => Promise<void>; // NEW: Increment ambassador delivery count
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -67,7 +70,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           level: level,
           currentXp: profile.currentXp ?? 0,
           maxXp: maxXp,
-          collegeName: profile.collegeName || "Unknown College", // Ensure collegeName is set
+          collegeName: profile.collegeName || "Unknown College",
+          ambassadorDeliveriesCount: profile.ambassadorDeliveriesCount ?? 0, // Initialize new field
         };
         setUserProfile(completeProfile);
       } else {
@@ -140,7 +144,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         level: level,
         currentXp: updatedProfileData.currentXp ?? 0,
         maxXp: calculatedMaxXp,
-        collegeName: updatedProfileData.collegeName || "Unknown College", // Ensure collegeName is set
+        collegeName: updatedProfileData.collegeName || "Unknown College",
+        ambassadorDeliveriesCount: updatedProfileData.ambassadorDeliveriesCount ?? 0, // Ensure new field is updated
       };
       setUserProfile(updatedProfile);
     } catch (error: any) {
@@ -179,6 +184,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // NEW: Deduct XP function
+  const deductXp = async (amount: number, reason: string) => {
+    if (!userProfile || !user) {
+      toast.error("Cannot deduct XP: User not logged in or profile missing.");
+      return;
+    }
+
+    let currentLevel = userProfile.level;
+    let currentXp = userProfile.currentXp - amount;
+    
+    // Ensure XP doesn't go below zero
+    if (currentXp < 0) currentXp = 0;
+
+    // Recalculate level if XP drops below current level's threshold
+    let newLevel = currentLevel;
+    let newMaxXp = calculateMaxXpForLevel(newLevel);
+
+    while (newLevel > 1 && currentXp < calculateMaxXpForLevel(newLevel - 1)) {
+      newLevel -= 1;
+      newMaxXp = calculateMaxXpForLevel(newLevel);
+      currentXp = newMaxXp + currentXp; // Carry over remaining XP to the new lower level
+    }
+    if (newLevel === 1 && currentXp < 0) currentXp = 0; // Ensure XP is not negative at level 1
+
+    try {
+      if (newLevel !== currentLevel || currentXp !== userProfile.currentXp) {
+        await updateUserProfile(userProfile.$id, {
+          level: newLevel,
+          currentXp: currentXp,
+        });
+      }
+
+      if (newLevel < currentLevel) {
+        toast.warning(`LEVEL DOWN! You dropped to Level ${newLevel} due to ${reason}.`);
+      } else {
+        toast.warning(`-${amount} XP deducted due to ${reason}.`);
+      }
+    } catch (error) {
+      toast.error("Failed to deduct XP/Level.");
+    }
+  };
+
+  // NEW: Increment ambassador deliveries count
+  const incrementAmbassadorDeliveriesCount = async () => {
+    if (!userProfile || !user) {
+      console.warn("Cannot increment ambassador deliveries count: User not logged in or profile missing.");
+      return;
+    }
+    const newCount = (userProfile.ambassadorDeliveriesCount || 0) + 1;
+    try {
+      await updateUserProfile(userProfile.$id, { ambassadorDeliveriesCount: newCount });
+      console.log(`Ambassador deliveries count incremented to ${newCount}`);
+
+      // Simulate XP deduction for misuse
+      const AMBASSADOR_MISUSE_THRESHOLD = userProfile.gender === "female" ? 10 : 5; // Higher threshold for females
+      const XP_DEDUCTION_AMOUNT = userProfile.gender === "female" ? 10 : 25; // Less severe deduction for females
+
+      if (newCount > AMBASSADOR_MISUSE_THRESHOLD && newCount % AMBASSADOR_MISUSE_THRESHOLD === 1) { // Deduct after first misuse over threshold
+        toast.warning(`Excessive ambassador delivery usage detected (${newCount} times). This may lead to XP deduction.`);
+        await deductXp(XP_DEDUCTION_AMOUNT, "excessive ambassador delivery usage");
+      }
+    } catch (error) {
+      console.error("Failed to update ambassador deliveries count:", error);
+    }
+  };
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -189,7 +261,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, userProfile, isVerified, login: loginUser, logout, updateUserProfile, addXp }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, userProfile, isVerified, login: loginUser, logout, updateUserProfile, addXp, deductXp, incrementAmbassadorDeliveriesCount }}>
       {children}
     </AuthContext.Provider>
   );

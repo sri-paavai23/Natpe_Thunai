@@ -33,7 +33,7 @@ const CUSTOM_REQUEST_OPTIONS = [
 
 
 const FoodWellnessPage = () => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth(); // NEW: Get incrementAmbassadorDeliveriesCount
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isPostCustomOrderDialogOpen, setIsPostCustomOrderDialogOpen] = useState(false);
   

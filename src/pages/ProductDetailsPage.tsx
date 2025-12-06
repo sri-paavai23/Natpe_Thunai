@@ -21,7 +21,7 @@ import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; //
 export default function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth(); // NEW: Get incrementAmbassadorDeliveriesCount
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -138,6 +138,11 @@ export default function ProductDetailsPage() {
       );
 
       const transactionId = newTransaction.$id;
+
+      // NEW: Increment ambassador deliveries count if opted
+      if (ambassadorDelivery) {
+        await incrementAmbassadorDeliveriesCount();
+      }
 
       // 3. Generate UPI Deep Link (Payment goes to Developer UPI ID)
       const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;

@@ -11,7 +11,7 @@ import { ServicePost } from "@/hooks/useServiceListings";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
-import { Loader2, DollarSign, Truck } from "lucide-react"; // ADDED Truck
+import { Loader2, DollarSign, Truck } from "lucide-react";
 import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"; // Import Dialog components
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
@@ -23,7 +23,7 @@ interface PlaceFoodOrderFormProps {
 }
 
 const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrderPlaced, onCancel }) => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth(); // NEW: Get incrementAmbassadorDeliveriesCount
   const [quantity, setQuantity] = useState(1);
   const [deliveryLocation, setDeliveryLocation] = useState(userProfile?.mobileNumber || ""); // Using mobile number field for location placeholder
   const [notes, setNotes] = useState("");
@@ -93,6 +93,11 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
       );
       
       const orderId = newOrder.$id;
+
+      // NEW: Increment ambassador deliveries count if opted
+      if (ambassadorDelivery) {
+        await incrementAmbassadorDeliveriesCount();
+      }
 
       // 2. Generate UPI Deep Link (Payment goes to Developer UPI ID)
       const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${totalAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (Order ID: ${orderId})`)}`;

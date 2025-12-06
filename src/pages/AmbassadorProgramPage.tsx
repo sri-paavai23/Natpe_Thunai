@@ -4,11 +4,11 @@ import React, { useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, HeartHandshake, Mail, ArrowLeft } from "lucide-react";
+import { Users, HeartHandshake, Mail, ArrowLeft, DollarSign, FileText } from "lucide-react"; // Added DollarSign, FileText
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import JoinAmbassadorForm from "@/components/forms/JoinAmbassadorForm";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom"; // Added Link
 
 const AmbassadorProgramPage = () => {
   const navigate = useNavigate();
@@ -61,6 +61,49 @@ const AmbassadorProgramPage = () => {
                 <JoinAmbassadorForm onApply={handleAmbassadorApply} onCancel={() => setIsAmbassadorFormOpen(false)} />
               </DialogContent>
             </Dialog>
+          </CardContent>
+        </Card>
+
+        {/* NEW: Ambassador Program Details Card */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Users className="h-5 w-5 text-secondary-neon" /> What it Means to be an Ambassador
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Becoming a Natpe🤝Thunai Ambassador means being a pillar of trust and efficiency in your campus community.
+            </p>
+            <div className="space-y-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <HeartHandshake className="h-4 w-4 text-primary" /> Your Role
+              </h3>
+              <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 pl-4">
+                <li>**Facilitate Deliveries:** Mediate exchanges for users who opt for ambassador delivery, ensuring smooth and safe transactions.</li>
+                <li>**Maintain Payment Flow:** Assist in verifying payments and ensuring funds reach the correct parties.</li>
+                <li>**Run Campaigns:** Organize and promote Natpe🤝Thunai events and services within your college.</li>
+                <li>**Community Building:** Act as a trusted point of contact, fostering a positive and helpful environment.</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-primary" /> Earning & Payment
+              </h3>
+              <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 pl-4">
+                <li>**Transaction-Based Earnings:** Ambassadors are compensated based on the number and value of transactions they successfully facilitate. This is not a fixed monthly salary.</li>
+                <li>**Monthly Reporting:** To ensure accurate payment, ambassadors are required to maintain a simple "excel report" (or similar digital log) of their monthly activities and facilitated transactions. This report will be reviewed for payment processing.</li>
+                <li>**Contribution, Not Employment:** This program is designed for community contribution and flexible earning, not as a traditional employment role.</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" /> Important Policy
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Please review our <Link to="/profile/policies" className="text-secondary-neon hover:underline">Ambassador Misuse Policy</Link> to understand the guidelines for fair use of ambassador services and the special considerations for female users.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, ShieldCheck, ScrollText, TrendingUp } from "lucide-react"; // Added TrendingUp
+import { FileText, ShieldCheck, ScrollText, TrendingUp, Users } from "lucide-react"; // Added Users icon
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
@@ -91,6 +91,22 @@ const policyContent = {
       <p class="text-sm text-muted-foreground">The calculated commission is deducted by the developer upon successful payment confirmation from the buyer, before the net amount is transferred to the seller.</p>
     `,
   },
+  ambassadorMisuse: {
+    title: "Ambassador Misuse Policy",
+    description: "Guidelines on fair use of ambassador delivery services and consequences for excessive reliance.",
+    fullText: `
+      <h3 class="text-lg font-semibold mb-2 text-foreground">1. Purpose of Ambassador Delivery</h3>
+      <p class="text-sm text-muted-foreground mb-4">Ambassador-mediated delivery is a convenience service designed to facilitate exchanges when direct meetings are difficult or uncomfortable. It is not intended for routine tasks that users can easily perform themselves.</p>
+      <h3 class="text-lg font-semibold mb-2 text-foreground">2. Fair Use Policy</h3>
+      <p class="text-sm text-muted-foreground mb-4">Users are encouraged to use ambassador delivery responsibly. Continuous or excessive reliance on ambassadors for tasks that do not genuinely require their intervention may be considered misuse.</p>
+      <h3 class="text-lg font-semibold mb-2 text-foreground">3. Consequences of Misuse</h3>
+      <p class="text-sm text-muted-foreground mb-4">If a user is found to be consistently misusing the ambassador delivery service (e.g., opting for it more than 5 times without valid reason), their user level may be reduced, resulting in a higher commission rate and slower XP progression.</p>
+      <h3 class="text-lg font-semibold mb-2 text-foreground">4. Special Consideration for Female Users</h3>
+      <p class="text-sm text-muted-foreground mb-4">Recognizing that some female students may feel uncomfortable meeting strangers, the threshold for misuse will be higher (e.g., 10 times) and any XP deductions will be less severe for female accounts. This is to ensure their safety and comfort remain a priority.</p>
+      <h3 class="text-lg font-semibold mb-2 text-foreground">5. Appeal Process</h3>
+      <p class="text-sm text-muted-foreground mb-4">Users who believe they have been unfairly penalized may contact support to appeal the decision, providing valid reasons for their ambassador delivery usage.</p>
+    `,
+  },
 };
 
 const PoliciesPage = () => {
@@ -141,6 +157,12 @@ const PoliciesPage = () => {
               onClick={() => handleViewPolicy("commissionPolicy")}
             >
               <TrendingUp className="mr-2 h-4 w-4" /> Dynamic Commission Policy
+            </Button>
+            <Button
+              className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => handleViewPolicy("ambassadorMisuse")}
+            >
+              <Users className="mr-2 h-4 w-4" /> Ambassador Misuse Policy
             </Button>
           </CardContent>
         </Card>
