@@ -13,6 +13,7 @@ import EditProfileForm from "@/components/forms/EditProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
+import { getLevelBadge } from "@/utils/badges"; // NEW: Import getLevelBadge
 
 const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
@@ -27,10 +28,11 @@ const ProfileDetailsPage = () => {
   const xpPercentage = (currentXp / maxXp) * 100;
   
   const commissionRate = calculateCommissionRate(userLevel);
+  const userBadge = getLevelBadge(userLevel); // NEW: Get user's badge
 
   const sellerRating = 4.7; // Placeholder
   const isVerified = true; // Placeholder for verification status
-  const badges = ["Top Seller", "Early Adopter"];
+  // const badges = ["Top Seller", "Early Adopter"]; // Removed static badges
 
   const avatarUrl = generateAvatarUrl(
     publicUsername,
@@ -108,18 +110,11 @@ const ProfileDetailsPage = () => {
               </p>
             </div>
 
-            {badges.length > 0 && (
+            {userBadge && ( // NEW: Display user's badge
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Award className="h-4 w-4 text-secondary-neon" /> Badges:
+                  <Award className="h-4 w-4 text-secondary-neon" /> Badge: <span className="font-semibold text-foreground">{userBadge}</span>
                 </p>
-                <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                  {badges.map((badge, index) => (
-                    <Badge key={index} variant="secondary" className="bg-primary-blue-light text-primary-foreground">
-                      {badge}
-                    </Badge>
-                  ))}
-                </div>
               </div>
             )}
             {userProfile && (

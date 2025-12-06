@@ -5,6 +5,7 @@ export interface Product {
   price: string;
   sellerRating: number;
   sellerBadge?: string;
+  sellerLevel?: number; // NEW: Add sellerLevel
   type: "sell" | "rent" | "gift" | "sports" | "gift-request";
   description: string;
   sellerId: string;
