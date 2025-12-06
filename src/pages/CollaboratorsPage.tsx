@@ -28,9 +28,12 @@ const CollaboratorsPage = () => {
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-      toast.error("You must be logged in with a complete profile to post a project.");
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to post a project.");
+      return;
+    }
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
     if (!postTitle || !postDescription || !postSkills || !postContact) {

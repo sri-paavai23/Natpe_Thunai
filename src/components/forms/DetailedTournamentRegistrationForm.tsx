@@ -8,14 +8,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { Plus, Minus, Users, DollarSign, Loader2, Gamepad2 } from "lucide-react"; // Added Gamepad2
+import { Plus, Minus, Users, DollarSign, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { DEVELOPER_UPI_ID } from "@/lib/config";
+import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
 import { ID } from 'appwrite';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { cn } from "@/lib/utils"; // Import cn for utility classes
 
 interface Player {
   id: number;
@@ -26,7 +25,7 @@ interface Player {
 interface DetailedTournamentRegistrationFormProps {
   tournamentName: string;
   gameName: string;
-  fee: number;
+  fee: number; // Added fee prop
   minPlayers?: number;
   maxPlayers?: number;
   onRegister: (data: { teamName: string; contactEmail: string; players: Player[] }) => void;
@@ -42,7 +41,7 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
   onRegister,
   onCancel,
 }) => {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [teamName, setTeamName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [players, setPlayers] = useState<Player[]>(
@@ -92,8 +91,8 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
   };
   
   const handlePaymentInitiation = async () => {
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-        toast.error("User session expired or profile incomplete. Please log in again and ensure your profile is complete.");
+    if (!user) {
+        toast.error("User session expired. Please log in again.");
         return;
     }
     
@@ -104,34 +103,38 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
     const transactionNote = `Tournament Registration: ${tournamentName} - Team ${teamName}`;
 
     try {
+        // 1. Create a mock transaction document (or use a dedicated registration collection)
+        // For simplicity and tracking, we use the transactions collection here, marking it as 'service' type.
         const newTransaction = await databases.createDocument(
             APPWRITE_DATABASE_ID,
             APPWRITE_TRANSACTIONS_COLLECTION_ID,
             ID.unique(),
             {
-                productId: tournamentName,
+                productId: tournamentName, // Using name as ID placeholder
                 productTitle: tournamentName,
                 buyerId: user.$id,
                 buyerName: user.name,
-                sellerId: DEVELOPER_UPI_ID,
+                sellerId: DEVELOPER_UPI_ID, // Developer is the recipient
                 sellerName: "Natpe Thunai Developers",
                 sellerUpiId: DEVELOPER_UPI_ID,
                 amount: transactionAmount,
                 status: "initiated",
-                type: "service",
+                type: "service", // Use 'service' type for non-market transactions
                 isBargain: false,
-                collegeName: userProfile.collegeName,
             }
         );
         
         const transactionId = newTransaction.$id;
 
+        // 2. Generate UPI Deep Link
         const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;
 
+        // 3. Redirect to UPI App
         window.open(upiDeepLink, "_blank");
         
         toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} registration fee. Please complete the payment and note the UTR ID.`);
 
+        // 4. Complete registration (simulated success after payment initiation)
         onRegister({ teamName, contactEmail, players });
 
     } catch (error: any) {
@@ -159,15 +162,12 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
         </div>
         <div className="space-y-3">
           <Label htmlFor="game" className="text-foreground">Game</Label>
-          <div className="relative">
-            <Gamepad2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="game"
-              value={gameName}
-              className="bg-input text-foreground border-border focus:ring-ring focus:border-ring pl-9"
-              disabled
-            />
-          </div>
+          <Input
+            id="game"
+            value={gameName}
+            className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+            disabled
+          />
         </div>
         <div className="space-y-3">
           <Label htmlFor="contactEmail" className="text-foreground">Contact Email (Team Lead)</Label>
@@ -191,9 +191,9 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-4">
             {players.map((player, index) => (
-              <div key={player.id} className="border border-border p-3 rounded-md space-y-2 bg-card">
+              <div key={player.id} className="border border-border p-3 rounded-md space-y-2">
                 <h4 className="font-medium text-sm text-secondary-neon">Player {index + 1}</h4>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <Label htmlFor={`player-name-${player.id}`} className="text-xs text-muted-foreground">Full Name</Label>
                   <Input
                     id={`player-name-${player.id}`}
@@ -205,7 +205,7 @@ const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistratio
                     disabled={isProcessing}
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <Label htmlFor={`player-id-${player.id}`} className="text-xs text-muted-foreground">In-Game ID/Username</Label>
                   <Input
                     id={`player-id-${player.id}`}

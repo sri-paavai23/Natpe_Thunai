@@ -9,7 +9,6 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Star } from "lucide-react";
 import { useServiceReviews } from "@/hooks/useServiceReviews"; // Import the hook
-import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
 
 interface SubmitServiceReviewFormProps {
   serviceId: string;
@@ -24,7 +23,6 @@ const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({
   onReviewSubmitted,
   onCancel,
 }) => {
-  const { user, userProfile } = useAuth(); // NEW: Use useAuth hook
   const { submitReview } = useServiceReviews(serviceId); // Use the hook to submit
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -36,11 +34,6 @@ const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-      toast.error("You must be logged in with a complete profile to submit a review.");
-      return;
-    }
     if (rating === 0) {
       toast.error("Please select a star rating.");
       return;

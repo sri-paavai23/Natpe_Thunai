@@ -123,9 +123,8 @@ const CashExchangePage = () => {
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-      toast.error("You must be logged in with a complete profile to post.");
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to post.");
       return;
     }
 
@@ -181,12 +180,7 @@ const CashExchangePage = () => {
   };
 
   const handleAcceptDeal = async (request: CashExchangeRequest) => {
-    // Added explicit check for user.$id
-    if (!user || !user.$id) {
-      toast.error("You must be logged in to accept a deal.");
-      return;
-    }
-    if (request.posterId === user.$id) {
+    if (request.posterId === user?.$id) {
       toast.error("You cannot accept your own deal.");
       return;
     }
@@ -210,12 +204,7 @@ const CashExchangePage = () => {
   };
 
   const handleContribute = async (request: CashExchangeRequest) => {
-    // Added explicit check for user.$id
-    if (!user || !user.$id) {
-      toast.error("You must be logged in to contribute.");
-      return;
-    }
-    if (request.posterId === user.$id) {
+    if (request.posterId === user?.$id) {
       toast.error("You cannot contribute to your own request.");
       return;
     }
@@ -223,6 +212,7 @@ const CashExchangePage = () => {
       toast.error("This is not an active group contribution request.");
       return;
     }
+    if (!user) return;
 
     const contributionAmount = 500; // Example fixed contribution amount
     const currentContribution = request.contributions?.reduce((sum, c) => sum + c.amount, 0) || 0;

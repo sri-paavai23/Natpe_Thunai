@@ -2,16 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { account, databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from "@/lib/appwrite";
-import { Models, Query } from "appwrite";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { calculateMaxXpForLevel, checkAndApplyLevelUp } from "@/utils/leveling"; // NEW: Import leveling utilities
+import { Loader2 } from "lucide-react";
+import { Models, Query } from "appwrite";
+import { calculateMaxXpForLevel, checkAndApplyLevelUp } from "@/utils/leveling";
 
-// Define the User and UserProfile types
-interface AppwriteUser extends Models.User<Models.Preferences> {
-  name: string;
-  email: string;
-  emailVerification: boolean; // Ensure this property exists
-}
+interface AppwriteUser extends Models.User<Models.Preferences> {}
 
 interface UserProfile extends Models.Document {
   userId: string;
@@ -20,218 +17,251 @@ interface UserProfile extends Models.Document {
   age: number;
   mobileNumber: string;
   upiId: string;
-  collegeIdPhotoId: string | null;
-  role: "user" | "developer" | "ambassador";
+  collegeIdPhotoId?: string;
+  role: "user" | "developer";
   gender: "male" | "female" | "prefer-not-to-say";
   userType: "student" | "staff";
   collegeName: string;
   level: number;
   currentXp: number;
   maxXp: number;
-  ambassadorDeliveriesCount?: number;
-  // NEW: Add avatar customization options
-  avatarOptions?: {
-    hair?: string;
-    eyes?: string;
-    mouth?: string;
-    skinColor?: string;
-    clothing?: string;
-    accessories?: string;
-  };
+  ambassadorDeliveriesCount: number; // NEW: Track ambassador delivery usage
 }
 
 interface AuthContextType {
-  user: AppwriteUser | null;
-  userProfile: UserProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isVerified: boolean; // NEW: Add isVerified
+  user: AppwriteUser | null;
+  userProfile: UserProfile | null;
+  isVerified: boolean;
   login: () => Promise<void>;
-  logout: () => Promise<void>;
+  logout: () => void;
   updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
-  incrementAmbassadorDeliveriesCount: () => Promise<void>;
-  addXp: (amount: number) => Promise<void>; // NEW: Add addXp
+  addXp: (amount: number) => Promise<void>;
+  deductXp: (amount: number, reason: string) => Promise<void>; // NEW: Deduct XP function
+  incrementAmbassadorDeliveriesCount: () => Promise<void>; // NEW: Increment ambassador delivery count
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<AppwriteUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isVerified, setIsVerified] = useState(false); // NEW: State for email verification
+  const [user, setUser] = useState<AppwriteUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const navigate = useNavigate();
 
-  const fetchUserAndProfile = useCallback(async () => {
+  const isVerified = user?.emailVerification ?? false;
+
+  const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      const currentUser = await account.get();
-      setUser(currentUser);
-      setIsAuthenticated(true);
-      setIsVerified(currentUser.emailVerification); // Set verification status
-
-      // Fetch user profile
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal("userId", currentUser.$id)]
+        [Query.equal('userId', userId)]
       );
+      const profile = response.documents[0] as unknown as UserProfile | undefined;
+      if (profile) {
+        const level = profile.level ?? 1;
+        const maxXp = calculateMaxXpForLevel(level);
 
-      if (response.documents.length > 0) {
-        setUserProfile(response.documents[0] as unknown as UserProfile);
+        const completeProfile: UserProfile = {
+          ...profile,
+          level: level,
+          currentXp: profile.currentXp ?? 0,
+          maxXp: maxXp,
+          collegeName: profile.collegeName || "Unknown College",
+          ambassadorDeliveriesCount: profile.ambassadorDeliveriesCount ?? 0, // Initialize new field
+        };
+        setUserProfile(completeProfile);
       } else {
-        setUserProfile(null); // No profile found
+        console.warn("User profile not found for user:", userId);
+        setUserProfile(null);
       }
     } catch (error) {
-      console.error("Failed to fetch user or profile:", error);
-      setUser(null);
+      console.error("Error fetching user profile:", error);
       setUserProfile(null);
-      setIsAuthenticated(false);
-      setIsVerified(false); // Reset verification status on error
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
+  const checkUserSession = useCallback(async () => {
+    try {
+      const currentUser = await account.get();
+      setIsAuthenticated(true);
+      setUser(currentUser);
+      await fetchUserProfile(currentUser.$id);
+    } catch (error) {
+      setIsAuthenticated(false);
+      setUser(null);
+      setUserProfile(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchUserProfile]);
+
   useEffect(() => {
-    fetchUserAndProfile();
+    checkUserSession();
+  }, [checkUserSession]);
 
-    // Set up real-time subscription for user profile changes
-    const unsubscribe = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_USER_PROFILES_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as UserProfile;
-        if (userProfile && payload.$id === userProfile.$id) {
-          setUserProfile(payload);
-          toast.info("Your profile has been updated in real-time!");
-        }
-      }
-    );
-
-    // Set up real-time subscription for user account changes (e.g., email verification)
-    const unsubscribeAccount = databases.client.subscribe(
-      `account`,
-      (response) => {
-        const payload = response.payload as unknown as AppwriteUser;
-        if (user && payload.$id === user.$id) {
-          setUser(payload);
-          setIsVerified(payload.emailVerification);
-          if (payload.emailVerification && !user.emailVerification) {
-            toast.success("Your email has been verified!");
-          }
-        }
-      }
-    );
-
-
-    return () => {
-      unsubscribe();
-      unsubscribeAccount();
-    };
-  }, [fetchUserAndProfile, userProfile, user]);
-
-  const login = async () => {
+  const loginUser = async () => {
     setIsLoading(true);
-    await fetchUserAndProfile();
+    await checkUserSession();
+    setIsLoading(false);
   };
 
   const logout = async () => {
     try {
       await account.deleteSession("current");
+      setIsAuthenticated(false);
       setUser(null);
       setUserProfile(null);
-      setIsAuthenticated(false);
-      setIsVerified(false); // Reset verification status
       toast.success("Logged out successfully!");
+      navigate("/auth", { replace: true });
     } catch (error: any) {
-      console.error("Failed to log out:", error);
       toast.error(error.message || "Failed to log out.");
+      console.error("Logout error:", error);
     }
   };
 
   const updateUserProfile = async (profileId: string, data: Partial<UserProfile>) => {
-    if (!user) {
-      toast.error("You must be logged in to update your profile.");
-      return;
-    }
     try {
+      const { maxXp, ...dataToSave } = data;
+
       const updatedDoc = await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
         profileId,
-        data
+        dataToSave
       );
-      setUserProfile(updatedDoc as unknown as UserProfile);
-      toast.success("Profile updated successfully!");
+      
+      const updatedProfileData = updatedDoc as unknown as UserProfile;
+      
+      const level = updatedProfileData.level ?? 1;
+      const calculatedMaxXp = calculateMaxXpForLevel(level);
+
+      const updatedProfile: UserProfile = {
+        ...updatedProfileData,
+        level: level,
+        currentXp: updatedProfileData.currentXp ?? 0,
+        maxXp: calculatedMaxXp,
+        collegeName: updatedProfileData.collegeName || "Unknown College",
+        ambassadorDeliveriesCount: updatedProfileData.ambassadorDeliveriesCount ?? 0, // Ensure new field is updated
+      };
+      setUserProfile(updatedProfile);
     } catch (error: any) {
       console.error("Error updating user profile:", error);
-      toast.error(error.message || "Failed to update profile.");
-      throw error; // Re-throw to allow form to handle error state
+      throw new Error(error.message || "Failed to update profile.");
     }
   };
 
+  const addXp = async (amount: number) => {
+    if (!userProfile || !user) {
+      toast.error("Cannot add XP: User not logged in or profile missing.");
+      return;
+    }
+
+    let currentLevel = userProfile.level;
+    let currentXp = userProfile.currentXp + amount;
+    let maxXp = userProfile.maxXp;
+
+    const { newLevel, newCurrentXp, newMaxXp } = checkAndApplyLevelUp(currentLevel, currentXp, maxXp);
+
+    try {
+      if (newLevel !== currentLevel || newCurrentXp !== userProfile.currentXp) {
+        await updateUserProfile(userProfile.$id, {
+          level: newLevel,
+          currentXp: newCurrentXp,
+        });
+      }
+
+      if (newLevel > currentLevel) {
+        toast.success(`LEVEL UP! You reached Level ${newLevel}! Commission rate reduced.`);
+      } else {
+        toast.info(`+${amount} XP earned!`);
+      }
+    } catch (error) {
+      toast.error("Failed to update XP/Level.");
+    }
+  };
+
+  // NEW: Deduct XP function
+  const deductXp = async (amount: number, reason: string) => {
+    if (!userProfile || !user) {
+      toast.error("Cannot deduct XP: User not logged in or profile missing.");
+      return;
+    }
+
+    let currentLevel = userProfile.level;
+    let currentXp = userProfile.currentXp - amount;
+    
+    // Ensure XP doesn't go below zero
+    if (currentXp < 0) currentXp = 0;
+
+    // Recalculate level if XP drops below current level's threshold
+    let newLevel = currentLevel;
+    let newMaxXp = calculateMaxXpForLevel(newLevel);
+
+    while (newLevel > 1 && currentXp < calculateMaxXpForLevel(newLevel - 1)) {
+      newLevel -= 1;
+      newMaxXp = calculateMaxXpForLevel(newLevel);
+      currentXp = newMaxXp + currentXp; // Carry over remaining XP to the new lower level
+    }
+    if (newLevel === 1 && currentXp < 0) currentXp = 0; // Ensure XP is not negative at level 1
+
+    try {
+      if (newLevel !== currentLevel || currentXp !== userProfile.currentXp) {
+        await updateUserProfile(userProfile.$id, {
+          level: newLevel,
+          currentXp: currentXp,
+        });
+      }
+
+      if (newLevel < currentLevel) {
+        toast.warning(`LEVEL DOWN! You dropped to Level ${newLevel} due to ${reason}.`);
+      } else {
+        toast.warning(`-${amount} XP deducted due to ${reason}.`);
+      }
+    } catch (error) {
+      toast.error("Failed to deduct XP/Level.");
+    }
+  };
+
+  // NEW: Increment ambassador deliveries count
   const incrementAmbassadorDeliveriesCount = async () => {
     if (!userProfile || !user) {
-      toast.error("User profile not found. Cannot increment ambassador deliveries.");
+      console.warn("Cannot increment ambassador deliveries count: User not logged in or profile missing.");
       return;
     }
-
-    const currentCount = userProfile.ambassadorDeliveriesCount || 0;
-    const newCount = currentCount + 1;
-
+    const newCount = (userProfile.ambassadorDeliveriesCount || 0) + 1;
     try {
       await updateUserProfile(userProfile.$id, { ambassadorDeliveriesCount: newCount });
-      toast.success(`Ambassador deliveries count updated to ${newCount}!`);
+      console.log(`Ambassador deliveries count incremented to ${newCount}`);
+
+      // Simulate XP deduction for misuse
+      const AMBASSADOR_MISUSE_THRESHOLD = userProfile.gender === "female" ? 10 : 5; // Higher threshold for females
+      const XP_DEDUCTION_AMOUNT = userProfile.gender === "female" ? 10 : 25; // Less severe deduction for females
+
+      if (newCount > AMBASSADOR_MISUSE_THRESHOLD && newCount % AMBASSADOR_MISUSE_THRESHOLD === 1) { // Deduct after first misuse over threshold
+        toast.warning(`Excessive ambassador delivery usage detected (${newCount} times). This may lead to XP deduction.`);
+        await deductXp(XP_DEDUCTION_AMOUNT, "excessive ambassador delivery usage");
+      }
     } catch (error) {
-      console.error("Failed to increment ambassador deliveries count:", error);
-      toast.error("Failed to update ambassador deliveries count.");
+      console.error("Failed to update ambassador deliveries count:", error);
     }
   };
 
-  // NEW: Implement addXp function
-  const addXp = useCallback(async (amount: number) => {
-    if (!userProfile || !user) {
-      toast.error("User profile not found. Cannot add XP.");
-      return;
-    }
 
-    let newCurrentXp = userProfile.currentXp + amount;
-    let newLevel = userProfile.level;
-    let newMaxXp = userProfile.maxXp;
-
-    const { newLevel: updatedLevel, newCurrentXp: updatedCurrentXp, newMaxXp: updatedMaxXp } = checkAndApplyLevelUp(newLevel, newCurrentXp, newMaxXp);
-
-    if (updatedLevel > newLevel) {
-      toast.success(`Congratulations! You leveled up to Level ${updatedLevel}!`);
-    }
-
-    try {
-      await updateUserProfile(userProfile.$id, {
-        level: updatedLevel,
-        currentXp: updatedCurrentXp,
-        maxXp: updatedMaxXp,
-      });
-    } catch (error) {
-      console.error("Failed to add XP or level up:", error);
-      toast.error("Failed to update XP and level.");
-    }
-  }, [user, userProfile, updateUserProfile]);
-
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
+        <p className="ml-3 text-lg text-muted-foreground">Loading application...</p>
+      </div>
+    );
+  }
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        userProfile,
-        isAuthenticated,
-        isLoading,
-        isVerified, // NEW: Provide isVerified
-        login,
-        logout,
-        updateUserProfile,
-        incrementAmbassadorDeliveriesCount,
-        addXp, // NEW: Provide addXp
-      }}
-    >
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, userProfile, isVerified, login: loginUser, logout, updateUserProfile, addXp, deductXp, incrementAmbassadorDeliveriesCount }}>
       {children}
     </AuthContext.Provider>
   );

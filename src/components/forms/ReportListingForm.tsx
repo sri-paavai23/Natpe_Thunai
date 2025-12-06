@@ -36,9 +36,12 @@ const ReportListingForm: React.FC<ReportListingFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-      toast.error("You must be logged in with a complete profile to submit a report.");
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to submit a report.");
+      return;
+    }
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
     if (!reason) {

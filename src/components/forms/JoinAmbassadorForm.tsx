@@ -35,9 +35,8 @@ const JoinAmbassadorForm: React.FC<JoinAmbassadorFormProps> = ({ onApply, onCanc
 
   const handleSubmit = async (e: React.FormEvent) => { // NEW: Make handleSubmit async
     e.preventDefault();
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile) {
-      toast.error("You must be logged in with a complete profile to apply.");
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to apply.");
       return;
     }
     if (!userProfile.collegeName) {

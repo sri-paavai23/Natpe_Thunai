@@ -68,9 +68,8 @@ export default function ProductDetailsPage() {
   }, [productId]);
 
   const handleOpenConfirmPurchase = (bargain: boolean) => {
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-      toast.error("Please log in with a complete profile to proceed with a transaction.");
+    if (!user || !userProfile) {
+      toast.error("Please log in to proceed with a transaction.");
       navigate("/auth");
       return;
     }
@@ -80,18 +79,17 @@ export default function ProductDetailsPage() {
       toast.error("You cannot buy/rent your own listing.");
       return;
     }
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
+      return;
+    }
 
     setIsBargainPurchase(bargain);
     setIsConfirmPurchaseDialogOpen(true);
   };
 
   const handleInitiatePayment = async () => {
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !product) {
-      toast.error("User session expired or profile incomplete. Please log in again and ensure your profile is complete.");
-      setIsProcessing(false);
-      return;
-    }
+    if (!user || !userProfile || !product) return;
 
     setIsProcessing(true);
     
@@ -169,9 +167,8 @@ export default function ProductDetailsPage() {
   };
 
   const handleBargainRequest = () => {
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !product) {
-      toast.error("Please log in with a complete profile to send a bargain request.");
+    if (!user || !userProfile || !product) {
+      toast.error("Please log in to send a bargain request.");
       navigate("/auth");
       return;
     }

@@ -5,21 +5,19 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign, Building2, Image } from "lucide-react"; // Added Image icon
+import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign, Building2 } from "lucide-react"; // Added Building2 icon
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import EditProfileForm from "@/components/forms/EditProfileForm";
-import AvatarCustomizerForm from "@/components/forms/AvatarCustomizerForm"; // NEW: Import AvatarCustomizerForm
 import { useAuth } from "@/context/AuthContext";
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
-import { getLevelBadge } from "@/utils/badges";
+import { getLevelBadge } from "@/utils/badges"; // NEW: Import getLevelBadge
 
 const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isAvatarCustomizerOpen, setIsAvatarCustomizerOpen] = useState(false); // NEW: State for avatar customizer dialog
 
   const publicUsername = user?.name || "CampusExplorer";
   const userEmail = user?.email || "N/A";
@@ -30,20 +28,17 @@ const ProfileDetailsPage = () => {
   const xpPercentage = (currentXp / maxXp) * 100;
   
   const commissionRate = calculateCommissionRate(userLevel);
-  const userBadge = getLevelBadge(userLevel);
+  const userBadge = getLevelBadge(userLevel); // NEW: Get user's badge
 
   const sellerRating = 4.7; // Placeholder
   const isVerified = true; // Placeholder for verification status
+  // const badges = ["Top Seller", "Early Adopter"]; // Removed static badges
 
-  // Ensure userProfile and its properties are available before generating avatar
-  const avatarUrl = userProfile 
-    ? generateAvatarUrl(
-        publicUsername,
-        userProfile.gender || "prefer-not-to-say",
-        userProfile.userType || "student",
-        userProfile.avatarOptions // Pass avatarOptions
-      )
-    : generateAvatarUrl(publicUsername, "prefer-not-to-say", "student"); // Fallback if no userProfile
+  const avatarUrl = generateAvatarUrl(
+    publicUsername,
+    userProfile?.gender || "prefer-not-to-say",
+    userProfile?.userType || "student"
+  );
 
   const handleSaveProfile = async (data: {
     firstName: string;
@@ -53,17 +48,10 @@ const ProfileDetailsPage = () => {
     upiId: string;
     gender: "male" | "female" | "prefer-not-to-say";
     userType: "student" | "staff";
-    collegeName: string;
+    collegeName: string; // NEW: Added collegeName
   }) => {
     if (userProfile) {
       await updateUserProfile(userProfile.$id, data);
-    }
-  };
-
-  // NEW: Handle saving avatar options
-  const handleSaveAvatarOptions = async (options: typeof userProfile.avatarOptions) => {
-    if (userProfile) {
-      await updateUserProfile(userProfile.$id, { avatarOptions: options });
     }
   };
 
@@ -83,28 +71,16 @@ const ProfileDetailsPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
             <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-4 text-center sm:text-left">
-              <div className="relative">
-                <Avatar className="h-20 w-20 border-2 border-secondary-neon">
-                  <AvatarImage src={avatarUrl} alt={publicUsername} />
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    {publicUsername.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                {/* NEW: Edit Avatar Button */}
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 border border-border"
-                  onClick={() => setIsAvatarCustomizerOpen(true)}
-                >
-                  <Image className="h-4 w-4" />
-                  <span className="sr-only">Edit Avatar</span>
-                </Button>
-              </div>
+              <Avatar className="h-20 w-20 border-2 border-secondary-neon">
+                <AvatarImage src={avatarUrl} alt={publicUsername} />
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  {publicUsername.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
               <div>
                 <h3 className="text-2xl font-bold text-foreground">{publicUsername}</h3>
                 <p className="text-sm text-muted-foreground">{userEmail}</p>
-                {user?.emailVerification && ( // Use Appwrite's emailVerification status
+                {isVerified && (
                   <Badge className="mt-1 bg-blue-500 text-white flex items-center gap-1 w-fit mx-auto sm:mx-0">
                     <UserCheck className="h-3 w-3" /> Verified
                   </Badge>
@@ -134,7 +110,7 @@ const ProfileDetailsPage = () => {
               </p>
             </div>
 
-            {userBadge && (
+            {userBadge && ( // NEW: Display user's badge
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <Award className="h-4 w-4 text-secondary-neon" /> Badge: <span className="font-semibold text-foreground">{userBadge}</span>
@@ -170,7 +146,7 @@ const ProfileDetailsPage = () => {
           <DialogHeader>
             <DialogTitle className="text-foreground">Edit Profile Details</DialogTitle>
           </DialogHeader>
-          {userProfile ? (
+          {userProfile && (
             <EditProfileForm
               initialData={{
                 firstName: userProfile.firstName,
@@ -180,31 +156,11 @@ const ProfileDetailsPage = () => {
                 upiId: userProfile.upiId,
                 gender: userProfile.gender,
                 userType: userProfile.userType,
-                collegeName: userProfile.collegeName,
+                collegeName: userProfile.collegeName, // NEW: Pass collegeName
               }}
               onSave={handleSaveProfile}
               onCancel={() => setIsEditDialogOpen(false)}
             />
-          ) : (
-            <p className="text-center text-muted-foreground py-4">Loading profile data...</p>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* NEW: Avatar Customizer Dialog */}
-      <Dialog open={isAvatarCustomizerOpen} onOpenChange={setIsAvatarCustomizerOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Customize Your Avatar</DialogTitle>
-          </DialogHeader>
-          {userProfile ? (
-            <AvatarCustomizerForm
-              initialAvatarOptions={userProfile.avatarOptions || {}}
-              onSave={handleSaveAvatarOptions}
-              onCancel={() => setIsAvatarCustomizerOpen(false)}
-            />
-          ) : (
-            <p className="text-center text-muted-foreground py-4">Loading avatar options...</p>
           )}
         </DialogContent>
       </Dialog>

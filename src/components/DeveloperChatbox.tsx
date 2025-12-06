@@ -16,13 +16,11 @@ import { useAuth } from "@/context/AuthContext";
 import { containsBlockedWords } from "@/lib/moderation"; // Import moderation utility
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
 import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
-import ContributionStoryDialog from "./ContributionStoryDialog"; // NEW: Import the new dialog component
 
 const DeveloperChatbox = () => {
   const { user, userProfile } = useAuth();
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [isContributionStoryOpen, setIsContributionStoryOpen] = useState(false); // NEW: State for the new dialog
   
   const userLevel = userProfile?.level ?? 1;
   const dynamicCommissionRateDisplay = formatCommissionRate(calculateCommissionRate(userLevel));
@@ -35,9 +33,12 @@ const DeveloperChatbox = () => {
       toast.error("Message cannot be empty.");
       return;
     }
-    // Added explicit check for user.$id
-    if (!user || !user.$id || !userProfile || !userProfile.collegeName) {
-      toast.error("You must be logged in with a complete profile to send a message.");
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to send a message.");
+      return;
+    }
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
     
@@ -72,7 +73,10 @@ const DeveloperChatbox = () => {
     }
   };
 
-  // Removed handleContribute function, now using DialogTrigger
+  const handleContribute = () => {
+    toast.info("Redirecting to our contribution guidelines (feature coming soon)!");
+    // In a real app, this would link to a GitHub repo, documentation, or a contact form.
+  };
 
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -120,7 +124,7 @@ const DeveloperChatbox = () => {
 
         <Separator className="my-4" />
 
-        {/* Contribute to Application - Now opens a dialog */}
+        {/* Contribute to Application */}
         <div className="space-y-3">
           <h3 className="lg font-semibold text-foreground flex items-center gap-2">
             <Code className="h-4 w-4 text-secondary-neon" /> Contribute to the Application
@@ -128,17 +132,11 @@ const DeveloperChatbox = () => {
           <p className="text-sm text-muted-foreground">
             Help us improve Natpe🤝Thunai! We welcome contributions from the community.
           </p>
-          <Button onClick={() => setIsContributionStoryOpen(true)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={handleContribute} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
             Learn How to Contribute
           </Button>
         </div>
       </CardContent>
-
-      {/* NEW: Contribution Story Dialog */}
-      <ContributionStoryDialog
-        isOpen={isContributionStoryOpen}
-        onClose={() => setIsContributionStoryOpen(false)}
-      />
     </Card>
   );
 };

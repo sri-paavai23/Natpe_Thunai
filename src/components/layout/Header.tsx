@@ -1,12 +1,12 @@
 "use client";
 
 import React from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom"; // Import Link
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { generateAvatarUrl } from "@/utils/avatarGenerator";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avatar generator
 
 const getPageTitle = (pathname: string) => {
   switch (pathname) {
@@ -47,9 +47,9 @@ const getPageTitle = (pathname: string) => {
     case "/services/post-job":
       return "Post a Job/Service";
     case "/services/ambassador-program":
-      return "Ambassador Program";
+      return "Ambassador Program"; // NEW TITLE
     default:
-      return "Natpe Thunai";
+      return "Natpe Thunai"; // Default title if no specific route matches
   }
 };
 
@@ -64,8 +64,7 @@ const Header = () => {
   const avatarUrl = generateAvatarUrl(
     displayName,
     userProfile?.gender || "prefer-not-to-say",
-    userProfile?.userType || "student",
-    userProfile?.avatarOptions // Pass avatarOptions
+    userProfile?.userType || "student"
   );
 
   return (
@@ -81,7 +80,7 @@ const Header = () => {
         )}
       </div>
       <div className="flex items-center space-x-4">
-        <Link to="/profile" className="cursor-pointer">
+        <Link to="/profile" className="cursor-pointer"> {/* Added Link for redirection */}
           <Avatar className="h-9 w-9 border-2 border-secondary-neon">
             <AvatarImage src={avatarUrl} alt={displayName} />
             <AvatarFallback className="bg-primary-blue-light text-primary-foreground">

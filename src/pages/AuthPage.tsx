@@ -9,14 +9,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { account, databases, storage, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_COLLEGE_ID_BUCKET_ID } from "@/lib/appwrite";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { APP_HOST_URL } from "@/lib/config";
-import { largeIndianColleges } from "@/lib/largeIndianColleges";
-import CollegeCombobox from "@/components/CollegeCombobox";
-import { generateAvatarUrl } from "@/utils/avatarGenerator"; // NEW: Import generateAvatarUrl
+import { indianColleges } from "@/lib/collegeData"; // Import the static college list
 
 // Helper function to generate a random username
 const generateRandomUsername = (): string => {
@@ -54,7 +53,7 @@ const AuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say");
   const [userType, setUserType] = useState<"student" | "staff">("student");
-  const [collegeName, setCollegeName] = useState("");
+  const [collegeName, setCollegeName] = useState(""); // NEW: State for college name
 
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -95,7 +94,7 @@ const AuthPage = () => {
           setLoading(false);
           return;
         }
-        if (!collegeName) {
+        if (!collegeName) { // NEW: Check for college name
           toast.error("Please select your college.");
           setLoading(false);
           return;
@@ -137,11 +136,10 @@ const AuthPage = () => {
               role: "user",
               gender,
               userType,
-              collegeName,
-              level: 1,
-              currentXp: 0,
-              maxXp: 100,
-              avatarOptions: {}, // NEW: Initialize empty avatar options
+              collegeName, // NEW: Save college name
+              level: 1, // Initialize level
+              currentXp: 0, // Initialize XP
+              maxXp: 100, // Initialize max XP for level 1
             }
           );
           toast.success("User profile saved.");
@@ -173,7 +171,7 @@ const AuthPage = () => {
         setTermsAccepted(false);
         setGender("prefer-not-to-say");
         setUserType("student");
-        setCollegeName("");
+        setCollegeName(""); // NEW: Clear college name
       }
     } catch (error: any) {
       toast.error(error.message || "An error occurred during authentication.");
@@ -263,13 +261,16 @@ const AuthPage = () => {
                 </div>
                 <div>
                   <Label htmlFor="collegeName" className="text-foreground">Your College</Label>
-                  <CollegeCombobox
-                    collegeList={largeIndianColleges}
-                    value={collegeName}
-                    onValueChange={setCollegeName}
-                    placeholder="Select your college"
-                    disabled={loading}
-                  />
+                  <Select value={collegeName} onValueChange={setCollegeName} required>
+                    <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
+                      <SelectValue placeholder="Select your college" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
+                      {indianColleges.map((college) => (
+                        <SelectItem key={college} value={college}>{college}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label htmlFor="collegeIdPhoto" className="text-foreground">College ID Card Photo</Label>
@@ -341,7 +342,7 @@ const AuthPage = () => {
                     I agree to the <Link to="/profile/policies" className="text-secondary-neon hover:underline">terms and conditions</Link>
                   </Label>
                 </div>
-                <p className="text-xs text-destructive text-center font-medium">
+                <p className="text-xs text-destructive-foreground text-center font-medium">
                   Your Name, Age, Mobile Number, UPI ID, and College ID Photo are collected for developer safety assurance only and will NOT be shared publicly. Only your chosen username will be visible.
                 </p>
               </>
