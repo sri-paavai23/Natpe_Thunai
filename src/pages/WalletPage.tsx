@@ -4,7 +4,7 @@ import React from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Wallet, Banknote, TrendingUp } from "lucide-react";
+import { DollarSign, Wallet, TrendingUp } from "lucide-react"; // Removed Banknote icon
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
@@ -21,14 +21,7 @@ const WalletPage = () => {
   const currentBalance = 1250.75;
   const developerUpiId = "8903480105@superyes";
 
-  const handleAddFunds = () => {
-    const addFundsAmount = 500; // Example fixed amount for adding funds
-    const transactionNote = "Add funds to Natpe Thunai wallet";
-    const upiDeepLink = `upi://pay?pa=${developerUpiId}&pn=NatpeThunaiDevelopers&am=${addFundsAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
-
-    window.open(upiDeepLink, "_blank");
-    toast.info(`Redirecting to your banking app to add ₹${addFundsAmount.toFixed(2)} to your wallet. Please complete the payment.`);
-  };
+  // Removed handleAddFunds function as it's no longer needed.
 
   const handleWithdrawFunds = () => {
     if (currentBalance <= 0) {
@@ -57,11 +50,8 @@ const WalletPage = () => {
               <p className="text-lg text-muted-foreground">Current Balance:</p>
               <p className="text-2xl font-bold text-secondary-neon">₹{currentBalance.toFixed(2)}</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Button onClick={handleAddFunds} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <Banknote className="mr-2 h-4 w-4" /> Add Funds
-              </Button>
-              <Button onClick={handleWithdrawFunds} variant="outline" className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10">
+            <div className="flex justify-center"> {/* Changed to flex for centering, button will be full width */}
+              <Button onClick={handleWithdrawFunds} variant="outline" className="w-full border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10">
                 <DollarSign className="mr-2 h-4 w-4" /> Withdraw
               </Button>
             </div>
