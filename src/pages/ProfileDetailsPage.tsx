@@ -8,16 +8,18 @@ import { Progress } from "@/components/ui/progress";
 import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign, Building2 } from "lucide-react"; // Added Building2 icon
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // NEW: Import DialogTrigger
 import EditProfileForm from "@/components/forms/EditProfileForm";
 import { useAuth } from "@/context/AuthContext";
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
-import { getLevelBadge } from "@/utils/badges"; // NEW: Import getLevelBadge
+import { getLevelBadge } from "@/utils/badges";
+import ReportMissingCollegeForm from "@/components/forms/ReportMissingCollegeForm"; // NEW: Import ReportMissingCollegeForm
 
 const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false); // NEW
 
   const publicUsername = user?.name || "CampusExplorer";
   const userEmail = user?.email || "N/A";
@@ -28,11 +30,10 @@ const ProfileDetailsPage = () => {
   const xpPercentage = (currentXp / maxXp) * 100;
   
   const commissionRate = calculateCommissionRate(userLevel);
-  const userBadge = getLevelBadge(userLevel); // NEW: Get user's badge
+  const userBadge = getLevelBadge(userLevel);
 
   const sellerRating = 4.7; // Placeholder
   const isVerified = true; // Placeholder for verification status
-  // const badges = ["Top Seller", "Early Adopter"]; // Removed static badges
 
   const avatarUrl = generateAvatarUrl(
     publicUsername,
@@ -48,7 +49,7 @@ const ProfileDetailsPage = () => {
     upiId: string;
     gender: "male" | "female" | "prefer-not-to-say";
     userType: "student" | "staff";
-    collegeName: string; // NEW: Added collegeName
+    collegeName: string;
   }) => {
     if (userProfile) {
       await updateUserProfile(userProfile.$id, data);
@@ -80,7 +81,7 @@ const ProfileDetailsPage = () => {
               <div>
                 <h3 className="text-2xl font-bold text-foreground">{publicUsername}</h3>
                 <p className="text-sm text-muted-foreground">{userEmail}</p>
-                {isVerified && (
+                {user?.emailVerification && ( // Use user.emailVerification for actual status
                   <Badge className="mt-1 bg-blue-500 text-white flex items-center gap-1 w-fit mx-auto sm:mx-0">
                     <UserCheck className="h-3 w-3" /> Verified
                   </Badge>
@@ -110,7 +111,7 @@ const ProfileDetailsPage = () => {
               </p>
             </div>
 
-            {userBadge && ( // NEW: Display user's badge
+            {userBadge && (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <Award className="h-4 w-4 text-secondary-neon" /> Badge: <span className="font-semibold text-foreground">{userBadge}</span>
@@ -156,12 +157,29 @@ const ProfileDetailsPage = () => {
                 upiId: userProfile.upiId,
                 gender: userProfile.gender,
                 userType: userProfile.userType,
-                collegeName: userProfile.collegeName, // NEW: Pass collegeName
+                collegeName: userProfile.collegeName,
               }}
               onSave={handleSaveProfile}
               onCancel={() => setIsEditDialogOpen(false)}
             />
           )}
+          {/* NEW: "Cannot Find College" button within Edit Profile Dialog */}
+          <Dialog open={isReportMissingCollegeDialogOpen} onOpenChange={setIsReportMissingCollegeDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="link" className="p-0 h-auto text-secondary-neon hover:underline mt-2 flex items-center gap-1 mx-auto">
+                <Building2 className="h-3 w-3" /> Cannot find my college
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Report Missing College</DialogTitle>
+              </DialogHeader>
+              <ReportMissingCollegeForm
+                onReportSubmitted={() => setIsReportMissingCollegeDialogOpen(false)}
+                onCancel={() => setIsReportMissingCollegeDialogOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
         </DialogContent>
       </Dialog>
     </div>

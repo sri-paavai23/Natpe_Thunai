@@ -30,7 +30,8 @@ These variables are used by your client-side React application and must be set i
 | `VITE_APPWRITE_AMBASSADOR_APPLICATIONS_COLLECTION_ID` | Collection ID for ambassador applications. | `ambassador_applications` |
 | `VITE_APPWRITE_REPORTS_COLLECTION_ID` | Collection ID for user-submitted reports. | `reports` |
 | `VITE_APPWRITE_SERVICE_REVIEWS_COLLECTION_ID` | Collection ID for service reviews. | `service_reviews` |
-| `VITE_APP_CREATION_DATE` | **NEW:** The ISO 8601 timestamp when the application was first launched. This is the starting point for the 4-year graduation countdown. | `2024-01-01T00:00:00Z` |
+| `VITE_APPWRITE_MISSING_COLLEGES_COLLECTION_ID` | **NEW:** Collection ID for user-reported missing colleges. | `missing_colleges` |
+| `VITE_APP_CREATION_DATE` | The ISO 8601 timestamp when the application was first launched. This is the starting point for the 4-year graduation countdown. | `2024-01-01T00:00:00Z` |
 
 **Important Security Note:**
 The `APPWRITE_API_KEY` is a sensitive secret and **must NOT be exposed in client-side code or environment variables accessible by the browser.** It should only be used in secure server-side environments, such as Appwrite Functions. For example, the `processPaymentAndNotify` Appwrite Function uses this key.

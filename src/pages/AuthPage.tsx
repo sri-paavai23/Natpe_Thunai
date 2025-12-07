@@ -12,11 +12,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Building2 } from "lucide-react"; // NEW: Import Building2 icon
 import { APP_HOST_URL } from "@/lib/config";
 import { largeIndianColleges } from "@/lib/largeIndianColleges";
 import CollegeCombobox from "@/components/CollegeCombobox";
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // NEW: Import Dialog components
+import ReportMissingCollegeForm from "@/components/forms/ReportMissingCollegeForm"; // NEW: Import ReportMissingCollegeForm
 
 // Helper function to generate a random username
 const generateRandomUsername = (): string => {
@@ -55,6 +57,7 @@ const AuthPage = () => {
   const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say");
   const [userType, setUserType] = useState<"student" | "staff">("student");
   const [collegeName, setCollegeName] = useState("");
+  const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false); // NEW
 
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -150,6 +153,7 @@ const AuthPage = () => {
               level: 1,
               currentXp: 0,
               maxXp: 100,
+              ambassadorDeliveriesCount: 0, // Initialize new field
               avatarOptions: defaultAvatarOptions, // NEW: Initialize with gender-specific defaults
             }
           );
@@ -279,6 +283,23 @@ const AuthPage = () => {
                     placeholder="Select your college"
                     disabled={loading}
                   />
+                  {/* NEW: "Cannot Find College" button */}
+                  <Dialog open={isReportMissingCollegeDialogOpen} onOpenChange={setIsReportMissingCollegeDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="link" className="p-0 h-auto text-secondary-neon hover:underline mt-2 flex items-center gap-1">
+                        <Building2 className="h-3 w-3" /> Cannot find my college
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+                      <DialogHeader>
+                        <DialogTitle className="text-foreground">Report Missing College</DialogTitle>
+                      </DialogHeader>
+                      <ReportMissingCollegeForm
+                        onReportSubmitted={() => setIsReportMissingCollegeDialogOpen(false)}
+                        onCancel={() => setIsReportMissingCollegeDialogOpen(false)}
+                      />
+                    </DialogContent>
+                  </Dialog>
                 </div>
                 <div>
                   <Label htmlFor="collegeIdPhoto" className="text-foreground">College ID Card Photo</Label>
