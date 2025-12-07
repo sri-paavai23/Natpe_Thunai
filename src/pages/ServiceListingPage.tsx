@@ -17,6 +17,7 @@ import BargainServiceDialog from "@/components/forms/BargainServiceDialog";
 import { useServiceReviews } from "@/hooks/useServiceReviews"; // NEW IMPORT
 import SubmitServiceReviewForm from "@/components/forms/SubmitServiceReviewForm"; // NEW IMPORT
 import { cn } from "@/lib/utils"; // Import cn for utility classes
+import { Badge } from "@/components/ui/badge"; // Import Badge
 
 // Helper function to format category slug into readable title
 const formatCategoryTitle = (categorySlug: string | undefined) => {
@@ -27,7 +28,7 @@ const formatCategoryTitle = (categorySlug: string | undefined) => {
 const ServiceListingPage = () => {
   const { category } = useParams<{ category: string }>();
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isBargainServiceDialogOpen, setIsBargainServiceDialogOpen] = useState(false);
   const [selectedServiceForBargain, setSelectedServiceForBargain] = useState<ServicePost | null>(null);
@@ -138,6 +139,20 @@ const ServiceListingPage = () => {
           <p className="text-xs text-muted-foreground">Posted by: {service.posterName}</p>
           <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
           
+          {/* NEW: Display Category and Custom Order status */}
+          <div className="flex items-center gap-2 mt-2">
+            {service.category && (
+              <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
+                {formatCategoryTitle(service.category)}
+              </Badge>
+            )}
+            {service.isCustomOrder && (
+              <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
+                Custom Request
+              </Badge>
+            )}
+          </div>
+
           {/* Display Average Rating */}
           <div className="flex items-center text-sm text-muted-foreground mt-2">
             {isReviewsLoading ? (
