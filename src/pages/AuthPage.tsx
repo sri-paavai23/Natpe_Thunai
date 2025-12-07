@@ -59,7 +59,7 @@ const AuthPage = () => {
   const [collegeName, setCollegeName] = useState("");
   const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
 
-  const { isAuthenticated, isLoading, login } = useAuth(); // NEW: Use login from AuthContext
+  const { isAuthenticated, isLoading, login } = useAuth();
   const navigate = useNavigate();
 
   // This useEffect handles redirection for *existing* authenticated users
@@ -98,9 +98,9 @@ const AuthPage = () => {
     try {
       if (isLogin) {
         await account.createEmailPasswordSession(email, password);
-        await login(); // NEW: Call login from AuthContext
+        await login(); // Call login from AuthContext to update global state
         toast.success("Logged in successfully!");
-        // The useEffect above will handle navigation for login
+        // Navigation is now handled by the useEffect above
       } else {
         if (!termsAccepted) {
           toast.error("You must accept the terms and conditions.");
@@ -163,9 +163,9 @@ const AuthPage = () => {
               level: 1,
               currentXp: 0,
               maxXp: 100,
-              ambassadorDeliveriesCount: 0, // Initialize new field
-              lastQuestCompletedDate: null, // Re-added
-              itemsListedToday: 0, // Re-added
+              ambassadorDeliveriesCount: 0,
+              lastQuestCompletedDate: null,
+              itemsListedToday: 0,
             }
           );
           toast.success("User profile saved.");
@@ -184,11 +184,10 @@ const AuthPage = () => {
 
         // Create session and log in the user immediately after successful signup
         await account.createEmailPasswordSession(email, password);
-        await login(); // NEW: Call login from AuthContext
+        await login(); // Call login from AuthContext to update global state
         toast.success("You are now logged in!");
         
-        // Explicitly navigate after successful signup and login
-        navigate("/home", { replace: true });
+        // Navigation is now handled by the useEffect above
 
         // Clear form fields
         setFirstName("");
