@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext"; // Import useAuth hook
 
 const Index = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading, login } = useAuth(); // Use AuthContext
+  const { isAuthenticated, isLoading } = useAuth(); // Use AuthContext
   const [localLoading, setLocalLoading] = useState(true); // Local loading for splash screen delay
 
   useEffect(() => {

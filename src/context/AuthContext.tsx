@@ -37,13 +37,14 @@ interface AuthContextType {
   user: AppwriteUser | null;
   userProfile: UserProfile | null;
   isVerified: boolean;
-  login: () => Promise<void>;
+  // login: () => Promise<void>; // Removed, replaced by handleAuthSuccess
   logout: () => void;
   updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
   addXp: (amount: number) => Promise<void>;
   deductXp: (amount: number, reason: string) => Promise<void>;
   incrementAmbassadorDeliveriesCount: () => Promise<void>;
   recordMarketListing: () => Promise<void>; // NEW: Function to record market listings
+  handleAuthSuccess: (currentUser: AppwriteUser) => Promise<void>; // NEW: Function to handle successful auth
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -112,15 +113,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [fetchUserProfile]);
 
+  // NEW: Function to handle successful authentication and update state
+  const handleAuthSuccess = useCallback(async (currentUser: AppwriteUser) => {
+    setIsAuthenticated(true);
+    setUser(currentUser);
+    await fetchUserProfile(currentUser.$id);
+    setIsLoading(false); // Ensure loading is set to false here
+  }, [fetchUserProfile]);
+
+
   useEffect(() => {
     checkUserSession();
   }, [checkUserSession]);
 
-  const loginUser = async () => {
-    setIsLoading(true);
-    await checkUserSession();
-    setIsLoading(false);
-  };
+  // Removed loginUser as it's replaced by handleAuthSuccess
+  // const loginUser = async () => {
+  //   setIsLoading(true);
+  //   await checkUserSession();
+  //   setIsLoading(false);
+  // };
 
   const logout = async () => {
     try {
@@ -298,7 +309,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, userProfile, isVerified, login: loginUser, logout, updateUserProfile, addXp, deductXp, incrementAmbassadorDeliveriesCount, recordMarketListing }}>
+    <AuthContext.Provider value={{ 
+      isAuthenticated, 
+      isLoading, 
+      user, 
+      userProfile, 
+      isVerified, 
+      logout, 
+      updateUserProfile, 
+      addXp, 
+      deductXp, 
+      incrementAmbassadorDeliveriesCount, 
+      recordMarketListing,
+      handleAuthSuccess // NEW: Provide the new function
+    }}>
       {children}
     </AuthContext.Provider>
   );

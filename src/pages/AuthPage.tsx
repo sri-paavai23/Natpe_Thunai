@@ -59,7 +59,7 @@ const AuthPage = () => {
   const [collegeName, setCollegeName] = useState("");
   const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
 
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, handleAuthSuccess } = useAuth(); // NEW: Use handleAuthSuccess
   const navigate = useNavigate();
 
   // This useEffect handles redirection for *existing* authenticated users
@@ -98,9 +98,10 @@ const AuthPage = () => {
     try {
       if (isLogin) {
         await account.createEmailPasswordSession(email, password);
-        login();
+        const currentUser = await account.get(); // Get the user object after session is created
+        await handleAuthSuccess(currentUser); // NEW: Call handleAuthSuccess
         toast.success("Logged in successfully!");
-        // The useEffect above will handle navigation for login
+        navigate("/home", { replace: true }); // Explicit navigation
       } else {
         if (!termsAccepted) {
           toast.error("You must accept the terms and conditions.");
@@ -164,9 +165,8 @@ const AuthPage = () => {
               currentXp: 0,
               maxXp: 100,
               ambassadorDeliveriesCount: 0, // Initialize new field
-              // Removed avatarOptions: defaultAvatarOptions as it's not in schema
-              // Removed lastQuestCompletedDate: null, // Initialize new field
-              // Removed itemsListedToday: 0, // Initialize new field
+              lastQuestCompletedDate: null, // Re-added
+              itemsListedToday: 0, // Re-added
             }
           );
           toast.success("User profile saved.");
@@ -185,7 +185,7 @@ const AuthPage = () => {
 
         // Create session and log in the user immediately after successful signup
         await account.createEmailPasswordSession(email, password);
-        await login(); // This updates isAuthenticated and user/userProfile in AuthContext
+        await handleAuthSuccess(user); // NEW: Call handleAuthSuccess with the newly created user
         toast.success("You are now logged in!");
         
         // Explicitly navigate after successful signup and login
