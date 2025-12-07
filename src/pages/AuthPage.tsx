@@ -12,13 +12,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Building2 } from "lucide-react"; // NEW: Import Building2 icon
+import { Eye, EyeOff, Building2, Image } from "lucide-react"; // NEW: Import Image icon
 import { APP_HOST_URL } from "@/lib/config";
 import { largeIndianColleges } from "@/lib/largeIndianColleges";
 import CollegeCombobox from "@/components/CollegeCombobox";
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // NEW: Import Dialog components
-import ReportMissingCollegeForm from "@/components/forms/ReportMissingCollegeForm"; // NEW: Import ReportMissingCollegeForm
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import ReportMissingCollegeForm from "@/components/forms/ReportMissingCollegeForm";
 
 // Helper function to generate a random username
 const generateRandomUsername = (): string => {
@@ -57,7 +57,7 @@ const AuthPage = () => {
   const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say");
   const [userType, setUserType] = useState<"student" | "staff">("student");
   const [collegeName, setCollegeName] = useState("");
-  const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false); // NEW
+  const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
 
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -75,6 +75,22 @@ const AuthPage = () => {
       setGeneratedUsernames(generateUsernameOptions());
     }
   }, [isLogin, generatedUsernames.length]);
+
+  const handleCollegeIdPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    if (file) {
+      const MAX_FILE_SIZE_MB = 1;
+      const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024; // 1MB in bytes
+
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB. Please compress your image.`);
+        setCollegeIdPhoto(null); // Clear the selected file
+        e.target.value = ''; // Clear the input field
+        return;
+      }
+    }
+    setCollegeIdPhoto(file);
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +182,7 @@ const AuthPage = () => {
           toast.info("Your Name, Age, Mobile Number, UPI ID, and College ID Photo are collected for developer safety assurance only and will NOT be shared publicly. Only your chosen username will be visible.");
         } catch (profileError: any) {
           console.error("Error creating user profile document:", profileError);
-          toast.error(`Failed to create user profile: ${profileError.message}. Please check Appwrite collection permissions.`);
+          toast.error(`Failed to create user profile: ${profileError.message}. Please ensure your Appwrite 'user_profiles' collection has 'create' permissions for 'users' and the schema matches the fields being sent.`);
           setLoading(false);
           return;
         }
@@ -312,16 +328,19 @@ const AuthPage = () => {
                   </Dialog>
                 </div>
                 <div>
-                  <Label htmlFor="collegeIdPhoto" className="text-foreground">College ID Card Photo</Label>
+                  <Label htmlFor="collegeIdPhoto" className="text-foreground">College ID Card Photo (Max 1MB)</Label>
                   <Input
                     id="collegeIdPhoto"
                     type="file"
                     accept="image/*"
-                    onChange={(e) => setCollegeIdPhoto(e.target.files ? e.target.files[0] : null)}
+                    onChange={handleCollegeIdPhotoChange}
                     required
                     className="bg-input text-foreground border-border focus:ring-ring focus:border-ring file:text-primary-foreground file:bg-primary-blue-light file:border-0 file:mr-4 file:py-2 file:px-4 file:rounded-md"
                   />
                   {collegeIdPhoto && <p className="text-xs text-muted-foreground mt-1">File selected: {collegeIdPhoto.name}</p>}
+                  <Link to="https://www.ilovepdf.com/compress_image" target="_blank" rel="noopener noreferrer" className="text-xs text-secondary-neon hover:underline flex items-center gap-1 mt-1">
+                    <Image className="h-3 w-3" /> Compress your image here
+                  </Link>
                 </div>
 
                 <div>
