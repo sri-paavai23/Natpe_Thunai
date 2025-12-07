@@ -59,7 +59,7 @@ const AuthPage = () => {
   const [collegeName, setCollegeName] = useState("");
   const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
 
-  const { isAuthenticated, isLoading, handleAuthSuccess } = useAuth(); // NEW: Use handleAuthSuccess
+  const { isAuthenticated, isLoading, login } = useAuth(); // NEW: Use login from AuthContext
   const navigate = useNavigate();
 
   // This useEffect handles redirection for *existing* authenticated users
@@ -98,10 +98,9 @@ const AuthPage = () => {
     try {
       if (isLogin) {
         await account.createEmailPasswordSession(email, password);
-        const currentUser = await account.get(); // Get the user object after session is created
-        await handleAuthSuccess(currentUser); // NEW: Call handleAuthSuccess
+        await login(); // NEW: Call login from AuthContext
         toast.success("Logged in successfully!");
-        navigate("/home", { replace: true }); // Explicit navigation
+        // The useEffect above will handle navigation for login
       } else {
         if (!termsAccepted) {
           toast.error("You must accept the terms and conditions.");
@@ -185,7 +184,7 @@ const AuthPage = () => {
 
         // Create session and log in the user immediately after successful signup
         await account.createEmailPasswordSession(email, password);
-        await handleAuthSuccess(user); // NEW: Call handleAuthSuccess with the newly created user
+        await login(); // NEW: Call login from AuthContext
         toast.success("You are now logged in!");
         
         // Explicitly navigate after successful signup and login

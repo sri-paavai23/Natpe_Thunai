@@ -37,14 +37,14 @@ interface AuthContextType {
   user: AppwriteUser | null;
   userProfile: UserProfile | null;
   isVerified: boolean;
-  // login: () => Promise<void>; // Removed, replaced by handleAuthSuccess
+  login: () => Promise<void>; // Re-added: Function to trigger session re-check
   logout: () => void;
   updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
   addXp: (amount: number) => Promise<void>;
   deductXp: (amount: number, reason: string) => Promise<void>;
   incrementAmbassadorDeliveriesCount: () => Promise<void>;
   recordMarketListing: () => Promise<void>; // NEW: Function to record market listings
-  handleAuthSuccess: (currentUser: AppwriteUser) => Promise<void>; // NEW: Function to handle successful auth
+  // handleAuthSuccess: (currentUser: AppwriteUser) => Promise<void>; // Removed
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,25 +113,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [fetchUserProfile]);
 
-  // NEW: Function to handle successful authentication and update state
-  const handleAuthSuccess = useCallback(async (currentUser: AppwriteUser) => {
-    setIsAuthenticated(true);
-    setUser(currentUser);
-    await fetchUserProfile(currentUser.$id);
-    setIsLoading(false); // Ensure loading is set to false here
-  }, [fetchUserProfile]);
+  // Re-added login function
+  const login = useCallback(async () => {
+    setIsLoading(true);
+    await checkUserSession();
+  }, [checkUserSession]);
 
 
   useEffect(() => {
     checkUserSession();
   }, [checkUserSession]);
-
-  // Removed loginUser as it's replaced by handleAuthSuccess
-  // const loginUser = async () => {
-  //   setIsLoading(true);
-  //   await checkUserSession();
-  //   setIsLoading(false);
-  // };
 
   const logout = async () => {
     try {
@@ -315,13 +306,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user, 
       userProfile, 
       isVerified, 
+      login, // Re-added
       logout, 
       updateUserProfile, 
       addXp, 
       deductXp, 
       incrementAmbassadorDeliveriesCount, 
       recordMarketListing,
-      handleAuthSuccess // NEW: Provide the new function
     }}>
       {children}
     </AuthContext.Provider>
