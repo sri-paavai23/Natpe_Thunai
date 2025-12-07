@@ -1,4 +1,4 @@
-// src/utils/time.ts
+"use client";
 
 import { differenceInSeconds, addYears, addMonths, addDays, format, intervalToDuration } from 'date-fns';
 
@@ -18,19 +18,19 @@ interface GraduationData {
 }
 
 /**
- * Calculates the graduation meter data based on the app creation date.
- * @param appCreationDateString The ISO string of the app creation date (e.g., '2024-01-01T00:00:00Z').
+ * Calculates the graduation meter data based on a given start date.
+ * @param startDateString The ISO string of the user's account creation date (e.g., '2024-01-01T00:00:00Z').
  * @returns GraduationData object.
  */
-export const getGraduationData = (appCreationDateString: string): GraduationData => {
-  const appCreationDate = new Date(appCreationDateString);
+export const getGraduationData = (startDateString: string): GraduationData => {
+  const startDate = new Date(startDateString);
   const now = new Date();
 
-  const fourYearsLater = addYears(appCreationDate, 4);
-  const threePointFiveYearsLater = addMonths(addYears(appCreationDate, 3), 6); // 3 years and 6 months
+  const fourYearsLater = addYears(startDate, 4);
+  const threePointFiveYearsLater = addMonths(addYears(startDate, 3), 6); // 3 years and 6 months
 
-  const totalDurationSeconds = differenceInSeconds(fourYearsLater, appCreationDate);
-  const elapsedSeconds = differenceInSeconds(now, appCreationDate);
+  const totalDurationSeconds = differenceInSeconds(fourYearsLater, startDate);
+  const elapsedSeconds = differenceInSeconds(now, startDate);
   const remainingSeconds = differenceInSeconds(fourYearsLater, now);
 
   const progressPercentage = Math.max(0, Math.min(100, (elapsedSeconds / totalDurationSeconds) * 100));
