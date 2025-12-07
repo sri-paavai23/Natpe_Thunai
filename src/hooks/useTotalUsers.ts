@@ -20,6 +20,14 @@ export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => { 
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalUsers = useCallback(async () => {
+    // NEW: If user is not a developer and their collegeName is not set, exit early.
+    // This prevents unnecessary API calls and ensures isLoading is set to false.
+    if (userProfile?.role !== 'developer' && !userProfile?.collegeName) {
+      setIsLoading(false);
+      setTotalUsers(0);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -44,7 +52,7 @@ export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => { 
     } finally {
       setIsLoading(false);
     }
-  }, [collegeNameFilter, userProfile?.role]); // NEW: Depend on userProfile.role
+  }, [collegeNameFilter, userProfile?.role, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchTotalUsers();
