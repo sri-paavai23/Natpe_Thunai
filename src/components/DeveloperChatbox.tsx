@@ -16,12 +16,14 @@ import { useAuth } from "@/context/AuthContext";
 import { containsBlockedWords } from "@/lib/moderation"; // Import moderation utility
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
 import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
+import ContributionStoryDialog from "./ContributionStoryDialog"; // NEW: Import ContributionStoryDialog
 
 const DeveloperChatbox = () => {
   const { user, userProfile } = useAuth();
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  
+  const [isContributionDialogOpen, setIsContributionDialogOpen] = useState(false); // NEW: State for dialog
+
   const userLevel = userProfile?.level ?? 1;
   const dynamicCommissionRateDisplay = formatCommissionRate(calculateCommissionRate(userLevel));
 
@@ -58,7 +60,7 @@ const DeveloperChatbox = () => {
           senderName: user.name,
           message: trimmedMessage,
           isDeveloper: userProfile.role === 'developer',
-          collegeName: userProfile.collegeName, // NEW: Add collegeName
+          collegeName: userProfile.collegeName,
           // Note: The $createdAt timestamp will be used by the Developer Dashboard
           // to determine visibility (1-2 days).
         }
@@ -73,10 +75,7 @@ const DeveloperChatbox = () => {
     }
   };
 
-  const handleContribute = () => {
-    toast.info("Redirecting to our contribution guidelines (feature coming soon)!");
-    // In a real app, this would link to a GitHub repo, documentation, or a contact form.
-  };
+  // Removed handleContribute function as the button will now trigger the dialog directly
 
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -132,11 +131,14 @@ const DeveloperChatbox = () => {
           <p className="text-sm text-muted-foreground">
             Help us improve Natpe🤝Thunai! We welcome contributions from the community.
           </p>
-          <Button onClick={handleContribute} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+          {/* NEW: Button now triggers the ContributionStoryDialog */}
+          <Button onClick={() => setIsContributionDialogOpen(true)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
             Learn How to Contribute
           </Button>
         </div>
       </CardContent>
+      {/* NEW: Render the ContributionStoryDialog */}
+      <ContributionStoryDialog isOpen={isContributionDialogOpen} onClose={() => setIsContributionDialogOpen(false)} />
     </Card>
   );
 };
