@@ -62,6 +62,8 @@ const AuthPage = () => {
   const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
+  // This useEffect handles redirection for *existing* authenticated users
+  // and also for new signups once AuthContext updates.
   React.useEffect(() => {
     if (!isLoading && isAuthenticated) {
       navigate("/home", { replace: true });
@@ -82,6 +84,7 @@ const AuthPage = () => {
         await account.createEmailPasswordSession(email, password);
         login();
         toast.success("Logged in successfully!");
+        // The useEffect above will handle navigation for login
       } else {
         if (!termsAccepted) {
           toast.error("You must accept the terms and conditions.");
@@ -155,6 +158,8 @@ const AuthPage = () => {
               maxXp: 100,
               ambassadorDeliveriesCount: 0, // Initialize new field
               avatarOptions: defaultAvatarOptions, // NEW: Initialize with gender-specific defaults
+              lastQuestCompletedDate: null, // Initialize new field
+              itemsListedToday: 0, // Initialize new field
             }
           );
           toast.success("User profile saved.");
@@ -171,10 +176,15 @@ const AuthPage = () => {
         );
         toast.info("Verification email sent! Please check your inbox.");
 
+        // Create session and log in the user immediately after successful signup
         await account.createEmailPasswordSession(email, password);
-        login();
+        login(); // This updates isAuthenticated and user/userProfile in AuthContext
         toast.success("You are now logged in!");
         
+        // Explicitly navigate after successful signup and login
+        navigate("/home", { replace: true }); // ADDED THIS LINE
+
+        // Clear form fields
         setFirstName("");
         setLastName("");
         setAge("");
