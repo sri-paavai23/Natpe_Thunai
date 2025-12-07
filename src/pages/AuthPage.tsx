@@ -165,8 +165,8 @@ const AuthPage = () => {
               maxXp: 100,
               ambassadorDeliveriesCount: 0, // Initialize new field
               // Removed avatarOptions: defaultAvatarOptions as it's not in schema
-              lastQuestCompletedDate: null, // Initialize new field
-              itemsListedToday: 0, // Initialize new field
+              // Removed lastQuestCompletedDate: null, // Initialize new field
+              // Removed itemsListedToday: 0, // Initialize new field
             }
           );
           toast.success("User profile saved.");
