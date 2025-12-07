@@ -143,6 +143,14 @@ const AuthPage = () => {
           }
         }
 
+        // Define default avatar options based on gender for initial profile creation
+        let defaultAvatarOptions: { [key: string]: string } = {};
+        if (gender === "male") {
+          defaultAvatarOptions = { hair: "short", clothing: "shirt" };
+        } else if (gender === "female") {
+          defaultAvatarOptions = { hair: "long", clothing: "hoodie" };
+        }
+
         try {
           await databases.createDocument(
             APPWRITE_DATABASE_ID,
@@ -162,11 +170,11 @@ const AuthPage = () => {
               collegeName,
               level: 1,
               currentXp: 0,
-              maxXp: 100,
-              ambassadorDeliveriesCount: 0, // Initialize new field
-              // Removed avatarOptions: defaultAvatarOptions as it's not in schema
-              // Removed lastQuestCompletedDate: null, // Initialize new field
-              // Removed itemsListedToday: 0, // Initialize new field
+              maxXp: 100, // This is calculated client-side, but good to initialize
+              ambassadorDeliveriesCount: 0,
+              lastQuestCompletedDate: null, // Re-added
+              itemsListedToday: 0, // Re-added
+              avatarOptions: defaultAvatarOptions, // Re-added
             }
           );
           toast.success("User profile saved.");
