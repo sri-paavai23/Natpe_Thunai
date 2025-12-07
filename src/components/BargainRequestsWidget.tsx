@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react"; // Add useState import
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MessageSquareText, Loader2, CheckCircle, XCircle, DollarSign } from "lucide-react";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 const BargainRequestsWidget: React.FC = () => {
   const { user } = useAuth();
   const { sellerRequests, isLoading, error, updateBargainStatus } = useBargainRequests();
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false); // Now useState is properly imported
 
   const handleUpdateStatus = async (requestId: string, newStatus: "accepted" | "denied") => {
     setIsUpdating(true);
