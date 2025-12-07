@@ -75,8 +75,6 @@ const DeveloperChatbox = () => {
     }
   };
 
-  // Removed handleContribute function as the button will now trigger the dialog directly
-
   return (
     <Card className="bg-card text-card-foreground shadow-lg border-border">
       <CardHeader className="p-4 pb-2">
@@ -115,9 +113,11 @@ const DeveloperChatbox = () => {
             For all transactions (buy, rent, services), users pay the developers first. We then deduct the dynamic commission rate (currently {dynamicCommissionRateDisplay} for Level {userLevel}) and transfer the remaining amount to the seller/service provider.
           </p>
           <div className="flex flex-col items-center space-y-2 p-3 border border-border rounded-md bg-background">
-            <img src="/qr.jpg" alt="Developer UPI QR Code" className="w-32 h-32 object-contain rounded-md" />
+            <a href="/qr.jpg" download="NatpeThunai_Developer_UPI_QR.jpg" className="cursor-pointer hover:opacity-80 transition-opacity">
+              <img src="/qr.jpg" alt="Developer UPI QR Code" className="w-32 h-32 object-contain rounded-md" />
+            </a>
             <p className="text-sm font-medium text-foreground">UPI ID: <span className="text-secondary-neon">{DEVELOPER_UPI_ID}</span></p>
-            <p className="text-xs text-muted-foreground text-center">Scan or use this UPI ID for all payments.</p>
+            <p className="text-xs text-muted-foreground text-center">Click the QR code to download or use this UPI ID for all payments.</p>
           </div>
         </div>
 
@@ -131,13 +131,11 @@ const DeveloperChatbox = () => {
           <p className="text-sm text-muted-foreground">
             Help us improve Natpe🤝Thunai! We welcome contributions from the community.
           </p>
-          {/* NEW: Button now triggers the ContributionStoryDialog */}
           <Button onClick={() => setIsContributionDialogOpen(true)} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
             Learn How to Contribute
           </Button>
         </div>
       </CardContent>
-      {/* NEW: Render the ContributionStoryDialog */}
       <ContributionStoryDialog isOpen={isContributionDialogOpen} onClose={() => setIsContributionDialogOpen(false)} />
     </Card>
   );
