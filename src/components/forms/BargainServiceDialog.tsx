@@ -98,6 +98,10 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
   return (
     <div className="space-y-4 py-4">
       <div className="space-y-3 py-2">
+        <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
+        <p className="text-sm text-muted-foreground">You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the service provider.</p>
+      </div>
+      <div className="space-y-3 py-2">
         <p className="text-sm text-foreground">Service: <span className="font-semibold">{service.title}</span></p>
         <p className="text-xl font-bold text-secondary-neon">
           Bargain Price: ₹{bargainedPrice.toFixed(2)}

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
 import { Search } from "lucide-react"; // NEW: Import Search icon
+import BargainRequestsWidget from "@/components/BargainRequestsWidget"; // NEW: Import BargainRequestsWidget
 
 const ActivityPage = () => {
   const navigate = useNavigate();
@@ -40,6 +41,10 @@ const ActivityPage = () => {
             <p className="text-muted-foreground">Monitor orders, service status, cancellation requests, and complaint notes in one place.</p>
           </CardContent>
         </Card>
+        
+        {/* NEW: Bargain Requests Widget */}
+        <BargainRequestsWidget />
+
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleActivityClick("/activity/cash-exchange", "Cash Exchange")}>
           <CardHeader className="p-0 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground">Cash Exchange</CardTitle>

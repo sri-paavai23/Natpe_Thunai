@@ -18,11 +18,13 @@ import { DEVELOPER_UPI_ID } from '@/lib/config'; // Import DEVELOPER_UPI_ID
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog"; // Import Dialog components and DialogTrigger
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
 import ReportListingForm from "@/components/forms/ReportListingForm"; // NEW: Import ReportListingForm
+import { useBargainRequests } from '@/hooks/useBargainRequests'; // NEW: Import useBargainRequests
 
 export default function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
+  const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests(); // NEW: Use bargain requests hook
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,6 +35,9 @@ export default function ProductDetailsPage() {
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
   const [isBargainPurchase, setIsBargainPurchase] = useState(false);
+
+  // NEW: Get current bargain status for this product
+  const { status: currentBargainStatus, requestId: currentBargainRequestId } = getBargainStatusForProduct(productId || '');
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -166,7 +171,7 @@ export default function ProductDetailsPage() {
     }
   };
 
-  const handleBargainRequest = () => {
+  const handleSendBargainRequest = async () => {
     if (!user || !userProfile || !product) {
       toast.error("Please log in to send a bargain request.");
       navigate("/auth");
@@ -174,6 +179,14 @@ export default function ProductDetailsPage() {
     }
     if (user.$id === product.sellerId) {
       toast.error("You cannot bargain on your own listing.");
+      return;
+    }
+    if (currentBargainStatus === 'pending') {
+      toast.info("You already have a pending bargain request for this item.");
+      return;
+    }
+    if (currentBargainStatus === 'denied') {
+      toast.info("Your previous bargain request was denied. The bargain option is now disabled for this item.");
       return;
     }
 
@@ -185,12 +198,14 @@ export default function ProductDetailsPage() {
     }
 
     const discountRate = 0.15;
-    const bargainAmount = originalAmount * (1 - discountRate);
+    const requestedBargainAmount = originalAmount * (1 - discountRate);
 
-    // Simulate sending a message to the seller
-    toast.success(`Bargain request sent to ${product.sellerName}!`);
-    toast.info(`You requested a 15% discount, making the price ₹${bargainAmount.toFixed(2)}. ${product.sellerName} will respond soon.`);
-    console.log(`Bargain Request: User ${user.name} requested 15% off (${bargainAmount.toFixed(2)}) for product ${product.title}. Seller UPI: ${product.sellerUpiId}`);
+    try {
+      await sendBargainRequest(product, requestedBargainAmount);
+      // The toast for success is handled within useBargainRequests hook
+    } catch (error) {
+      // Error handled in hook
+    }
   };
 
   if (isLoading) {
@@ -218,6 +233,11 @@ export default function ProductDetailsPage() {
   const bargainPrice = (parseFloat(originalPrice) * 0.85).toFixed(2); // 15% discount
   const currentPurchasePrice = isBargainPurchase ? parseFloat(bargainPrice) : parseFloat(originalPrice);
 
+  // Determine if bargain button should be disabled
+  const isBargainDisabled = 
+    user?.$id === product.sellerId || // Cannot bargain on own product
+    currentBargainStatus === 'pending' || // Already has a pending request
+    currentBargainStatus === 'denied'; // Previous request was denied
 
   return (
     <div className="container mx-auto p-6 pb-20">
@@ -263,11 +283,13 @@ export default function ProductDetailsPage() {
                 variant="outline" 
                 size="lg" 
                 className="w-full border-primary text-primary hover:bg-primary/10"
-                onClick={() => handleOpenConfirmPurchase(true)} // Open dialog for bargain purchase
-                disabled={isProcessing}
+                onClick={handleSendBargainRequest} // NEW: Call handleSendBargainRequest
+                disabled={isProcessing || isBargainDisabled} // Disable if processing or bargain is disabled
               >
                 <MessageSquareText className="mr-2 h-5 w-5" /> 
-                Bargain (15% off: ₹{bargainPrice})
+                {currentBargainStatus === 'pending' ? 'Bargain Pending...' : 
+                 currentBargainStatus === 'denied' ? 'Bargain Denied' : 
+                 `Bargain (15% off: ₹${bargainPrice})`}
               </Button>
             </div>
           )}
@@ -349,7 +371,8 @@ export default function ProductDetailsPage() {
                 <DollarSign className="h-5 w-5 text-secondary-neon" /> Confirm {product.type === 'sell' ? 'Purchase' : 'Rent'}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Review your order and select delivery options before proceeding to payment.
+              <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
+              <p>You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the seller.</p>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -364,7 +387,10 @@ export default function ProductDetailsPage() {
             )}
             <p className="text-xs text-muted-foreground">Seller: {product.sellerName}</p>
             <p className="text-xs text-destructive-foreground">
-                Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the seller.
+                Recipient: Natpe Thunai Developers (UPI ID: {DEVELOPER_UPI_ID})
+            </p>
+            <p className="text-xs text-muted-foreground">
+                You will be redirected to your UPI app. If redirection fails, please use the developer UPI ID/QR code found in the 'Chat with Developers' section of your profile.
             </p>
           </div>
 
@@ -379,7 +405,7 @@ export default function ProductDetailsPage() {
             <Button variant="outline" onClick={() => setIsConfirmPurchaseDialogOpen(false)} disabled={isProcessing} className="border-border text-primary-foreground hover:bg-muted">
               Cancel
             </Button>
-            <Button onClick={handleInitiatePayment} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+            <Button onClick={handleInitiatePayment} disabled={isProcessing} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
             </Button>
           </DialogFooter>

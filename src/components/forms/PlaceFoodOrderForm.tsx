@@ -185,7 +185,8 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrd
                 <DollarSign className="h-5 w-5 text-secondary-neon" /> Confirm Payment
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              You are about to pay the total amount to the developer to secure your order.
+              <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
+              <p>You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then process your order.</p>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
