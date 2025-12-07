@@ -13,13 +13,14 @@ import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
 
 const AnalyticsCard = () => {
   const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
-  const collegeName = userProfile?.collegeName; // Get the current user's college name
+  // Determine the collegeName to pass to hooks. If developer, pass undefined to fetch all.
+  const collegeNameForAnalytics = userProfile?.role === 'developer' ? undefined : userProfile?.collegeName;
 
-  // Pass collegeName to the hooks for college-specific data
-  const { products, isLoading: isLoadingListings, error: listingsError } = useMarketListings(); // useMarketListings already filters internally
-  const { totalUsers, isLoading: isLoadingUsers, error: usersError } = useTotalUsers(collegeName); // Pass collegeName
-  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders, error: foodOrdersError } = useFoodOrdersAnalytics(collegeName); // Pass collegeName
-  const { totalTransactions, isLoading: isLoadingTransactions, error: transactionsError } = useTotalTransactions(collegeName); // Pass collegeName
+  // Pass collegeNameForAnalytics to the hooks
+  const { products, isLoading: isLoadingListings, error: listingsError } = useMarketListings(); // useMarketListings already filters internally based on userProfile.role
+  const { totalUsers, isLoading: isLoadingUsers, error: usersError } = useTotalUsers(collegeNameForAnalytics);
+  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders, error: foodOrdersError } = useFoodOrdersAnalytics(collegeNameForAnalytics);
+  const { totalTransactions, isLoading: isLoadingTransactions, error: transactionsError } = useTotalTransactions(collegeNameForAnalytics);
 
   const isLoadingAny = isLoadingListings || isLoadingUsers || isLoadingFoodOrders || isLoadingTransactions;
   const hasError = listingsError || usersError || foodOrdersError || transactionsError;

@@ -5,6 +5,7 @@ import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } f
 import { Query } from 'appwrite';
 import { toast } from 'sonner';
 import { subDays, formatISO } from 'date-fns';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
 interface FoodOrdersAnalyticsState {
   foodOrdersLastWeek: number;
@@ -13,7 +14,8 @@ interface FoodOrdersAnalyticsState {
   refetch: () => void;
 }
 
-export const useFoodOrdersAnalytics = (collegeName?: string): FoodOrdersAnalyticsState => { // NEW: Add collegeName parameter
+export const useFoodOrdersAnalytics = (collegeNameFilter?: string): FoodOrdersAnalyticsState => { // NEW: Renamed parameter to collegeNameFilter
+  const { userProfile } = useAuth(); // NEW: Get userProfile here
   const [foodOrdersLastWeek, setFoodOrdersLastWeek] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +31,10 @@ export const useFoodOrdersAnalytics = (collegeName?: string): FoodOrdersAnalytic
         Query.greaterThanEqual('$createdAt', isoDate),
         Query.limit(1) // We only need the total count
       ];
-      if (collegeName) { // NEW: Apply collegeName filter if provided
-        queries.push(Query.equal('collegeName', collegeName));
+      // NEW: If user is a developer, or no specific collegeNameFilter is provided, fetch all.
+      // Otherwise, filter by the provided collegeNameFilter.
+      if (userProfile?.role !== 'developer' && collegeNameFilter) {
+        queries.push(Query.equal('collegeName', collegeNameFilter));
       }
 
       const response = await databases.listDocuments(
@@ -46,7 +50,7 @@ export const useFoodOrdersAnalytics = (collegeName?: string): FoodOrdersAnalytic
     } finally {
       setIsLoading(false);
     }
-  }, [collegeName]); // NEW: Depend on collegeName
+  }, [collegeNameFilter, userProfile?.role]); // NEW: Depend on userProfile.role
 
   useEffect(() => {
     fetchFoodOrdersLastWeek();

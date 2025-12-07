@@ -21,7 +21,9 @@ export const useMarketListings = (): MarketListingsState => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async () => {
-    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+    const isDeveloper = userProfile?.role === 'developer';
+
+    if (!isDeveloper && !userProfile?.collegeName) { // Only fetch if collegeName is available for non-developers
       setIsLoading(false);
       setProducts([]); // Clear products if no college is set
       return;
@@ -32,8 +34,10 @@ export const useMarketListings = (): MarketListingsState => {
     try {
       const queries = [
         Query.orderDesc('$createdAt'),
-        Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
       ];
+      if (!isDeveloper) { // Apply collegeName filter ONLY for non-developers
+        queries.push(Query.equal('collegeName', userProfile!.collegeName));
+      }
 
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
@@ -70,20 +74,21 @@ export const useMarketListings = (): MarketListingsState => {
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+  }, [userProfile?.collegeName, userProfile?.role]); // Depend on userProfile.collegeName AND userProfile.role
 
   useEffect(() => {
     fetchProducts();
 
-    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
+    const isDeveloper = userProfile?.role === 'developer';
+    if (!isDeveloper && !userProfile?.collegeName) return; // Only subscribe if collegeName is available for non-developers
 
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_PRODUCTS_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as Product;
 
-        // NEW: Filter real-time updates by collegeName
-        if (payload.collegeName !== userProfile.collegeName) {
+        // NEW: Filter real-time updates by collegeName ONLY for non-developers
+        if (!isDeveloper && payload.collegeName !== userProfile!.collegeName) {
             return;
         }
 
@@ -137,7 +142,7 @@ export const useMarketListings = (): MarketListingsState => {
       unsubscribe();
       unsubscribeUserProfiles(); // NEW: Unsubscribe from user profiles
     };
-  }, [fetchProducts, userProfile?.collegeName, products]); // NEW: Depend on products state for user profile subscription
+  }, [fetchProducts, userProfile?.collegeName, userProfile?.role, products]); // NEW: Depend on products state for user profile subscription
 
   return { products, isLoading, error, refetch: fetchProducts };
 };
