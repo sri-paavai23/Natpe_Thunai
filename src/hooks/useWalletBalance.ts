@@ -43,7 +43,7 @@ export const useWalletBalance = (): WalletBalanceState => {
         [
           Query.or([
             Query.equal('buyerId', user.$id),
-            Query.equal('userId', user.$id) // Changed from sellerId to userId
+            Query.equal('userId', user.$id)
           ]),
           Query.limit(100) // Fetch a reasonable number of transactions
         ]
@@ -51,7 +51,7 @@ export const useWalletBalance = (): WalletBalanceState => {
 
       marketTransactionsResponse.documents.forEach((doc: Models.Document) => {
         const tx = doc as unknown as MarketTransactionItem;
-        if (tx.userId === user.$id && tx.status === 'paid_to_seller' && tx.netSellerAmount !== undefined) { // Corrected: tx.sellerId to tx.userId
+        if (tx.userId === user.$id && tx.status === 'paid_to_seller' && tx.netSellerAmount !== undefined) {
           totalEarned += tx.netSellerAmount;
         }
         if (tx.buyerId === user.$id && tx.status !== 'failed') { // Count all non-failed purchases as spent
