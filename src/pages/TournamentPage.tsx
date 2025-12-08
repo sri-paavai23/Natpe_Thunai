@@ -6,21 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trophy, Calendar, DollarSign, Users, Gamepad2, Loader2, AlertTriangle, Edit } from "lucide-react"; // NEW: Import Edit icon
+import { Trophy, Calendar, DollarSign, Users, Gamepad2, Loader2, AlertTriangle, Edit, PlusCircle } from "lucide-react"; // NEW: Import PlusCircle icon
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import DetailedTournamentRegistrationForm from "@/components/forms/DetailedTournamentRegistrationForm";
-import TournamentManagementForm from "@/components/forms/TournamentManagementForm"; // NEW: Import TournamentManagementForm
-import { useTournamentData, Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData"; // Import hook and interfaces
-import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
+import TournamentManagementForm from "@/components/forms/TournamentManagementForm";
+import PostTournamentForm from "@/components/forms/PostTournamentForm"; // NEW: Import PostTournamentForm
+import { useTournamentData, Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData";
+import { useAuth } from "@/context/AuthContext";
 
 const TournamentPage = () => {
-  const { user } = useAuth(); // NEW: Get current user
+  const { user } = useAuth();
   const { tournaments, isLoading, error } = useTournamentData();
   const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
-  const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false); // NEW: State for management dialog
+  const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false);
+  const [isPostTournamentDialogOpen, setIsPostTournamentDialogOpen] = useState(false); // NEW: State for post tournament dialog
 
   // Aggregate data from all tournaments
   const upcomingTournaments = tournaments.filter(t => t.status === "Open");
@@ -53,6 +55,12 @@ const TournamentPage = () => {
     setIsManagementDialogOpen(true);
   };
 
+  // NEW: Handle tournament posted
+  const handleTournamentPosted = () => {
+    setIsPostTournamentDialogOpen(false);
+    // The useTournamentData hook will refetch automatically
+  };
+
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-4">
@@ -66,6 +74,36 @@ const TournamentPage = () => {
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Esports Arena (Tournaments)</h1>
       <div className="max-w-md mx-auto space-y-6">
+
+        {/* NEW: Create Tournament Card */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <PlusCircle className="h-5 w-5 text-secondary-neon" /> Host Your Own Tournament
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Organize and manage your own esports tournaments for the campus community!
+            </p>
+            <Dialog open={isPostTournamentDialogOpen} onOpenChange={setIsPostTournamentDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Create New Tournament
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-foreground">Create New Tournament</DialogTitle>
+                </DialogHeader>
+                <PostTournamentForm 
+                  onTournamentPosted={handleTournamentPosted} 
+                  onCancel={() => setIsPostTournamentDialogOpen(false)} 
+                />
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
 
         {/* Upcoming Tournaments Section */}
         <Card className="bg-card text-card-foreground shadow-lg border-border">
@@ -93,6 +131,9 @@ const TournamentPage = () => {
                     </p>
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
                       <DollarSign className="h-3 w-3" /> Fee: {tournament.fee === 0 ? "Free" : `₹${tournament.fee}`} | Prize: {tournament.prizePool}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Hosted by: <span className="font-medium text-foreground">{tournament.posterName}</span>
                     </p>
                   </div>
                   <div className="flex gap-2 mt-3 sm:mt-0">
@@ -206,6 +247,8 @@ const TournamentPage = () => {
               tournamentName={selectedTournament.name}
               gameName={selectedTournament.game}
               fee={selectedTournament.fee} // Pass the fee
+              minPlayers={selectedTournament.minPlayers} // NEW: Pass minPlayers
+              maxPlayers={selectedTournament.maxPlayers} // NEW: Pass maxPlayers
               onRegister={handleRegistrationSubmit}
               onCancel={() => setIsRegisterDialogOpen(false)}
             />
