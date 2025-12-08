@@ -2,40 +2,41 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ID, Query, Models } from 'appwrite';
-import { Product } from "@/lib/mockData";
+import { ID, Query, Models } from 'appwrite'; // Import Models
+import { Product } from "@/lib/mockData"; // Import Product interface
 import { containsBlockedWords } from "@/lib/moderation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2, Flag } from 'lucide-react';
+import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2, Flag } from 'lucide-react'; // Added Flag icon
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
-import { calculateCommissionRate } from '@/utils/commission';
-import { DEVELOPER_UPI_ID } from '@/lib/config';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import ReportListingForm from "@/components/forms/ReportListingForm";
-import { useBargainRequests } from '@/hooks/useBargainRequests';
+import { calculateCommissionRate } from '@/utils/commission'; // Import commission calculator
+import { DEVELOPER_UPI_ID } from '@/lib/config'; // Import DEVELOPER_UPI_ID
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog"; // Import Dialog components and DialogTrigger
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
+import ReportListingForm from "@/components/forms/ReportListingForm"; // NEW: Import ReportListingForm
+import { useBargainRequests } from '@/hooks/useBargainRequests'; // NEW: Import useBargainRequests
 
 export default function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
-  const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
+  const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests(); // NEW: Use bargain requests hook
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirmPurchaseDialogOpen, setIsConfirmPurchaseDialogOpen] = useState(false);
-  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false); // NEW: State for report dialog
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
   const [isBargainPurchase, setIsBargainPurchase] = useState(false);
 
+  // NEW: Get current bargain status for this product
   const { status: currentBargainStatus, requestId: currentBargainRequestId } = getBargainStatusForProduct(productId || '');
 
   useEffect(() => {
@@ -65,6 +66,10 @@ export default function ProductDetailsPage() {
 
     fetchProduct();
     
+    // Optional: Add real-time subscription for this specific product if needed, 
+    // but for details page, a single fetch is often sufficient unless status changes frequently.
+    // We will skip the subscription here to keep it to a minimum, relying on the user to refresh.
+
   }, [productId]);
 
   const handleOpenConfirmPurchase = (bargain: boolean) => {
@@ -93,6 +98,7 @@ export default function ProductDetailsPage() {
 
     setIsProcessing(true);
     
+    // 1. Calculate Price
     const priceString = product.price.replace(/[₹,]/g, '').split('/')[0].trim();
     let amount = parseFloat(priceString);
     
@@ -103,7 +109,7 @@ export default function ProductDetailsPage() {
     }
 
     const transactionType = product.type === 'sell' ? 'buy' : 'rent';
-    const discountRate = 0.15;
+    const discountRate = 0.15; // 15% fixed bargain discount
     
     if (isBargainPurchase) {
       amount = amount * (1 - discountRate);
@@ -115,6 +121,7 @@ export default function ProductDetailsPage() {
       : `${transactionType} of ${product.title}`;
 
     try {
+      // 2. Create Appwrite Transaction Document (Status: initiated)
       const newTransaction = await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
@@ -139,16 +146,20 @@ export default function ProductDetailsPage() {
 
       const transactionId = newTransaction.$id;
 
+      // NEW: Increment ambassador deliveries count if opted
       if (ambassadorDelivery) {
         await incrementAmbassadorDeliveriesCount();
       }
 
+      // 3. Generate UPI Deep Link (Payment goes to Developer UPI ID)
       const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;
 
+      // 4. Redirect to UPI App
       window.open(upiDeepLink, "_blank");
       
       toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} to the developer. Please complete the payment and note the UTR ID.`);
 
+      // 5. Redirect to Confirmation Page
       navigate(`/market/confirm-payment/${transactionId}`);
 
     } catch (error: any) {
@@ -156,7 +167,7 @@ export default function ProductDetailsPage() {
       toast.error(error.message || "Failed to initiate transaction.");
     } finally {
       setIsProcessing(false);
-      setIsConfirmPurchaseDialogOpen(false);
+      setIsConfirmPurchaseDialogOpen(false); // Close dialog
     }
   };
 
@@ -191,7 +202,9 @@ export default function ProductDetailsPage() {
 
     try {
       await sendBargainRequest(product, requestedBargainAmount);
+      // The toast for success is handled within useBargainRequests hook
     } catch (error) {
+      // Error handled in hook
     }
   };
 
@@ -217,17 +230,19 @@ export default function ProductDetailsPage() {
   const isBuyOrRent = product.type === 'sell' || product.type === 'rent';
   const actionText = product.type === 'sell' ? 'Buy Now' : 'Rent Now';
   const originalPrice = product.price.replace(/[₹,]/g, '').split('/')[0].trim();
-  const bargainPrice = (parseFloat(originalPrice) * 0.85).toFixed(2);
+  const bargainPrice = (parseFloat(originalPrice) * 0.85).toFixed(2); // 15% discount
   const currentPurchasePrice = isBargainPurchase ? parseFloat(bargainPrice) : parseFloat(originalPrice);
 
+  // Determine if bargain button should be disabled
   const isBargainDisabled = 
-    user?.$id === product.sellerId ||
-    currentBargainStatus === 'pending' ||
-    currentBargainStatus === 'denied';
+    user?.$id === product.sellerId || // Consistently use product.sellerId
+    currentBargainStatus === 'pending' || // Already has a pending request
+    currentBargainStatus === 'denied'; // Previous request was denied
 
   return (
     <div className="container mx-auto p-6 pb-20">
       <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        {/* Image Section */}
         <div>
           <img 
             src={product.imageUrl || "/app-logo.png"} 
@@ -236,6 +251,7 @@ export default function ProductDetailsPage() {
           />
         </div>
 
+        {/* Details Section */}
         <div>
           <h1 className="text-4xl font-bold mb-2 text-foreground">{product.title}</h1>
           <p className="text-3xl font-semibold text-secondary-neon mb-4">{product.price}</p>
@@ -247,7 +263,7 @@ export default function ProductDetailsPage() {
               <span>{product.sellerRating}</span>
             </div>
             {product.sellerBadge && <Badge variant="default" className="bg-accent text-accent-foreground">{product.sellerBadge}</Badge>}
-            {product.status && product.status !== 'available' && (
+            {product.status && product.status !== 'available' && ( // NEW: Display product status if not available
               <Badge variant="destructive" className="bg-red-500 text-white">
                 {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
               </Badge>
@@ -261,8 +277,8 @@ export default function ProductDetailsPage() {
               <Button 
                 size="lg" 
                 className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-                onClick={() => handleOpenConfirmPurchase(false)}
-                disabled={isProcessing || product.status !== 'available'}
+                onClick={() => handleOpenConfirmPurchase(false)} // Open dialog for direct purchase
+                disabled={isProcessing || product.status !== 'available'} // Disable if not available
               >
                 <DollarSign className="mr-2 h-5 w-5" /> 
                 {isProcessing ? "Processing..." : (product.status !== 'available' ? "Not Available" : actionText)}
@@ -272,8 +288,8 @@ export default function ProductDetailsPage() {
                 variant="outline" 
                 size="lg" 
                 className="w-full border-primary text-primary hover:bg-primary/10"
-                onClick={handleSendBargainRequest}
-                disabled={isProcessing || isBargainDisabled || product.status !== 'available'}
+                onClick={handleSendBargainRequest} // NEW: Call handleSendBargainRequest
+                disabled={isProcessing || isBargainDisabled || product.status !== 'available'} // Disable if processing or bargain is disabled or not available
               >
                 <MessageSquareText className="mr-2 h-5 w-5" /> 
                 {currentBargainStatus === 'pending' ? 'Bargain Pending...' : 
@@ -300,8 +316,8 @@ export default function ProductDetailsPage() {
                 <span>Located in {product.location}</span>
               </div>
               <div className="flex items-center text-sm text-muted-foreground mt-1">
-                <Building2 className="h-4 w-4 mr-1" />
-                <span>College: {product.collegeName}</span>
+                <Building2 className="h-4 w-4 mr-1" /> {/* NEW: College icon */}
+                <span>College: {product.collegeName}</span> {/* NEW: Display collegeName */}
               </div>
             </CardContent>
           </Card>
@@ -326,6 +342,7 @@ export default function ProductDetailsPage() {
             </Alert>
           )}
 
+          {/* NEW: Refund Policy Warning Banner */}
           <Alert variant="destructive" className="mt-6">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle className="font-semibold">Important Refund Policy</AlertTitle>
@@ -334,6 +351,7 @@ export default function ProductDetailsPage() {
             </AlertDescription>
           </Alert>
 
+          {/* NEW: Report Listing Button */}
           <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="w-full mt-6 border-destructive text-destructive hover:bg-destructive/10">
@@ -350,7 +368,7 @@ export default function ProductDetailsPage() {
               <ReportListingForm
                 productId={product.$id}
                 productTitle={product.title}
-                sellerId={product.sellerId}
+                sellerId={product.sellerId} // Consistently use product.sellerId
                 onReportSubmitted={() => setIsReportDialogOpen(false)}
                 onCancel={() => setIsReportDialogOpen(false)}
               />
@@ -359,6 +377,7 @@ export default function ProductDetailsPage() {
         </div>
       </div>
 
+      {/* Confirmation Dialog for Purchase/Rent */}
       <Dialog open={isConfirmPurchaseDialogOpen} onOpenChange={setIsConfirmPurchaseDialogOpen}>
         <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
           <DialogHeader>

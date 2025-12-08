@@ -5,7 +5,7 @@ import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, A
 import { Query, Models } from 'appwrite';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { MarketTransactionItem, FoodOrderItem } from '@/pages/TrackingPage';
+import { MarketTransactionItem, FoodOrderItem } from '@/pages/TrackingPage'; // Re-using interfaces from TrackingPage
 
 interface WalletBalanceState {
   earnedBalance: number;
@@ -43,18 +43,18 @@ export const useWalletBalance = (): WalletBalanceState => {
         [
           Query.or([
             Query.equal('buyerId', user.$id),
-            Query.equal('sellerId', user.$id)
+            Query.equal('sellerId', user.$id) // Changed to sellerId
           ]),
-          Query.limit(100)
+          Query.limit(100) // Fetch a reasonable number of transactions
         ]
       );
 
       marketTransactionsResponse.documents.forEach((doc: Models.Document) => {
         const tx = doc as unknown as MarketTransactionItem;
-        if (tx.sellerId === user.$id && tx.status === 'paid_to_seller' && tx.netSellerAmount !== undefined) {
+        if (tx.sellerId === user.$id && tx.status === 'paid_to_seller' && tx.netSellerAmount !== undefined) { // Changed to sellerId
           totalEarned += tx.netSellerAmount;
         }
-        if (tx.buyerId === user.$id && tx.status !== 'failed') {
+        if (tx.buyerId === user.$id && tx.status !== 'failed') { // Count all non-failed purchases as spent
           totalSpent += tx.amount;
         }
       });
@@ -68,7 +68,7 @@ export const useWalletBalance = (): WalletBalanceState => {
             Query.equal('buyerId', user.$id),
             Query.equal('providerId', user.$id)
           ]),
-          Query.limit(100)
+          Query.limit(100) // Fetch a reasonable number of orders
         ]
       );
 
@@ -77,7 +77,7 @@ export const useWalletBalance = (): WalletBalanceState => {
         if (order.providerId === user.$id && order.status === 'Delivered') {
           totalEarned += order.totalAmount;
         }
-        if (order.buyerId === user.$id && order.status === 'Delivered') {
+        if (order.buyerId === user.$id && order.status === 'Delivered') { // Count delivered orders as spent
           totalSpent += order.totalAmount;
         }
       });
@@ -97,17 +97,18 @@ export const useWalletBalance = (): WalletBalanceState => {
   useEffect(() => {
     fetchBalances();
 
+    // Setup real-time subscriptions for transactions and food orders
     const unsubscribeTransactions = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
       () => {
-        fetchBalances();
+        fetchBalances(); // Refetch balances on any transaction change
       }
     );
 
     const unsubscribeFoodOrders = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_ORDERS_COLLECTION_ID}.documents`,
       () => {
-        fetchBalances();
+        fetchBalances(); // Refetch balances on any food order change
       }
     );
 

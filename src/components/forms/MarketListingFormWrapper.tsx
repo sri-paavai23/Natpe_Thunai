@@ -42,7 +42,7 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
       type: productType,
       
       // Seller Info (from Auth Context)
-      userId: user.$id, // Consistently use userId for the seller's ID
+      sellerId: user.$id, // Consistently use sellerId for the seller's ID
       sellerName: user.name,
       sellerUpiId: userProfile.upiId,
       collegeName: userProfile.collegeName,
@@ -55,7 +55,7 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
       // Type-specific fields (using null for fields not applicable to the current type)
       category: data.category || null, // Used by Sell
       damages: data.damages || null, // Used by Sell/Sports
-      condition: data.condition || null, // Used by Sports
+      condition: data.condition || null, // Used by Sell/Sports
       policies: data.policies || null, // Used by Rent
       
       // Delivery/Ambassador Info

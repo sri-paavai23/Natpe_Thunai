@@ -1,11 +1,11 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Product } from "@/lib/mockData";
-import { Trash2, Award } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { Badge } from "@/components/ui/badge";
-import { getLevelBadge } from "@/utils/badges";
+import { Product } from "@/lib/mockData"; // Import Product interface
+import { Trash2, Award } from 'lucide-react'; // Import Award icon
+import { Link } from 'react-router-dom'; // Import Link
+import { Badge } from "@/components/ui/badge"; // Import Badge
+import { getLevelBadge } from "@/utils/badges"; // NEW: Import getLevelBadge
 
 interface ProductListingCardProps {
   product: Product;
@@ -14,7 +14,7 @@ interface ProductListingCardProps {
 
 const ProductListingCard: React.FC<ProductListingCardProps> = ({ product, onDeveloperDelete }) => {
   const isDeveloper = product.isDeveloper && onDeveloperDelete;
-  const sellerBadge = product.sellerLevel ? getLevelBadge(product.sellerLevel) : undefined;
+  const sellerBadge = product.sellerLevel ? getLevelBadge(product.sellerLevel) : undefined; // NEW: Derive badge from sellerLevel
 
   return (
     <Card className="flex flex-col h-full relative hover:shadow-xl transition-shadow">
@@ -42,7 +42,7 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product, onDeve
           <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
           <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
             <span>Seller: {product.sellerName} ({product.sellerRating} stars)</span>
-            {sellerBadge && (
+            {sellerBadge && ( // NEW: Display seller's level-based badge
               <Badge className="bg-blue-500 text-white flex items-center gap-1">
                   <Award className="h-3 w-3" /> {sellerBadge}
               </Badge>
