@@ -4,7 +4,7 @@ import React, { useState } from "react"; // Add useState import
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MessageSquareText, Loader2, CheckCircle, XCircle, DollarSign } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge }2 } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import { useBargainRequests } from "@/hooks/useBargainRequests";
 import { cn } from "@/lib/utils";

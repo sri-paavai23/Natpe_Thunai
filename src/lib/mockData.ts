@@ -8,7 +8,7 @@ export interface Product {
   sellerLevel?: number; // NEW: Add sellerLevel
   type: "sell" | "rent" | "gift" | "sports" | "gift-request";
   description: string;
-  sellerId: string;
+  userId: string; // FIX: Changed from sellerId to userId
   sellerName: string;
   sellerUpiId: string; // Added UPI ID
   damages?: string;
@@ -21,6 +21,7 @@ export interface Product {
   policies?: string; // Used by Rent
   ambassadorDelivery?: boolean;
   ambassadorMessage?: string;
+  status?: "available" | "sold" | "rented"; // NEW: Add status for product availability
 }
 
 // Removed dummyProducts array. We will fetch from Appwrite.

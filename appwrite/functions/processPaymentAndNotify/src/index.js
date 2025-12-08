@@ -57,6 +57,14 @@ module.exports = async function (req, res) {
             { status: 'sold' } // You'd need to add a 'status' attribute to your products collection
           );
           console.log(`Product ${transactionData.productId} marked as sold.`);
+        } else if (product.type === 'rent') { // NEW: Handle rent type
+          await databases.updateDocument(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_PRODUCTS_COLLECTION_ID,
+            transactionData.productId,
+            { status: 'rented' } 
+          );
+          console.log(`Product ${transactionData.productId} marked as rented.`);
         }
         // Add similar logic for 'rent' type (e.g., update availability, set rental period)
 

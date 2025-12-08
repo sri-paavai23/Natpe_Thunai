@@ -25,7 +25,7 @@ interface Transaction {
   productId: string;
   buyerId: string;
   buyerName: string;
-  sellerId: string;
+  userId: string; // FIX: Changed from sellerId to userId
   sellerName: string;
   sellerUpiId: string;
   amount: number;
@@ -38,6 +38,7 @@ interface Transaction {
   collegeName: string;
   ambassadorDelivery?: boolean;
   ambassadorMessage?: string;
+  utrId?: string; // NEW: Add UTR ID
 }
 
 const DeveloperDashboardPage = () => {
@@ -90,7 +91,12 @@ const DeveloperDashboardPage = () => {
               t.$id === (response.payload as any).$id ? (response.payload as unknown as Transaction) : t
             )
           );
-          toast.info(`Transaction "${(response.payload as any).productTitle}" updated to status: ${(response.payload as any).status}`);
+          const updatedTx = response.payload as unknown as Transaction;
+          toast.info(`Transaction "${updatedTx.productTitle}" updated to status: ${updatedTx.status.replace(/_/g, ' ')}`);
+          // NEW: Developer notification for payment confirmation
+          if (updatedTx.status === 'payment_confirmed_to_developer' && updatedTx.utrId) {
+            toast.success(`New Payment Claim: Order ${updatedTx.$id} by ${updatedTx.buyerName}. TR ID: ${updatedTx.utrId}`);
+          }
         }
       }
     );
@@ -173,7 +179,7 @@ const DeveloperDashboardPage = () => {
       const sellerProfileResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', transaction.sellerId)]
+        [Query.equal('userId', transaction.userId)] // FIX: Use transaction.userId
       );
 
       if (sellerProfileResponse.documents.length === 0) {

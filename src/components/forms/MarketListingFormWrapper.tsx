@@ -42,7 +42,7 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
       type: productType,
       
       // Seller Info (from Auth Context)
-      sellerId: user.$id,
+      userId: user.$id, // FIX: Changed from sellerId to userId
       sellerName: user.name,
       sellerUpiId: userProfile.upiId,
       collegeName: userProfile.collegeName,
@@ -50,6 +50,7 @@ const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onC
       // Mocked/Default Fields
       sellerRating: 5.0, // Default high rating for new sellers
       location: "Campus Area", // Placeholder location
+      status: "available", // NEW: Default status for new listings
       
       // Type-specific fields (using null for fields not applicable to the current type)
       category: data.category || null, // Used by Sell

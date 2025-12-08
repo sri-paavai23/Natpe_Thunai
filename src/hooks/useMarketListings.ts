@@ -34,6 +34,7 @@ export const useMarketListings = (): MarketListingsState => {
     try {
       const queries = [
         Query.orderDesc('$createdAt'),
+        Query.equal('status', 'available'), // NEW: Only fetch available products
       ];
       if (!isDeveloper) { // Apply collegeName filter ONLY for non-developers
         queries.push(Query.equal('collegeName', userProfile!.collegeName));
@@ -52,7 +53,7 @@ export const useMarketListings = (): MarketListingsState => {
             const sellerProfileResponse = await databases.listDocuments(
               APPWRITE_DATABASE_ID,
               APPWRITE_USER_PROFILES_COLLECTION_ID,
-              [Query.equal('userId', product.sellerId), Query.limit(1)]
+              [Query.equal('userId', product.userId), Query.limit(1)] // FIX: Use product.userId
             );
             const sellerProfile = sellerProfileResponse.documents[0] as any;
             return {
@@ -60,7 +61,7 @@ export const useMarketListings = (): MarketListingsState => {
               sellerLevel: sellerProfile?.level ?? 1, // Default to 1 if profile not found
             };
           } catch (sellerError) {
-            console.warn(`Could not fetch profile for seller ${product.sellerId}:`, sellerError);
+            console.warn(`Could not fetch profile for seller ${product.userId}:`, sellerError); // FIX: Use product.userId
             return { ...product, sellerLevel: 1 }; // Default level if profile fetch fails
           }
         })
@@ -129,7 +130,7 @@ export const useMarketListings = (): MarketListingsState => {
         // to update their badge/level.
         if (response.events.includes("databases.*.collections.*.documents.*.update")) {
           // Check if the updated profile belongs to a seller of an existing product
-          const isSellerOfExistingProduct = products.some(p => p.sellerId === payload.userId);
+          const isSellerOfExistingProduct = products.some(p => p.userId === payload.userId); // FIX: Use userId
           if (isSellerOfExistingProduct) {
             fetchProducts(); // Refetch products to update seller levels/badges
           }

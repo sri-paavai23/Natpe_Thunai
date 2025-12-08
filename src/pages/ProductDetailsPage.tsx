@@ -80,7 +80,7 @@ export default function ProductDetailsPage() {
     }
     if (!product) return;
 
-    if (user.$id === product.sellerId) {
+    if (user.$id === product.userId) { // FIX: Use product.userId
       toast.error("You cannot buy/rent your own listing.");
       return;
     }
@@ -131,7 +131,7 @@ export default function ProductDetailsPage() {
           productTitle: product.title,
           buyerId: user.$id,
           buyerName: user.name,
-          sellerId: product.sellerId,
+          sellerId: product.userId, // FIX: Use product.userId
           sellerName: product.sellerName,
           sellerUpiId: product.sellerUpiId,
           amount: transactionAmount,
@@ -177,7 +177,7 @@ export default function ProductDetailsPage() {
       navigate("/auth");
       return;
     }
-    if (user.$id === product.sellerId) {
+    if (user.$id === product.userId) { // FIX: Use product.userId
       toast.error("You cannot bargain on your own listing.");
       return;
     }
@@ -235,7 +235,7 @@ export default function ProductDetailsPage() {
 
   // Determine if bargain button should be disabled
   const isBargainDisabled = 
-    user?.$id === product.sellerId || // Cannot bargain on own product
+    user?.$id === product.userId || // FIX: Use product.userId
     currentBargainStatus === 'pending' || // Already has a pending request
     currentBargainStatus === 'denied'; // Previous request was denied
 
@@ -263,6 +263,11 @@ export default function ProductDetailsPage() {
               <span>{product.sellerRating}</span>
             </div>
             {product.sellerBadge && <Badge variant="default" className="bg-accent text-accent-foreground">{product.sellerBadge}</Badge>}
+            {product.status && product.status !== 'available' && ( // NEW: Display product status if not available
+              <Badge variant="destructive" className="bg-red-500 text-white">
+                {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+              </Badge>
+            )}
           </div>
 
           <p className="text-muted-foreground mb-6">{product.description}</p>
@@ -273,10 +278,10 @@ export default function ProductDetailsPage() {
                 size="lg" 
                 className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
                 onClick={() => handleOpenConfirmPurchase(false)} // Open dialog for direct purchase
-                disabled={isProcessing}
+                disabled={isProcessing || product.status !== 'available'} // Disable if not available
               >
                 <DollarSign className="mr-2 h-5 w-5" /> 
-                {isProcessing ? "Processing..." : actionText}
+                {isProcessing ? "Processing..." : (product.status !== 'available' ? "Not Available" : actionText)}
               </Button>
               
               <Button 
@@ -284,7 +289,7 @@ export default function ProductDetailsPage() {
                 size="lg" 
                 className="w-full border-primary text-primary hover:bg-primary/10"
                 onClick={handleSendBargainRequest} // NEW: Call handleSendBargainRequest
-                disabled={isProcessing || isBargainDisabled} // Disable if processing or bargain is disabled
+                disabled={isProcessing || isBargainDisabled || product.status !== 'available'} // Disable if processing or bargain is disabled or not available
               >
                 <MessageSquareText className="mr-2 h-5 w-5" /> 
                 {currentBargainStatus === 'pending' ? 'Bargain Pending...' : 
@@ -295,8 +300,8 @@ export default function ProductDetailsPage() {
           )}
           
           {!isBuyOrRent && (
-            <Button size="lg" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-              Contact Seller
+            <Button size="lg" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={product.status !== 'available'}>
+              {product.status !== 'available' ? "Not Available" : "Contact Seller"}
             </Button>
           )}
 
@@ -363,7 +368,7 @@ export default function ProductDetailsPage() {
               <ReportListingForm
                 productId={product.$id}
                 productTitle={product.title}
-                sellerId={product.sellerId}
+                sellerId={product.userId} // FIX: Use product.userId
                 onReportSubmitted={() => setIsReportDialogOpen(false)}
                 onCancel={() => setIsReportDialogOpen(false)}
               />
