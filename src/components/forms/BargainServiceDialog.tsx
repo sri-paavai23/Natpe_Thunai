@@ -14,7 +14,7 @@ import { Loader2, DollarSign, Truck } from "lucide-react";
 import { DEVELOPER_UPI_ID } from "@/lib/config";
 import { Badge } from "@/components/ui/badge";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { useNavigate } from "react-router-dom"; // NEW: Import useNavigate
+import { useNavigate } from "react-router-dom";
 
 interface BargainServiceDialogProps {
   service: ServicePost;
@@ -24,7 +24,7 @@ interface BargainServiceDialogProps {
 
 const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, onBargainInitiated, onCancel }) => {
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
-  const navigate = useNavigate(); // NEW: Initialize useNavigate
+  const navigate = useNavigate();
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -55,7 +55,7 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
           productTitle: service.title,
           buyerId: user.$id,
           buyerName: user.name,
-          userId: service.posterId, // Service provider is the seller, use userId
+          sellerId: service.posterId, // Corrected: Use service.posterId as sellerId
           sellerName: service.posterName,
           sellerUpiId: userProfile.upiId, // Buyer's UPI ID for now, actual seller UPI is service.contact
           amount: transactionAmount,
