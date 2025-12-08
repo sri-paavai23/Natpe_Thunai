@@ -25,13 +25,13 @@ module.exports = async function (req, res) {
         const sellerProfileResponse = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_USER_PROFILES_COLLECTION_ID,
-          [sdk.Query.equal('userId', transactionData.userId), sdk.Query.limit(1)] // FIX: Use transactionData.userId
+          [sdk.Query.equal('userId', transactionData.sellerId), sdk.Query.limit(1)] // Changed to transactionData.sellerId
         );
         if (sellerProfileResponse.documents.length > 0) {
           sellerLevel = sellerProfileResponse.documents[0].level || 1;
         }
       } catch (profileError) {
-        console.warn(`Could not fetch seller profile for user ${transactionData.userId}:`, profileError); // FIX: Use transactionData.userId
+        console.warn(`Could not fetch seller profile for user ${transactionData.sellerId}:`, profileError); // Changed to transactionData.sellerId
       }
 
       // Dynamic commission calculation (simplified for function, actual logic in frontend)
