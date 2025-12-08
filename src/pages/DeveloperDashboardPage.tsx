@@ -619,7 +619,7 @@ const DeveloperDashboardPage = () => {
                       <TableCell className="text-foreground">₹{tx.amount.toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.commissionAmount || 0).toFixed(2)}</TableCell>
                       <TableCell className="text-foreground">₹{(tx.netSellerAmount || 0).toFixed(2)}</TableCell>
-                      <TableCell className="text-foreground">{tx.sellerUpiId}</TableCell>
+                      <TableCell className="text-muted-foreground">{tx.sellerUpiId}</TableCell>
                       <TableCell>
                         {tx.ambassadorDelivery ? (
                           <Badge variant="outline" className="flex items-center gap-1 bg-blue-100 text-blue-800">
