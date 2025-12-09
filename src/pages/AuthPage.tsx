@@ -225,7 +225,7 @@ const AuthPage = () => {
       <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-bold text-foreground">
-            {isLogin ? "Welcome Back!" : "Join Natpe Thunai"}
+            {isLogin ? "Campus Hustle: Login to Level Up"}
           </CardTitle>
           <CardDescription className="text-foreground">
             {isLogin ? "Log in to your campus connection hub." : "Create your account to get started."}
