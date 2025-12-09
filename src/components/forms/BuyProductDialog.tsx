@@ -6,51 +6,43 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ServicePost } from "@/hooks/useServiceListings";
+import { Product } from "@/lib/mockData";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
-import { ID, Query } from 'appwrite'; // NEW: Import Query
+import { ID, Query } from 'appwrite';
 import { Loader2, DollarSign, Truck } from "lucide-react";
 import { DEVELOPER_UPI_ID } from "@/lib/config";
-import { Badge } from "@/components/ui/badge";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
 import { useNavigate } from "react-router-dom";
 
-interface BargainServiceDialogProps {
-  service: ServicePost;
-  onBargainInitiated: () => void;
+interface BuyProductDialogProps {
+  product: Product;
+  onPurchaseInitiated: () => void;
   onCancel: () => void;
 }
 
-const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, onBargainInitiated, onCancel }) => {
+const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchaseInitiated, onCancel }) => {
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   const navigate = useNavigate();
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const discountRate = 0.15; // 15% fixed bargain discount
-
-  // Parse original price
-  const priceMatch = service.price.match(/₹(\d+(\.\d+)?)/);
-  const originalPriceValue = priceMatch ? parseFloat(priceMatch[1]) : 0;
-  const bargainedPrice = originalPriceValue * (1 - discountRate);
-
-  const handleInitiateBargainPayment = async () => {
-    if (!user || !userProfile || !service) return;
+  const handleInitiatePurchasePayment = async () => {
+    if (!user || !userProfile || !product) return;
 
     setIsProcessing(true);
 
-    const transactionAmount = parseFloat(bargainedPrice.toFixed(2));
-    const transactionNote = `Bargain for Service: ${service.title}`;
+    const transactionAmount = parseFloat(product.price.replace(/[^0-9.]/g, ''));
+    const transactionNote = `Purchase of Product: ${product.title}`;
 
     try {
-      // Check for existing initiated transaction for this service by this user
+      // Check for existing initiated transaction for this product by this user
       const existingTransactions = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
         [
-          Query.equal('productId', service.$id), // Using service ID as product ID for transaction
+          Query.equal('productId', product.$id),
           Query.equal('buyerId', user.$id),
           Query.equal('status', 'initiated'), // Check for transactions that are still pending payment
           Query.limit(1)
@@ -58,9 +50,9 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
       );
 
       if (existingTransactions.documents.length > 0) {
-        toast.info("You already have an initiated payment for this service. Please complete it or wait for it to expire.");
+        toast.info("You already have an initiated payment for this product. Please complete it or wait for it to expire.");
         setIsProcessing(false);
-        onBargainInitiated(); // Close dialog
+        onPurchaseInitiated(); // Close dialog
         navigate(`/market/confirm-payment/${existingTransactions.documents[0].$id}`);
         return;
       }
@@ -71,17 +63,16 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
         ID.unique(),
         {
-          productId: service.$id, // Using service ID as product ID
-          productTitle: service.title,
+          productId: product.$id,
+          productTitle: product.title,
           buyerId: user.$id,
           buyerName: user.name,
-          sellerId: service.posterId,
-          sellerName: service.posterName,
-          sellerUpiId: userProfile.upiId, // Buyer's UPI ID for now, actual seller UPI is service.contact
+          sellerId: product.sellerId,
+          sellerName: product.sellerName,
+          sellerUpiId: product.sellerUpiId, // This should be the seller's UPI ID
           amount: transactionAmount,
           status: "initiated",
-          type: "service", // Mark as service transaction
-          isBargain: true,
+          type: "product", // Mark as product transaction
           collegeName: userProfile.collegeName,
           ambassadorDelivery: ambassadorDelivery,
           ambassadorMessage: ambassadorMessage || null,
@@ -104,12 +95,12 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
       toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} to the developer. Please complete the payment and note the UTR ID.`);
 
       // Redirect to Confirmation Page (or tracking page)
-      onBargainInitiated(); // Close dialog and trigger parent callback
+      onPurchaseInitiated(); // Close dialog and trigger parent callback
       navigate(`/market/confirm-payment/${transactionId}`); // Navigate to a generic confirmation/tracking page
 
     } catch (error: any) {
-      console.error("Error initiating bargain transaction for service:", error);
-      toast.error(error.message || "Failed to initiate bargain transaction.");
+      console.error("Error initiating purchase transaction:", error);
+      toast.error(error.message || "Failed to initiate purchase transaction.");
     } finally {
       setIsProcessing(false);
     }
@@ -119,19 +110,16 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
     <div className="space-y-4 py-4">
       <div className="space-y-3 py-2">
         <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
-        <p className="text-sm text-muted-foreground">You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the service provider.</p>
+        <p className="text-sm text-muted-foreground">You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the seller.</p>
       </div>
       <div className="space-y-3 py-2">
-        <p className="text-sm text-foreground">Service: <span className="font-semibold">{service.title}</span></p>
+        <p className="text-sm text-foreground">Product: <span className="font-semibold">{product.title}</span></p>
         <p className="text-xl font-bold text-secondary-neon">
-          Bargain Price: ₹{bargainedPrice.toFixed(2)}
+          Price: {product.price}
         </p>
-        <p className="text-xs text-green-500 flex items-center gap-1">
-          <Badge variant="outline" className="bg-green-100 text-green-800">15% Bargain Applied</Badge>
-        </p>
-        <p className="text-xs text-muted-foreground">Provider: {service.posterName}</p>
+        <p className="text-xs text-muted-foreground">Seller: {product.sellerName}</p>
         <p className="text-xs text-destructive-foreground">
-          Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the service provider.
+          Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the seller.
         </p>
       </div>
 
@@ -146,7 +134,7 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
         <Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
           Cancel
         </Button>
-        <Button onClick={handleInitiateBargainPayment} disabled={isProcessing} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+        <Button onClick={handleInitiatePurchasePayment} disabled={isProcessing} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
           {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
         </Button>
       </DialogFooter>
@@ -154,4 +142,4 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
   );
 };
 
-export default BargainServiceDialog;
+export default BuyProductDialog;

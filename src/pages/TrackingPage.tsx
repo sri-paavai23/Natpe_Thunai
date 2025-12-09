@@ -11,7 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Models, Query } from "appwrite";
 import { calculateCommissionRate } from "@/utils/commission";
-import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders"; // NEW IMPORT
+import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
 import { Button } from "@/components/ui/button";
 
 // --- Tracking Item Interfaces ---
@@ -34,9 +34,9 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   sellerId: string; // Consistently use sellerId for the seller's ID
   commissionAmount?: number;
   netSellerAmount?: number;
-  collegeName: string; // NEW: Add collegeName
-  ambassadorDelivery?: boolean; // NEW
-  ambassadorMessage?: string; // NEW
+  collegeName: string;
+  ambassadorDelivery?: boolean;
+  ambassadorMessage?: string;
 }
 
 export interface FoodOrderItem extends BaseTrackingItem {
@@ -49,18 +49,15 @@ export interface FoodOrderItem extends BaseTrackingItem {
   providerId: string;
   orderStatus: FoodOrder["status"]; // Specific status for food orders
   quantity: number;
-  deliveryLocation: string; // Added missing property
-  notes: string; // Added missing property
-  collegeName: string; // NEW: Add collegeName
-  ambassadorDelivery?: boolean; // NEW
-  ambassadorMessage?: string; // NEW
+  deliveryLocation: string;
+  notes: string;
+  collegeName: string;
+  ambassadorDelivery?: boolean;
+  ambassadorMessage?: string;
 }
 
-interface OtherActivityItem extends BaseTrackingItem {
-  type: "Order" | "Service" | "Cancellation" | "Complaint";
-}
-
-type TrackingItem = MarketTransactionItem | FoodOrderItem | OtherActivityItem;
+// Removed OtherActivityItem as dummy data is being removed
+type TrackingItem = MarketTransactionItem | FoodOrderItem;
 
 // --- Conversion Functions ---
 
@@ -90,7 +87,7 @@ const convertAppwriteTransactionToTrackingItem = (doc: Models.Document, currentU
   let description = `Payment for ${transactionDoc.productTitle}`;
   if (isBuyer) {
     description = `Purchase of ${transactionDoc.productTitle}`;
-  } else if (transactionDoc.sellerId === currentUserId) { // Consistently use transactionDoc.sellerId
+  } else if (transactionDoc.sellerId === currentUserId) {
     description = `Sale of ${transactionDoc.productTitle}`;
   }
 
@@ -105,21 +102,21 @@ const convertAppwriteTransactionToTrackingItem = (doc: Models.Document, currentU
     sellerName: transactionDoc.sellerName,
     buyerName: transactionDoc.buyerName,
     buyerId: transactionDoc.buyerId,
-    sellerId: transactionDoc.sellerId, // Consistently use transactionDoc.sellerId
+    sellerId: transactionDoc.sellerId,
     commissionAmount: transactionDoc.commissionAmount,
     netSellerAmount: transactionDoc.netSellerAmount,
-    isUserProvider: transactionDoc.sellerId === currentUserId, // Consistently use transactionDoc.sellerId
-    collegeName: transactionDoc.collegeName, // NEW: Add collegeName
-    ambassadorDelivery: transactionDoc.ambassadorDelivery, // NEW
-    ambassadorMessage: transactionDoc.ambassadorMessage, // NEW
+    isUserProvider: transactionDoc.sellerId === currentUserId,
+    collegeName: transactionDoc.collegeName,
+    ambassadorDelivery: transactionDoc.ambassadorDelivery,
+    ambassadorMessage: transactionDoc.ambassadorMessage,
   };
 };
 
 // New conversion function for Food Orders
 const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: string): FoodOrderItem => {
   const isBuyer = doc.buyerId === currentUserId;
-  const description = isBuyer 
-    ? `Order placed for ${doc.offeringTitle}` 
+  const description = isBuyer
+    ? `Order placed for ${doc.offeringTitle}`
     : `Order received for ${doc.offeringTitle}`;
 
   return {
@@ -137,33 +134,26 @@ const convertAppwriteFoodOrderToTrackingItem = (doc: FoodOrder, currentUserId: s
     orderStatus: doc.status,
     isUserProvider: doc.providerId === currentUserId,
     quantity: doc.quantity,
-    deliveryLocation: doc.deliveryLocation, // Mapped missing property
-    notes: doc.notes, // Mapped missing property
-    collegeName: doc.collegeName, // NEW: Add collegeName
-    ambassadorDelivery: doc.ambassadorDelivery, // NEW
-    ambassadorMessage: doc.ambassadorMessage, // NEW
+    deliveryLocation: doc.deliveryLocation,
+    notes: doc.notes,
+    collegeName: doc.collegeName,
+    ambassadorDelivery: doc.ambassadorDelivery,
+    ambassadorMessage: doc.ambassadorMessage,
   };
 };
 
-const dummyOtherItems: OtherActivityItem[] = [
-  { id: "t1", type: "Order", description: "Gaming Headset from The Exchange", status: "In Progress", date: "2024-07-20", isUserProvider: false },
-  { id: "t2", type: "Service", description: "Resume Building Service", status: "Completed", date: "2024-07-18", isUserProvider: false },
-  { id: "t3", type: "Cancellation", description: "Rent request for Bicycle", status: "Pending", date: "2024-07-22", isUserProvider: false },
-  { id: "t4", type: "Complaint", description: "Issue with food delivery", status: "Resolved", date: "2024-07-15", isUserProvider: false },
-  { id: "t5", type: "Order", description: "Textbook: Advanced Physics", status: "Pending", date: "2024-07-23", isUserProvider: false },
-];
-
+// Removed dummyOtherItems
 
 const TrackingPage = () => {
   const { user, userProfile } = useAuth();
   const { orders: foodOrders, isLoading: isLoadingFood, refetch: refetchFoodOrders } = useFoodOrders();
-  
+
   const [trackingItems, setTrackingItems] = useState<TrackingItem[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const fetchMarketTransactions = useCallback(async () => {
-    if (!user?.$id || !userProfile?.collegeName) { // NEW: Only fetch if user and collegeName are available
+    if (!user?.$id || !userProfile?.collegeName) {
       setLoadingTransactions(false);
       return [];
     }
@@ -176,9 +166,9 @@ const TrackingPage = () => {
         [
           Query.or([
             Query.equal('buyerId', user.$id),
-            Query.equal('sellerId', user.$id) // Consistently use sellerId
+            Query.equal('sellerId', user.$id)
           ]),
-          Query.equal('collegeName', userProfile.collegeName), // NEW: Filter by collegeName
+          Query.equal('collegeName', userProfile.collegeName),
           Query.orderDesc('$createdAt')
         ]
       );
@@ -189,24 +179,19 @@ const TrackingPage = () => {
       toast.error("Failed to load market transactions.");
       return [];
     }
-  }, [user?.$id, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+  }, [user?.$id, userProfile?.collegeName]);
 
   const mergeAndSetItems = useCallback(async () => {
     const fetchedTransactions = await fetchMarketTransactions();
-    
-    // foodOrders is already filtered by collegeName internally by useFoodOrders hook
+
     const foodOrderItems = foodOrders.map(o => convertAppwriteFoodOrderToTrackingItem(o, user!.$id));
 
-    // Filter dummy items by collegeName (assuming dummy items also have a collegeName or are global)
-    // For now, we'll assume dummy items are global or don't have collegeName, so they won't be filtered.
-    // In a real scenario, dummy items should also have a collegeName attribute.
-    const collegeFilteredDummyItems = dummyOtherItems; // No collegeName on dummy items, so they are "global" for now.
-    
-    const mergedItems = [...fetchedTransactions, ...foodOrderItems, ...collegeFilteredDummyItems];
-    
+    // Removed dummyOtherItems from merge
+    const mergedItems = [...fetchedTransactions, ...foodOrderItems];
+
     // Sort by creation date (newest first)
     mergedItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
+
     setTrackingItems(mergedItems);
     setLoadingTransactions(false);
   }, [fetchMarketTransactions, foodOrders, user]);
@@ -306,14 +291,7 @@ const TrackingPage = () => {
 
   const getIcon = (type: TrackingItem["type"]) => {
     switch (type) {
-      case "Order":
-        return <Package className="h-4 w-4 text-secondary-neon" />;
-      case "Service":
-        return <Truck className="h-4 w-4 text-secondary-neon" />;
-      case "Cancellation":
-        return <XCircle className="h-4 w-4 text-destructive" />;
-      case "Complaint":
-        return <MessageSquareText className="h-4 w-4 text-yellow-500" />;
+      // Removed "Order", "Service", "Cancellation", "Complaint" as they are not real data
       case "Transaction":
         return <DollarSign className="h-4 w-4 text-green-500" />;
       case "Food Order":
@@ -344,14 +322,14 @@ const TrackingPage = () => {
               trackingItems.map((item) => {
                 const isSellerOrProvider = item.isUserProvider;
                 const commissionRateDisplay = (dynamicCommissionRate * 100).toFixed(2);
-                
+
                 // Determine if it's a Food Order for specific logic
                 const isFoodOrder = item.type === "Food Order";
                 const foodItem = isFoodOrder ? (item as FoodOrderItem) : null;
 
                 // Calculate expected net amount if commission hasn't been deducted yet (Market only)
                 const marketItem = item.type === "Transaction" ? (item as MarketTransactionItem) : null;
-                
+
                 // Use dynamicCommissionRate for calculation if commissionAmount/netSellerAmount are missing (i.e., status is 'initiated' or 'payment_confirmed_to_developer')
                 const expectedCommission = marketItem?.amount ? marketItem.amount * dynamicCommissionRate : 0;
                 const expectedNet = marketItem?.amount ? marketItem.amount - expectedCommission : 0;
@@ -375,7 +353,7 @@ const TrackingPage = () => {
                     {marketItem && (
                       <div className="space-y-1 text-xs border-t border-border pt-2">
                         <p className="text-muted-foreground">Amount: <span className="font-semibold text-foreground">₹{marketItem.amount?.toFixed(2)}</span></p>
-                        {marketItem.ambassadorDelivery && ( // NEW
+                        {marketItem.ambassadorDelivery && (
                           <p className="text-muted-foreground flex items-center gap-1">
                             <Truck className="h-3 w-3" /> Ambassador Delivery Requested
                             {marketItem.ambassadorMessage && <span className="ml-1">({marketItem.ambassadorMessage})</span>}
@@ -392,7 +370,7 @@ const TrackingPage = () => {
                             )}
                             {marketItem.status === "Commission Deducted (Awaiting Seller Pay)" && (
                               <p className="text-orange-500">
-                                Commission deducted (₹{marketItem.commissionAmount?.toFixed(2) || expectedCommission.toFixed(2)}). 
+                                Commission deducted (₹{marketItem.commissionAmount?.toFixed(2) || expectedCommission.toFixed(2)}).
                                 Awaiting transfer of net amount: ₹{marketItem.netSellerAmount?.toFixed(2) || expectedNet.toFixed(2)}.
                               </p>
                             )}
@@ -412,13 +390,13 @@ const TrackingPage = () => {
                         <p className="text-xs text-muted-foreground">Total: <span className="font-semibold text-foreground">₹{foodItem.totalAmount.toFixed(2)}</span> | Qty: {foodItem.quantity}</p>
                         <p className="text-xs text-muted-foreground">Delivery to: {foodItem.deliveryLocation}</p>
                         {foodItem.notes && <p className="text-xs text-muted-foreground">Notes: {foodItem.notes}</p>}
-                        {foodItem.ambassadorDelivery && ( // NEW
+                        {foodItem.ambassadorDelivery && (
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
                             <Truck className="h-3 w-3" /> Ambassador Delivery Requested
                             {foodItem.ambassadorMessage && <span className="ml-1">({foodItem.ambassadorMessage})</span>}
                           </p>
                         )}
-                        
+
                         {/* Provider Actions */}
                         {isSellerOrProvider && foodItem.orderStatus !== "Delivered" && foodItem.orderStatus !== "Cancelled" && (
                           <div className="flex justify-end">
@@ -430,7 +408,7 @@ const TrackingPage = () => {
                             >
                               {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : (
                                 <>
-                                  <ArrowRight className="h-3 w-3 mr-1" /> 
+                                  <ArrowRight className="h-3 w-3 mr-1" />
                                   {foodItem.orderStatus === "Pending Confirmation" && "Confirm Order"}
                                   {foodItem.orderStatus === "Confirmed" && "Start Preparing"}
                                   {foodItem.orderStatus === "Preparing" && "Mark Out for Delivery"}
