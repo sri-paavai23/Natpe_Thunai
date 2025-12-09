@@ -14,17 +14,26 @@ interface TotalTransactionsState {
 }
 
 export const useTotalTransactions = (collegeNameFilter?: string): TotalTransactionsState => { // NEW: Renamed parameter to collegeNameFilter
-  const { userProfile } = useAuth(); // NEW: Get userProfile here
+  const { userProfile, isLoading: isAuthLoading } = useAuth(); // NEW: Get isAuthLoading
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalTransactions = useCallback(async () => {
+    if (isAuthLoading) { // NEW: Wait for AuthContext to load
+      setIsLoading(true);
+      return;
+    }
+
     // NEW: If user is not a developer and their collegeName is not set, exit early.
     // This prevents unnecessary API calls and ensures isLoading is set to false.
-    if (userProfile?.role !== 'developer' && !userProfile?.collegeName) {
+    const isDeveloper = userProfile?.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile?.collegeName;
+
+    if (!isDeveloper && !collegeToFilterBy) {
       setIsLoading(false);
       setTotalTransactions(0);
+      setError("User profile is missing college information. Cannot fetch total transactions.");
       return;
     }
 
@@ -32,10 +41,8 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
     setError(null);
     try {
       const queries = [Query.limit(1)]; // We only need the total count
-      // NEW: If user is a developer, or no specific collegeNameFilter is provided, fetch all.
-      // Otherwise, filter by the provided collegeNameFilter.
-      if (userProfile?.role !== 'developer' && collegeNameFilter) {
-        queries.push(Query.equal('collegeName', collegeNameFilter));
+      if (!isDeveloper && collegeToFilterBy) { // Apply collegeName filter ONLY for non-developers
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
       }
 
       const response = await databases.listDocuments(
@@ -51,7 +58,7 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
     } finally {
       setIsLoading(false);
     }
-  }, [collegeNameFilter, userProfile?.role, userProfile?.collegeName]); // NEW: Depend on userProfile.role and userProfile.collegeName
+  }, [isAuthLoading, collegeNameFilter, userProfile?.role, userProfile?.collegeName]); // NEW: Depend on isAuthLoading
 
   useEffect(() => {
     fetchTotalTransactions();

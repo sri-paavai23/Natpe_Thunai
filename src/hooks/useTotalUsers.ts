@@ -14,17 +14,26 @@ interface TotalUsersState {
 }
 
 export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => { // NEW: Renamed parameter to collegeNameFilter
-  const { userProfile } = useAuth(); // NEW: Get userProfile here
+  const { userProfile, isLoading: isAuthLoading } = useAuth(); // NEW: Get isAuthLoading
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalUsers = useCallback(async () => {
+    if (isAuthLoading) { // NEW: Wait for AuthContext to load
+      setIsLoading(true);
+      return;
+    }
+
     // NEW: If user is not a developer and their collegeName is not set, exit early.
     // This prevents unnecessary API calls and ensures isLoading is set to false.
-    if (userProfile?.role !== 'developer' && !userProfile?.collegeName) {
+    const isDeveloper = userProfile?.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile?.collegeName; // Use explicit filter or user's college
+
+    if (!isDeveloper && !collegeToFilterBy) {
       setIsLoading(false);
       setTotalUsers(0);
+      setError("User profile is missing college information. Cannot fetch total users.");
       return;
     }
 
@@ -33,10 +42,8 @@ export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => { 
     try {
       const queries = [Query.limit(1)]; // We only need the total count
 
-      // NEW: If user is a developer, or no specific collegeNameFilter is provided, fetch all.
-      // Otherwise, filter by the provided collegeNameFilter.
-      if (userProfile?.role !== 'developer' && collegeNameFilter) {
-        queries.push(Query.equal('collegeName', collegeNameFilter));
+      if (!isDeveloper && collegeToFilterBy) { // Apply collegeName filter ONLY for non-developers
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
       }
 
       const response = await databases.listDocuments(
@@ -52,7 +59,7 @@ export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => { 
     } finally {
       setIsLoading(false);
     }
-  }, [collegeNameFilter, userProfile?.role, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+  }, [isAuthLoading, collegeNameFilter, userProfile?.role, userProfile?.collegeName]); // NEW: Depend on isAuthLoading
 
   useEffect(() => {
     fetchTotalUsers();
