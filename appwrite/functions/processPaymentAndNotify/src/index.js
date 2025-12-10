@@ -108,6 +108,20 @@ module.exports = async function (req, res) {
 
         res.json({ success: true, message: 'Transaction processed, commission deducted, and product status updated.' });
 
+      } else if (transactionData.status === 'seller_confirmed_delivery') { // NEW: Handle seller_confirmed_delivery status
+        // This status means the seller has confirmed delivery, now the developer can mark it as paid.
+        await databases.updateDocument(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_TRANSACTIONS_COLLECTION_ID,
+          transactionData.$id,
+          {
+            status: 'paid_to_seller',
+          }
+        );
+        console.log(`Transaction ${transactionData.$id} updated to 'paid_to_seller' after seller confirmed delivery.`);
+        console.log(`Developer Notification: Seller ${transactionData.sellerName} confirmed delivery for transaction ${transactionData.$id}. Proceed with payout of ₹${transactionData.netSellerAmount}.`);
+        res.json({ success: true, message: 'Transaction status updated to paid_to_seller after seller confirmation.' });
+
       } else if (transactionData.status === 'initiated') {
         console.log(`Transaction ${transactionData.$id} initiated. Awaiting payment confirmation from buyer.`);
         res.json({ success: true, message: 'Transaction initiated, awaiting buyer payment confirmation.' });

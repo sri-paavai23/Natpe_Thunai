@@ -70,6 +70,8 @@ const mapAppwriteStatusToTrackingStatus = (appwriteStatus: string): string => {
       return "Payment Confirmed (Processing)";
     case "commission_deducted":
       return "Commission Deducted (Awaiting Seller Pay)";
+    case "seller_confirmed_delivery": // NEW STATUS
+      return "Seller Confirmed Delivery (Awaiting Payout)";
     case "paid_to_seller":
       return "Completed";
     case "failed":
@@ -263,6 +265,28 @@ const TrackingPage = () => {
     }
   };
 
+  // NEW: Function to handle seller marking market item as delivered
+  const handleMarkMarketItemDelivered = async (transactionId: string) => {
+    if (isUpdatingStatus) return;
+    setIsUpdatingStatus(true);
+
+    try {
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        transactionId,
+        { status: "seller_confirmed_delivery" } // Update to new status
+      );
+      toast.success("Delivery confirmed! Developer will process your payout shortly.");
+      fetchMarketTransactions(); // Refetch to update local state
+    } catch (error: any) {
+      console.error("Error marking market item as delivered:", error);
+      toast.error(error.message || "Failed to mark item as delivered.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   // --- UI Helpers ---
 
   const getStatusBadgeClass = (status: string) => {
@@ -277,6 +301,7 @@ const TrackingPage = () => {
       case "Preparing":
         return "bg-orange-500 text-white";
       case "Out for Delivery":
+      case "Seller Confirmed Delivery (Awaiting Payout)": // NEW STATUS CLASS
         return "bg-purple-500 text-white";
       case "Completed":
       case "Delivered":
@@ -374,8 +399,26 @@ const TrackingPage = () => {
                                 Awaiting transfer of net amount: ₹{marketItem.netSellerAmount?.toFixed(2) || expectedNet.toFixed(2)}.
                               </p>
                             )}
+                            {marketItem.status === "Seller Confirmed Delivery (Awaiting Payout)" && ( // NEW STATUS MESSAGE
+                              <p className="text-purple-500">
+                                You confirmed delivery. Awaiting developer payout of net amount: ₹{marketItem.netSellerAmount?.toFixed(2) || expectedNet.toFixed(2)}.
+                              </p>
+                            )}
                             {marketItem.status === "Completed" && (
                               <p className="text-green-500">Payment complete. Net amount ₹{marketItem.netSellerAmount?.toFixed(2)} transferred.</p>
+                            )}
+                            {/* NEW: Seller action button for market items */}
+                            {marketItem.status === "Commission Deducted (Awaiting Seller Pay)" && (
+                              <div className="flex justify-end mt-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleMarkMarketItemDelivered(marketItem.id)}
+                                  disabled={isUpdatingStatus}
+                                  className="bg-green-500 text-white hover:bg-green-600 text-xs"
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-1" /> Mark as Delivered
+                                </Button>
+                              </div>
                             )}
                           </>
                         ) : (
