@@ -341,7 +341,7 @@ const AuthPage = () => {
                     className="bg-input text-foreground border-border focus:ring-ring focus:border-ring file:text-primary-foreground file:bg-primary-blue-light file:border-0 file:mr-4 file:py-2 file:px-4 file:rounded-md"
                   />
                   {collegeIdPhoto && <p className="text-xs text-muted-foreground mt-1">File selected: {collegeIdPhoto.name}</p>}
-                  <Link to="/help/image-to-url" target="_blank" rel="noopener noreferrer" className="text-xs text-secondary-neon hover:underline flex items-center gap-1 mt-1">
+                  <Link to="/help/Click-To-Compress-The-Image" target="_blank" rel="noopener noreferrer" className="text-xs text-secondary-neon hover:underline flex items-center gap-1 mt-1">
                     <Image className="h-3 w-3" /> How to get URL?
                   </Link>
                 </div>
