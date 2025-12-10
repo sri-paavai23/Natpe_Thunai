@@ -97,8 +97,7 @@ const ProfileDetailsPage = () => {
                     upiId: userProfile.upiId || "",
                     gender: userProfile.gender,
                     userType: userProfile.userType,
-                    collegeName: userProfile.collegeName,
-                    otherCollegeName: userProfile.otherCollegeName || "",
+                    collegeName: userProfile.collegeName || "",
                     avatarStyle: userProfile.avatarStyle || "pixel-art",
                   }}
                   onSave={handleSaveProfile}
