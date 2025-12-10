@@ -13,6 +13,8 @@ interface ContributionStoryDialogProps {
 }
 
 const ContributionStoryDialog: React.FC<ContributionStoryDialogProps> = ({ isOpen, onClose }) => {
+  const upiLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDeveloper&cu=INR`;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
@@ -63,7 +65,12 @@ const ContributionStoryDialog: React.FC<ContributionStoryDialogProps> = ({ isOpe
             </p>
             <div className="flex flex-col items-center space-y-2 p-3 border border-border rounded-md bg-background">
               <img src="/qr.jpg" alt="Developer UPI QR Code" className="w-32 h-32 object-contain rounded-md" />
-              <p className="text-sm font-medium text-foreground">UPI ID: <span className="text-secondary-neon">{DEVELOPER_UPI_ID}</span></p>
+              <p className="text-sm font-medium text-foreground">
+                UPI ID:{" "}
+                <a href={upiLink} className="text-secondary-neon underline hover:text-secondary-neon/80" target="_blank" rel="noopener noreferrer">
+                  {DEVELOPER_UPI_ID}
+                </a>
+              </p>
               <p className="text-xs text-muted-foreground text-center">Scan or use this UPI ID to contribute any amount you wish.</p>
             </div>
           </div>

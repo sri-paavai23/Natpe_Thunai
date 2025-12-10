@@ -12,8 +12,8 @@ import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
-import FoodOfferingCard from "@/components/FoodOfferingCard"; // NEW IMPORT
-import FoodCustomRequestsList from "@/components/FoodCustomRequestsList"; // NEW IMPORT
+import FoodOfferingCard from "@/components/FoodOfferingCard";
+import FoodCustomRequestsList from "@/components/FoodCustomRequestsList";
 
 // Service categories specific to this page
 const OFFERING_CATEGORIES = ["homemade-meals", "wellness-remedies"];
@@ -34,7 +34,7 @@ const CUSTOM_REQUEST_OPTIONS = [
 
 
 const FoodWellnessPage = () => {
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth(); // NEW: Get incrementAmbassadorDeliveriesCount
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isPostCustomOrderDialogOpen, setIsPostCustomOrderDialogOpen] = useState(false);
   
@@ -65,7 +65,7 @@ const FoodWellnessPage = () => {
         posterId: user.$id,
         posterName: user.name,
         isCustomOrder: false,
-        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
+        collegeName: userProfile.collegeName,
       };
 
       await databases.createDocument(
@@ -104,7 +104,7 @@ const FoodWellnessPage = () => {
         posterId: user.$id,
         posterName: user.name,
         isCustomOrder: true,
-        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
+        collegeName: userProfile.collegeName,
       };
 
       await databases.createDocument(
@@ -150,6 +150,11 @@ const FoodWellnessPage = () => {
                   onSubmit={handlePostService} 
                   onCancel={() => setIsPostServiceDialogOpen(false)} 
                   categoryOptions={OFFERING_OPTIONS}
+                  titlePlaceholder="e.g., Delicious Homemade Biryani"
+                  descriptionPlaceholder="Describe your food or remedy, ingredients, benefits, etc."
+                  pricePlaceholder="e.g., 150 INR per plate or 200 INR for a wellness drink"
+                  contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
+                  ambassadorMessagePlaceholder="e.g., Deliver to Block A, Room 101 by 7 PM"
                 />
               </DialogContent>
             </Dialog>
@@ -169,6 +174,12 @@ const FoodWellnessPage = () => {
                   onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
                   isCustomOrder={true} 
                   categoryOptions={CUSTOM_REQUEST_OPTIONS}
+                  titlePlaceholder="e.g., Request for Vegan Pasta"
+                  descriptionPlaceholder="Describe the custom food or remedy you need, specific requirements, etc."
+                  customOrderDescriptionPlaceholder="Specify details like ingredients, dietary restrictions, quantity, preferred time."
+                  pricePlaceholder="e.g., 250 INR (negotiable) or Your budget"
+                  contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
+                  ambassadorMessagePlaceholder="e.g., Pick up from my room, Block B, Room 205"
                 />
               </DialogContent>
             </Dialog>
