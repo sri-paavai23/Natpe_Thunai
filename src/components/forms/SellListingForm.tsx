@@ -31,7 +31,6 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
   const [priceValue, setPriceValue] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [otherCategory, setOtherCategory] = useState(""); // New state for "Other" category
   const [damages, setDamages] = useState("");
   const [imageUrl, setImageUrl] = useState(""); // Initialize as empty string
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
@@ -52,13 +51,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Determine the final category
-    const finalCategory = category === "other" && otherCategory.trim()
-      ? otherCategory.trim()
-      : category;
-
-    if (!title || !priceValue || !description || !finalCategory) {
+    if (!title || !priceValue || !description || !category) {
       toast.error("Please fill in all required fields.");
       return;
     }
@@ -73,20 +66,17 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
 
     const finalImageUrl = imageUrl.trim() || "/app-logo.png"; // Default to app logo if empty
 
-    onSubmit({ title, price: `₹${priceValue}`, description, category: finalCategory, damages, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
+    onSubmit({ title, price: `₹${priceValue}`, description, category, damages, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
     setTitle("");
     setPriceValue("");
     setDescription("");
     setCategory("");
-    setOtherCategory(""); // Reset other category
     setDamages("");
     setImageUrl("");
     setAmbassadorDelivery(false);
     setAmbassadorMessage("");
     resetAnalysis();
   };
-
-  const showOtherCategoryInput = category === "other";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -138,7 +128,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
       </div>
       <div>
         <Label htmlFor="category" className="text-foreground">Category</Label>
-        <Select value={category} onValueChange={(value) => { setCategory(value); setOtherCategory(""); resetAnalysis(); }} required>
+        <Select value={category} onValueChange={(value) => { setCategory(value); resetAnalysis(); }} required>
           <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
@@ -149,20 +139,6 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
           </SelectContent>
         </Select>
       </div>
-      {showOtherCategoryInput && (
-        <div>
-          <Label htmlFor="otherCategory" className="text-foreground">Specify Other Category</Label>
-          <Input
-            id="otherCategory"
-            type="text"
-            placeholder="e.g., Sports Equipment"
-            value={otherCategory}
-            onChange={(e) => { setOtherCategory(e.target.value); resetAnalysis(); }}
-            required
-            className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-          />
-        </div>
-      )}
       <div>
         <div className="flex items-center justify-between">
           <Label htmlFor="imageUrl" className="text-foreground">Image URL (Optional)</Label>

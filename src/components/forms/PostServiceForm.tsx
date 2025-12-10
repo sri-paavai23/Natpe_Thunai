@@ -12,13 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required."),
   description: z.string().min(1, "Description is required."),
   category: z.string().min(1, "Category is required."),
-  otherCategory: z.string().optional(), // For "Other" category input
   price: z.string().min(1, "Price is required."),
   contact: z.string().min(10, "Contact information is required."),
   customOrderDescription: z.string().optional(),
@@ -59,7 +57,6 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
       title: "",
       description: "",
       category: "",
-      otherCategory: "", // Initialize otherCategory
       price: "",
       contact: "",
       customOrderDescription: "",
@@ -68,22 +65,10 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
     },
   });
 
-  const selectedCategory = form.watch("category");
-  const showOtherCategoryInput = selectedCategory === "other";
-
   const handleSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      // If "Other" is selected, use the value from otherCategory field
-      const finalCategory = data.category === "other" && data.otherCategory
-        ? data.otherCategory
-        : data.category;
-
-      await onSubmit({ ...data, category: finalCategory });
-      toast.success(isCustomOrder ? "Custom request posted!" : "Offering posted!");
-    } catch (e: any) {
-      console.error("Error posting service:", e);
-      toast.error(e.message || "Failed to post service.");
+      await onSubmit(data);
     } finally {
       setIsSubmitting(false);
     }
@@ -139,7 +124,7 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-foreground">Category</FormLabel>
-              <Select onValueChange={(value) => { field.onChange(value); form.setValue("otherCategory", ""); }} defaultValue={field.value} disabled={isSubmitting}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
                   <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
                     <SelectValue placeholder="Select a category" />
@@ -157,21 +142,6 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
             </FormItem>
           )}
         />
-        {showOtherCategoryInput && (
-          <FormField
-            control={form.control}
-            name="otherCategory"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Specify Other Category</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="e.g., Vegan Desserts" disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         <FormField
           control={form.control}
           name="price"

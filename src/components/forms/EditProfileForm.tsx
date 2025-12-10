@@ -13,9 +13,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { DICEBEAR_AVATAR_STYLES, generateAvatarUrl } from "@/utils/avatarGenerator"; // Import generateAvatarUrl
-import Combobox from "@/components/ui/combobox";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar components
+import { DICEBEAR_AVATAR_STYLES } from "@/utils/avatarGenerator";
+import Combobox from "@/components/ui/combobox"; // Import the new Combobox component
 
 // Define the form schema using Zod
 const formSchema = z.object({
@@ -31,7 +30,6 @@ const formSchema = z.object({
     required_error: "Please select a user type.",
   }),
   collegeName: z.string().min(1, "College name is required."),
-  otherCollegeName: z.string().optional(), // For "Other" college input
   avatarStyle: z.enum(DICEBEAR_AVATAR_STYLES as [string, ...string[]], {
     required_error: "Please select an avatar style.",
   }),
@@ -204,23 +202,95 @@ const COLLEGE_OPTIONS = [
   { value: "government-arts-college-kovilpatti", label: "Government Arts College, Kovilpatti" },
   { value: "government-arts-college-ottapidaram", label: "Government Arts College, Ottapidaram" },
   { value: "government-arts-college-kayathar", label: "Government Arts College, Kayathar" },
-  { value: "government-arts-college-sriperumbudur", label: "Sriperumbudur" },
-  { value: "government-arts-college-tambaram", label: "Tambaram" },
-  { value: "government-arts-college-ponneri", label: "Ponneri" },
-  { value: "government-arts-college-gummidipoondi", label: "Gummidipoondi" },
-  { value: "government-arts-college-uthukottai", label: "Uthukottai" },
-  { value: "government-arts-college-tiruttani", label: "Tiruttani" },
-  { value: "government-arts-college-arani", label: "Arani" },
-  { value: "government-arts-college-vandavasi", label: "Vandavasi" },
-  { value: "government-arts-college-cheyyar", label: "Cheyyar" },
-  { value: "government-arts-college-polur", label: "Polur" },
-  { value: "government-arts-college-gingee", label: "Gingee" },
-  { value: "government-arts-college-tindivanam", label: "Tindivanam" },
-  { value: "government-arts-college-ulundurpet", label: "Ulundurpet" },
-  { value: "government-arts-college-vriddhachalam", label: "Vriddhachalam" },
-  { value: "government-arts-college-panruti", label: "Panruti" },
-  { value: "government-arts-college-neyveli", label: "Neyveli" },
-  { value: "government-arts-college-sethiathope", label: "Sethiathope" },
+  { value: "government-arts-college-sriperumbudur", label: "Government Arts College, Sriperumbudur" },
+  { value: "government-arts-college-tambaram", label: "Government Arts College, Tambaram" },
+  { value: "government-arts-college-ponneri", label: "Government Arts College, Ponneri" },
+  { value: "government-arts-college-gummidipoondi", label: "Government Arts College, Gummidipoondi" },
+  { value: "government-arts-college-uthukottai", label: "Government Arts College, Uthukottai" },
+  { value: "government-arts-college-tiruttani", label: "Government Arts College, Tiruttani" },
+  { value: "government-arts-college-arani", label: "Government Arts College, Arani" },
+  { value: "government-arts-college-vandavasi", label: "Government Arts College, Vandavasi" },
+  { value: "government-arts-college-cheyyar", label: "Government Arts College, Cheyyar" },
+  { value: "government-arts-college-polur", label: "Government Arts College, Polur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
+  { value: "government-arts-college-kattumannarkoil", label: "Government Arts College, Kattumannarkoil" },
+  { value: "government-arts-college-chinnasalem", label: "Government Arts College, Chinnasalem" },
+  { value: "government-arts-college-kalvarayan-hills", label: "Government Arts College, Kalvarayan Hills" },
+  { value: "government-arts-college-sankarapuram", label: "Government Arts College, Sankarapuram" },
+  { value: "government-arts-college-tirukoilur", label: "Government Arts College, Tirukoilur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
+  { value: "government-arts-college-kattumannarkoil", label: "Government Arts College, Kattumannarkoil" },
+  { value: "government-arts-college-chinnasalem", label: "Government Arts College, Chinnasalem" },
+  { value: "government-arts-college-kalvarayan-hills", label: "Government Arts College, Kalvarayan Hills" },
+  { value: "government-arts-college-sankarapuram", label: "Government Arts College, Sankarapuram" },
+  { value: "government-arts-college-tirukoilur", label: "Government Arts College, Tirukoilur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
+  { value: "government-arts-college-kattumannarkoil", label: "Government Arts College, Kattumannarkoil" },
+  { value: "government-arts-college-chinnasalem", label: "Government Arts College, Chinnasalem" },
+  { value: "government-arts-college-kalvarayan-hills", label: "Government Arts College, Kalvarayan Hills" },
+  { value: "government-arts-college-sankarapuram", label: "Government Arts College, Sankarapuram" },
+  { value: "government-arts-college-tirukoilur", label: "Government Arts College, Tirukoilur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
+  { value: "government-arts-college-kattumannarkoil", label: "Government Arts College, Kattumannarkoil" },
+  { value: "government-arts-college-chinnasalem", label: "Government Arts College, Chinnasalem" },
+  { value: "government-arts-college-kalvarayan-hills", label: "Government Arts College, Kalvarayan Hills" },
+  { value: "government-arts-college-sankarapuram", label: "Government Arts College, Sankarapuram" },
+  { value: "government-arts-college-tirukoilur", label: "Government Arts College, Tirukoilur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
+  { value: "government-arts-college-kattumannarkoil", label: "Government Arts College, Kattumannarkoil" },
+  { value: "government-arts-college-chinnasalem", label: "Government Arts College, Chinnasalem" },
+  { value: "government-arts-college-kalvarayan-hills", label: "Government Arts College, Kalvarayan Hills" },
+  { value: "government-arts-college-sankarapuram", label: "Government Arts College, Sankarapuram" },
+  { value: "government-arts-college-tirukoilur", label: "Government Arts College, Tirukoilur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
+  { value: "government-arts-college-kattumannarkoil", label: "Government Arts College, Kattumannarkoil" },
+  { value: "government-arts-college-chinnasalem", label: "Government Arts College, Chinnasalem" },
+  { value: "government-arts-college-kalvarayan-hills", label: "Government Arts College, Kalvarayan Hills" },
+  { value: "government-arts-college-sankarapuram", label: "Government Arts College, Sankarapuram" },
+  { value: "government-arts-college-tirukoilur", label: "Government Arts College, Tirukoilur" },
+  { value: "government-arts-college-gingee", label: "Government Arts College, Gingee" },
+  { value: "government-arts-college-tindivanam", label: "Government Arts College, Tindivanam" },
+  { value: "government-arts-college-ulundurpet", label: "Government Arts College, Ulundurpet" },
+  { value: "government-arts-college-vriddhachalam", label: "Government Arts College, Vriddhachalam" },
+  { value: "government-arts-college-panruti", label: "Government Arts College, Panruti" },
+  { value: "government-arts-college-neyveli", label: "Government Arts College, Neyveli" },
+  { value: "government-arts-college-sethiathope", label: "Government Arts College, Sethiathope" },
     { value: "other", label: "Other / Not Listed" },
 ];
 
@@ -238,24 +308,10 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ initialData, onSave, 
     defaultValues: initialData,
   });
 
-  const selectedCollege = form.watch("collegeName");
-  const showOtherCollegeInput = selectedCollege === "other";
-  const selectedAvatarStyle = form.watch("avatarStyle");
-  const firstName = form.watch("firstName");
-  const lastName = form.watch("lastName");
-  const avatarSeed = `${firstName || initialData.firstName} ${lastName || initialData.lastName}`.trim() || "User";
-  const previewAvatarUrl = generateAvatarUrl(avatarSeed, selectedAvatarStyle, 128); // Pass size explicitly
-
-
   const handleSave = async (data: z.infer<typeof formSchema>) => {
     setIsSaving(true);
     try {
-      // If "Other" college is selected, use the value from otherCollegeName field
-      const finalCollegeName = data.collegeName === "other" && data.otherCollegeName
-        ? data.otherCollegeName
-        : data.collegeName;
-
-      await onSave({ ...data, collegeName: finalCollegeName });
+      await onSave(data);
       toast.success("Profile updated successfully!");
       onCancel();
     } catch (error: any) {
@@ -403,47 +459,24 @@ const EditProfileForm: React.FC<EditProfileFormProps> = ({ initialData, onSave, 
             </FormItem>
           )}
         />
-        {showOtherCollegeInput && (
-          <FormField
-            control={form.control}
-            name="otherCollegeName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Specify Other College Name</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="e.g., My Custom University" disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         <FormField
           control={form.control}
           name="avatarStyle"
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-foreground">Avatar Style</FormLabel>
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16 border-2 border-secondary-neon">
-                  <AvatarImage src={previewAvatarUrl} alt="Avatar Preview" />
-                  <AvatarFallback>
-                    {avatarSeed.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSaving}>
-                  <FormControl>
-                    <SelectTrigger className="flex-grow bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                      <SelectValue placeholder="Select avatar style" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
-                    {DICEBEAR_AVATAR_STYLES.map((style) => (
-                      <SelectItem key={style} value={style}>{style.replace(/-/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSaving}>
+                <FormControl>
+                  <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
+                    <SelectValue placeholder="Select avatar style" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
+                  {DICEBEAR_AVATAR_STYLES.map((style) => (
+                    <SelectItem key={style} value={style}>{style.replace(/-/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
