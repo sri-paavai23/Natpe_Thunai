@@ -4,17 +4,17 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Phone, DollarSign, MapPin } from "lucide-react";
+import { Briefcase, User, Phone, MessageSquareText, DollarSign, MapPin } from "lucide-react";
 import { ServicePost } from "@/hooks/useServiceListings"; // Assuming ServicePost type is available
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
 import { Link } from "react-router-dom";
 
-interface ServiceListingCardProps {
+interface FreelanceServiceCardProps {
   service: ServicePost;
 }
 
-const ServiceListingCard: React.FC<ServiceListingCardProps> = ({ service }) => {
-  const avatarUrl = generateAvatarUrl(service.posterName || "Anonymous", service.posterAvatarStyle || "pixel-art", 128);
+const FreelanceServiceCard: React.FC<FreelanceServiceCardProps> = ({ service }) => {
+  const avatarUrl = generateAvatarUrl(service.posterName || "Anonymous", service.posterAvatarStyle || "pixel-art", 128); // Pass size explicitly
 
   return (
     <Card className="bg-card text-card-foreground border-border shadow-md hover:shadow-lg transition-shadow">
@@ -41,11 +41,19 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({ service }) => {
       <CardContent className="space-y-2 text-sm">
         <p className="text-muted-foreground">{service.description}</p>
         <div className="flex items-center gap-2 text-primary-foreground">
-          <DollarSign className="h-4 w-4 text-secondary-neon" />
-          <span className="font-medium">Price: {service.price}</span>
+          <Briefcase className="h-4 w-4 text-secondary-neon" />
+          <span className="font-medium">Category: {service.category.replace(/-/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
         </div>
-        <p className="text-xs text-muted-foreground">Posted by: {service.posterName}</p>
-        <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
+        <div className="flex items-center gap-2 text-primary-foreground">
+          <DollarSign className="h-4 w-4 text-secondary-neon" />
+          <span className="font-medium">Price/Rate: {service.price}</span>
+        </div>
+        {service.ambassadorDelivery && (
+          <div className="flex items-center gap-2 text-primary-foreground">
+            <MessageSquareText className="h-4 w-4 text-secondary-neon" />
+            <span className="font-medium">Ambassador Facilitation: {service.ambassadorMessage || "Available"}</span>
+          </div>
+        )}
       </CardContent>
       <CardFooter className="pt-2">
         <Button asChild className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
@@ -58,4 +66,4 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({ service }) => {
   );
 };
 
-export default ServiceListingCard;
+export default FreelanceServiceCard;

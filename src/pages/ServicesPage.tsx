@@ -47,6 +47,7 @@ const ServicesPage = () => {
         {/* Student Welfare & E-commerce Links */}
         <StudentWelfareLinks />
 
+        {/* Freelance Section Card */}
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/freelance", "Freelance Section")}>
           <CardHeader className="p-0 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground">Freelance Section</CardTitle>
