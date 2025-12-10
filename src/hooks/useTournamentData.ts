@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TOURNAMENTS_COLLECTION_ID } from "@/lib/appwrite";
-import { Models, Query } from "appwrite";
+import { Query, Models } from "appwrite";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 export interface TeamStanding {
@@ -14,14 +14,14 @@ export interface TeamStanding {
 
 export interface Winner {
   tournament: string;
-  winner: string; // Team name or player name
+  winner: string;
   prize: string;
 }
 
 export interface Tournament extends Models.Document {
   name: string;
   game: string;
-  date: string;
+  date: string; // e.g., "2024-12-25"
   fee: number;
   prizePool: string;
   minPlayers: number;
@@ -32,45 +32,57 @@ export interface Tournament extends Models.Document {
   posterName: string;
   collegeName: string;
   status: "Open" | "Ongoing" | "Completed" | "Closed";
-  registeredTeams: string[]; // Array of team names or IDs
+  registeredTeams: string[]; // This will be stored as JSON string in Appwrite
   standings?: TeamStanding[];
   winners?: Winner[];
 }
 
-export const useTournamentData = () => {
-  const { userProfile } = useAuth();
+export const useTournamentData = (collegeName?: string) => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { userProfile } = useAuth();
 
-  const fetchTournaments = useCallback(async () => {
-    if (!userProfile?.collegeName) {
-      setIsLoading(false);
-      setTournaments([]);
-      return;
-    }
+  const targetCollegeName = collegeName || userProfile?.collegeName;
 
+  const fetchTournaments = async () => {
     setIsLoading(true);
     setError(null);
     try {
+      let queries = [Query.orderDesc("$createdAt")];
+
+      if (targetCollegeName) {
+        queries.push(Query.equal("collegeName", targetCollegeName));
+      }
+
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_TOURNAMENTS_COLLECTION_ID,
-        [
-          Query.orderDesc('$createdAt'),
-          Query.equal('collegeName', userProfile.collegeName)
-        ]
+        queries
       );
-      setTournaments(response.documents as unknown as Tournament[]);
+
+      const parsedTournaments: Tournament[] = response.documents.map(doc => {
+        // Parse registeredTeams from JSON string back to array
+        const registeredTeams = typeof doc.registeredTeams === 'string'
+          ? JSON.parse(doc.registeredTeams)
+          : doc.registeredTeams;
+
+        return {
+          ...doc,
+          registeredTeams,
+        } as Tournament;
+      });
+
+      setTournaments(parsedTournaments);
     } catch (err: any) {
       console.error("Error fetching tournaments:", err);
       setError(err.message || "Failed to fetch tournaments.");
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName]);
+  };
 
-  const updateTournament = useCallback(async (tournamentId: string, data: Partial<Tournament>) => {
+  const updateTournament = async (tournamentId: string, data: Partial<Tournament>) => {
     try {
       const updatedDoc = await databases.updateDocument(
         APPWRITE_DATABASE_ID,
@@ -78,52 +90,51 @@ export const useTournamentData = () => {
         tournamentId,
         data
       );
-      setTournaments(prev => prev.map(t => t.$id === tournamentId ? (updatedDoc as unknown as Tournament) : t));
-      return updatedDoc as unknown as Tournament;
+      // Optimistically update state or refetch
+      setTournaments((prev) =>
+        prev.map((t) => (t.$id === updatedDoc.$id ? { ...updatedDoc, registeredTeams: JSON.parse(updatedDoc.registeredTeams as string) } as Tournament : t))
+      );
+      return updatedDoc;
     } catch (err: any) {
       console.error("Error updating tournament:", err);
       throw new Error(err.message || "Failed to update tournament.");
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchTournaments();
 
-    if (!userProfile?.collegeName) return;
-
+    // Real-time subscription
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TOURNAMENTS_COLLECTION_ID}.documents`,
       (response) => {
-        const payload = response.payload as unknown as Tournament;
-
-        if (payload.collegeName !== userProfile.collegeName) {
-          return;
+        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+          const newTournament = response.payload as Tournament;
+          // Parse registeredTeams for new document
+          const registeredTeams = typeof newTournament.registeredTeams === 'string'
+            ? JSON.parse(newTournament.registeredTeams)
+            : newTournament.registeredTeams;
+          setTournaments((prev) => [{ ...newTournament, registeredTeams }, ...prev]);
+        } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+          const updatedTournament = response.payload as Tournament;
+          // Parse registeredTeams for updated document
+          const registeredTeams = typeof updatedTournament.registeredTeams === 'string'
+            ? JSON.parse(updatedTournament.registeredTeams)
+            : updatedTournament.registeredTeams;
+          setTournaments((prev) =>
+            prev.map((t) => (t.$id === updatedTournament.$id ? { ...updatedTournament, registeredTeams } : t))
+          );
+        } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+          const deletedTournament = response.payload as Tournament;
+          setTournaments((prev) => prev.filter((t) => t.$id !== deletedTournament.$id));
         }
-
-        setTournaments(prev => {
-          const existingIndex = prev.findIndex(t => t.$id === payload.$id);
-          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-            if (existingIndex === -1) {
-              return [payload, ...prev];
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-            if (existingIndex !== -1) {
-              return prev.map(t => t.$id === payload.$id ? payload : t);
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-            if (existingIndex !== -1) {
-              return prev.filter(t => t.$id !== payload.$id);
-            }
-          }
-          return prev;
-        });
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [fetchTournaments, userProfile?.collegeName]);
+  }, [targetCollegeName]);
 
-  return { tournaments, isLoading, error, fetchTournaments, updateTournament };
+  return { tournaments, isLoading, error, updateTournament };
 };

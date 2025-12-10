@@ -4,12 +4,13 @@ import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
-import { User, DollarSign, Award } from "lucide-react";
+import { User, DollarSign, Award, Zap, TrendingUp } from "lucide-react"; // Added Zap and TrendingUp
 import { useAuth } from "@/context/AuthContext";
 import { generateAvatarUrl } from "@/utils/avatarGenerator";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission";
 import { getLevelBadge } from "@/utils/badges";
 import { getGraduationData } from "@/utils/time";
+import { cn } from "@/lib/utils"; // Import cn for conditional classNames
 
 const ProfileWidget = () => {
   const { user, userProfile } = useAuth();
@@ -28,12 +29,12 @@ const ProfileWidget = () => {
     displayName,
     userProfile?.gender || "prefer-not-to-say",
     userProfile?.userType || "student",
-    userProfile?.avatarStyle || "lorelei" // NEW: Pass avatarStyle
+    userProfile?.avatarStyle || "lorelei"
   );
 
   const renderMotivationalMessage = () => {
     if (userProfile?.userType !== "student" || userProfile?.role === "developer") {
-      return null; // Only for students, not developers
+      return null;
     }
 
     const userCreationDate = user?.$createdAt;
@@ -87,33 +88,49 @@ const ProfileWidget = () => {
   };
 
   return (
-    <Card className="bg-card text-card-foreground shadow-lg border-border">
-      <CardContent className="p-4 flex items-center space-x-4">
-        <Avatar className="h-16 w-16 border-2 border-secondary-neon">
+    <Card className="relative overflow-hidden bg-gradient-to-br from-primary-blue-light to-secondary-neon text-white shadow-lg rounded-xl border-none">
+      {/* Background elements for funky design */}
+      <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full mix-blend-overlay blur-xl"></div>
+      <div className="absolute -bottom-10 -right-10 w-60 h-60 bg-white/15 rounded-full mix-blend-overlay blur-xl"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-white/5 rounded-full mix-blend-overlay blur-xl"></div>
+
+      <CardContent className="relative z-10 p-6 flex flex-col items-center text-center space-y-4">
+        <Avatar className="h-24 w-24 border-4 border-white shadow-md transition-transform duration-300 hover:scale-105">
           <AvatarImage src={avatarUrl} alt={displayName} />
-          <AvatarFallback className="bg-primary text-primary-foreground">
-            <User className="h-8 w-8" />
+          <AvatarFallback className="bg-primary text-primary-foreground text-3xl font-bold">
+            <User className="h-12 w-12" />
           </AvatarFallback>
         </Avatar>
-        <div className="flex-grow space-y-1">
-          <h3 className="text-xl font-bold text-foreground">{displayName}</h3>
-          <p className="text-sm text-muted-foreground">Level {userLevel}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <Progress value={xpPercentage} className="h-2 bg-muted-foreground/30 [&::-webkit-progress-bar]:bg-secondary-neon [&::-webkit-progress-value]:bg-secondary-neon" />
-            <span className="text-xs text-muted-foreground">{currentXp}/{maxXp} XP</span>
+        
+        <div className="space-y-1">
+          <h3 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-md">{displayName}</h3>
+          <p className="text-lg font-medium text-white/90 flex items-center justify-center gap-2">
+            <Zap className="h-5 w-5 text-yellow-300" /> Level {userLevel}
+          </p>
+        </div>
+
+        <div className="w-full max-w-xs space-y-2">
+          <div className="flex items-center gap-2">
+            <Progress value={xpPercentage} className="h-2 bg-white/30 [&::-webkit-progress-bar]:bg-white/50 [&::-webkit-progress-value]:bg-white" />
+            <span className="text-xs text-white/80 whitespace-nowrap">{currentXp}/{maxXp} XP</span>
           </div>
-          <div className="flex items-center text-xs text-muted-foreground pt-1">
-            <DollarSign className="h-3 w-3 mr-1 text-secondary-neon" />
-            Commission Rate: <span className="font-semibold text-foreground ml-1">{formatCommissionRate(commissionRate)}</span>
+          <div className="flex items-center justify-center text-sm text-white/90">
+            <DollarSign className="h-4 w-4 mr-1 text-green-300" />
+            Commission Rate: <span className="font-bold ml-1">{formatCommissionRate(commissionRate)}</span>
           </div>
           {userBadge && (
-            <div className="flex items-center text-xs text-muted-foreground">
-              <Award className="h-3 w-3 mr-1 text-secondary-neon" />
-              Badge: <span className="font-semibold text-foreground ml-1">{userBadge}</span>
+            <div className="flex items-center justify-center text-sm text-white/90">
+              <Award className="h-4 w-4 mr-1 text-purple-300" />
+              Badge: <span className="font-bold ml-1">{userBadge}</span>
             </div>
           )}
-          {renderMotivationalMessage()}
         </div>
+        
+        {renderMotivationalMessage() && (
+          <div className="mt-3 p-3 bg-white/10 rounded-md text-white/90 text-sm italic max-w-sm">
+            {renderMotivationalMessage()}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

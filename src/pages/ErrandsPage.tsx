@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ShoppingBag, NotebookPen, Bike, PlusCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import PostErrandForm from "@/components/forms/PostErrandForm";
+import PostErrandForm, { ErrandPostData } from "@/components/forms/PostErrandForm"; // Import ErrandPostData
 import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
@@ -26,6 +26,7 @@ const STANDARD_ERRAND_OPTIONS = [
 const ErrandsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
+  const [initialErrandCategory, setInitialErrandCategory] = useState<string | undefined>(undefined); // NEW state for initial category
   
   // Fetch only standard errands for the user's college
   const { errands: postedErrands, isLoading, error } = useErrandListings(ERRAND_TYPES);
@@ -33,11 +34,17 @@ const ErrandsPage = () => {
   // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
 
-  const handleErrandClick = (errandType: string) => {
-    toast.info(`You selected "${errandType}". Post your errand using the button below.`);
+  // NEW: Function to open dialog with pre-filled category
+  const handleOpenPostErrandDialog = (category?: string) => {
+    if (isAgeGated) {
+      toast.error("Access denied: Errands are not available for users aged 25 and above.");
+      return;
+    }
+    setInitialErrandCategory(category);
+    setIsPostErrandDialogOpen(true);
   };
 
-  const handlePostErrand = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => { // NEW: Remove collegeName from Omit
+  const handlePostErrand = async (data: ErrandPostData) => { // Use ErrandPostData
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an errand.");
       return;
@@ -48,7 +55,7 @@ const ErrandsPage = () => {
         ...data,
         posterId: user.$id,
         posterName: user.name,
-        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
+        collegeName: userProfile.collegeName,
       };
 
       await databases.createDocument(
@@ -60,6 +67,7 @@ const ErrandsPage = () => {
       
       toast.success(`Your errand "${data.title}" has been posted!`);
       setIsPostErrandDialogOpen(false);
+      setInitialErrandCategory(undefined); // Reset initial category
     } catch (e: any) {
       console.error("Error posting errand:", e);
       toast.error(e.message || "Failed to post errand listing.");
@@ -82,25 +90,28 @@ const ErrandsPage = () => {
             </p>
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleErrandClick("Note-writing/Transcription")}
+              onClick={() => handleOpenPostErrandDialog("note-writing")} // Open dialog with pre-filled category
+              disabled={isAgeGated}
             >
-              <NotebookPen className="mr-2 h-4 w-4" /> Note-writing/Transcription
+              <NotebookPen className="mr-2 h-4 w-4" /> Post Note-writing/Transcription Errand
             </Button>
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleErrandClick("Small Jobs (e.g., moving books)")}
+              onClick={() => handleOpenPostErrandDialog("small-job")} // Open dialog with pre-filled category
+              disabled={isAgeGated}
             >
-              <Bike className="mr-2 h-4 w-4" /> Small Jobs (e.g., moving books)
+              <Bike className="mr-2 h-4 w-4" /> Post Small Job Errand
             </Button>
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleErrandClick("Delivery Services (within campus)")}
+              onClick={() => handleOpenPostErrandDialog("delivery")} // Open dialog with pre-filled category
+              disabled={isAgeGated}
             >
-              <Bike className="mr-2 h-4 w-4" /> Delivery Services (within campus)
+              <Bike className="mr-2 h-4 w-4" /> Post Delivery Service Errand
             </Button>
             <Dialog open={isPostErrandDialogOpen} onOpenChange={setIsPostErrandDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4" disabled={isAgeGated}>
+                <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4" disabled={isAgeGated} onClick={() => handleOpenPostErrandDialog()}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Post Your Errand
                 </Button>
               </DialogTrigger>
@@ -110,8 +121,9 @@ const ErrandsPage = () => {
                 </DialogHeader>
                 <PostErrandForm 
                   onSubmit={handlePostErrand} 
-                  onCancel={() => setIsPostErrandDialogOpen(false)} 
+                  onCancel={() => { setIsPostErrandDialogOpen(false); setInitialErrandCategory(undefined); }} 
                   categoryOptions={STANDARD_ERRAND_OPTIONS}
+                  initialCategory={initialErrandCategory} // Pass initial category
                 />
               </DialogContent>
             </Dialog>

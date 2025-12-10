@@ -1,47 +1,45 @@
 "use client";
 
-import React, { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import React, { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Save, PlusCircle, Trash2 } from "lucide-react";
+import { Loader2, Save, PlusCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { useTournamentData, Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { Tournament, useTournamentData } from "@/hooks/useTournamentData"; // Import Tournament and useTournamentData
 
-// Zod schema for a single team standing
-const teamStandingSchema = z.object({
-  rank: z.preprocess(
-    (val) => Number(val),
-    z.number().min(1, "Rank must be at least 1.")
-  ),
-  teamName: z.string().min(1, "Team name is required."),
-  status: z.enum(["1st", "2nd", "Eliminated", "Participating"]),
-  points: z.preprocess(
-    (val) => Number(val),
-    z.number().min(0, "Points cannot be negative.")
-  ),
-});
-
-// Zod schema for a single winner
-const winnerSchema = z.object({
-  tournament: z.string().min(1, "Tournament name is required."),
-  winner: z.string().min(1, "Winner name is required."),
-  prize: z.string().min(1, "Prize details are required."),
-});
-
-// Main form schema for tournament management
+// Define the form schema using Zod
 const formSchema = z.object({
-  status: z.enum(["Open", "Ongoing", "Completed", "Closed"]),
-  standings: z.array(teamStandingSchema),
-  winners: z.array(winnerSchema),
+  name: z.string().min(1, "Tournament name is required."),
+  game: z.string().min(1, "Game name is required."),
+  date: z.date({
+    required_error: "A date for the tournament is required.",
+  }),
+  fee: z.coerce.number().min(0, "Fee cannot be negative."),
+  prizePool: z.string().min(1, "Prize pool details are required."),
+  minPlayers: z.coerce.number().min(1, "Minimum players must be at least 1."),
+  maxPlayers: z.coerce.number().min(1, "Maximum players must be at least 1."),
+  description: z.string().min(1, "Description is required."),
+  rules: z.string().min(1, "Rules are required."),
+  status: z.enum(["Open", "Ongoing", "Completed", "Closed"], {
+    required_error: "Status is required.",
+  }),
+  registeredTeams: z.array(z.string()).optional(), // Array of team names
 });
+
+export type TournamentUpdateData = z.infer<typeof formSchema>;
 
 interface TournamentManagementFormProps {
   tournament: Tournament;
@@ -49,38 +47,62 @@ interface TournamentManagementFormProps {
 }
 
 const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tournament, onClose }) => {
-  const { updateTournament } = useTournamentData();
+  const { updateTournament } = useTournamentData(); // Assuming useTournamentData provides updateTournament
   const [isSaving, setIsSaving] = useState(false);
+  const [currentRegisteredTeams, setCurrentRegisteredTeams] = useState<string[]>(tournament.registeredTeams || []);
+  const [newTeamName, setNewTeamName] = useState("");
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<TournamentUpdateData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: tournament.name,
+      game: tournament.game,
+      date: new Date(tournament.date),
+      fee: tournament.fee,
+      prizePool: tournament.prizePool,
+      minPlayers: tournament.minPlayers,
+      maxPlayers: tournament.maxPlayers,
+      description: tournament.description,
+      rules: tournament.rules,
       status: tournament.status,
-      standings: tournament.standings || [],
-      winners: tournament.winners || [],
+      registeredTeams: tournament.registeredTeams,
     },
   });
 
-  const { fields: standingsFields, append: appendStanding, remove: removeStanding } = useFieldArray({
-    control: form.control,
-    name: "standings",
-  });
+  useEffect(() => {
+    setCurrentRegisteredTeams(tournament.registeredTeams || []);
+  }, [tournament.registeredTeams]);
 
-  const { fields: winnersFields, append: appendWinner, remove: removeWinner } = useFieldArray({
-    control: form.control,
-    name: "winners",
-  });
+  const handleAddTeam = () => {
+    if (newTeamName.trim() && !currentRegisteredTeams.includes(newTeamName.trim())) {
+      setCurrentRegisteredTeams((prev) => [...prev, newTeamName.trim()]);
+      setNewTeamName("");
+    }
+  };
 
-  const handleSave = async (data: z.infer<typeof formSchema>) => {
+  const handleRemoveTeam = (teamToRemove: string) => {
+    setCurrentRegisteredTeams((prev) => prev.filter((team) => team !== teamToRemove));
+  };
+
+  const handleSubmit = async (data: TournamentUpdateData) => {
     setIsSaving(true);
     try {
-      // Explicitly cast standings and winners to their strict types
-      const dataToUpdate: Partial<Tournament> = {
-        status: data.status,
-        standings: data.standings as TeamStanding[],
-        winners: data.winners as Winner[],
+      const updatedData = {
+        ...data,
+        date: format(data.date, "yyyy-MM-dd"),
+        registeredTeams: JSON.stringify(currentRegisteredTeams), // Stringify for Appwrite
       };
-      await updateTournament(tournament.$id, dataToUpdate);
+      // Assuming updateTournament takes the tournament ID and the updated data
+      // await updateTournament(tournament.$id, updatedData); // This function needs to be implemented in useTournamentData
+      
+      // For now, directly call Appwrite update
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TOURNAMENTS_COLLECTION_ID,
+        tournament.$id,
+        updatedData
+      );
+
       toast.success("Tournament updated successfully!");
       onClose();
     } catch (error: any) {
@@ -93,14 +115,155 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSave)} className="space-y-6">
-        {/* Tournament Status */}
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Tournament Name</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="game"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Game</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="date"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel className="text-foreground">Date</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal bg-input text-foreground border-border hover:bg-input",
+                        !field.value && "text-muted-foreground"
+                      )}
+                      disabled={isSaving}
+                    >
+                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-card text-card-foreground border-border" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) => date < new Date("1900-01-01")}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="fee"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Registration Fee (₹)</FormLabel>
+              <FormControl>
+                <Input type="number" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="prizePool"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Prize Pool</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="minPlayers"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">Min Players/Team</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="maxPlayers"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">Max Players/Team</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Description</FormLabel>
+              <FormControl>
+                <Textarea {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="rules"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Rules</FormLabel>
+              <FormControl>
+                <Textarea {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="status"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Tournament Status</FormLabel>
+              <FormLabel className="text-foreground">Status</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSaving}>
                 <FormControl>
                   <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
@@ -119,148 +282,32 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
           )}
         />
 
-        {/* Team Standings Management */}
-        <div className="space-y-4 border-t border-border pt-4">
-          <h3 className="text-lg font-semibold text-foreground">Team Standings</h3>
-          {standingsFields.map((item, index) => (
-            <div key={item.id} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end p-2 border border-border rounded-md bg-background">
-              <FormField
-                control={form.control}
-                name={`standings.${index}.rank`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Rank</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="1" {...field} onChange={e => field.onChange(parseInt(e.target.value))} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`standings.${index}.teamName`}
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel className="text-foreground">Team Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Team Alpha" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`standings.${index}.status`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSaving}>
-                      <FormControl>
-                        <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-popover text-popover-foreground border-border">
-                        <SelectItem value="1st">1st</SelectItem>
-                        <SelectItem value="2nd">2nd</SelectItem>
-                        <SelectItem value="Eliminated">Eliminated</SelectItem>
-                        <SelectItem value="Participating">Participating</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`standings.${index}.points`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Points</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="100" {...field} onChange={e => field.onChange(parseInt(e.target.value))} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="button" variant="destructive" size="icon" onClick={() => removeStanding(index)} disabled={isSaving} className="mt-auto">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => appendStanding({ rank: standingsFields.length + 1, teamName: "", status: "Participating", points: 0 })}
-            disabled={isSaving}
-            className="w-full border-border text-primary-foreground hover:bg-muted"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Team Standing
-          </Button>
-        </div>
-
-        {/* Winner Announcements Management */}
-        <div className="space-y-4 border-t border-border pt-4">
-          <h3 className="text-lg font-semibold text-foreground">Winner Announcements</h3>
-          {winnersFields.map((item, index) => (
-            <div key={item.id} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end p-2 border border-border rounded-md bg-background">
-              <FormField
-                control={form.control}
-                name={`winners.${index}.tournament`}
-                render={({ field }) => (
-                  <FormItem className="col-span-1">
-                    <FormLabel className="text-foreground">Tournament Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Valorant Cup" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`winners.${index}.winner`}
-                render={({ field }) => (
-                  <FormItem className="col-span-1">
-                    <FormLabel className="text-foreground">Winner</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Team Alpha" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`winners.${index}.prize`}
-                render={({ field }) => (
-                  <FormItem className="col-span-1">
-                    <FormLabel className="text-foreground">Prize</FormLabel>
-                    <FormControl>
-                      <Input placeholder="₹1000" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="button" variant="destructive" size="icon" onClick={() => removeWinner(index)} disabled={isSaving} className="mt-auto">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => appendWinner({ tournament: tournament.name, winner: "", prize: "" })}
-            disabled={isSaving}
-            className="w-full border-border text-primary-foreground hover:bg-muted"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Winner
-          </Button>
-        </div>
+        {/* Registered Teams Management */}
+        <FormItem>
+          <FormLabel className="text-foreground">Registered Teams</FormLabel>
+          <div className="flex space-x-2 mb-2">
+            <Input
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              placeholder="Add new team name"
+              disabled={isSaving}
+              className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+            />
+            <Button type="button" onClick={handleAddTeam} disabled={isSaving || !newTeamName.trim()} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <PlusCircle className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-1">
+            {currentRegisteredTeams.map((team) => (
+              <div key={team} className="flex items-center justify-between p-2 bg-muted rounded-md text-muted-foreground">
+                <span>{team}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveTeam(team)} disabled={isSaving}>
+                  <XCircle className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </FormItem>
 
         <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
           <Button type="button" variant="outline" onClick={onClose} disabled={isSaving} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">

@@ -18,60 +18,56 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const formSchema = z.object({
   title: z.string().min(1, "Title is required."),
   description: z.string().min(1, "Description is required."),
-  type: z.string().min(1, "Errand type is required."),
-  compensation: z.string().min(1, "Compensation is required."),
-  deadline: z.string().optional(), // Optional deadline
+  category: z.string().min(1, "Category is required."),
   contact: z.string().min(1, "Contact information is required."),
-  otherType: z.string().optional(), // For custom type if 'other' is selected
+  otherCategory: z.string().optional(), // For custom category if 'other' is selected
 });
 
-export type ErrandPostData = z.infer<typeof formSchema>;
+export type FoodRequestPostData = z.infer<typeof formSchema>;
 
-interface PostErrandFormProps {
-  onSubmit: (data: ErrandPostData) => Promise<void>;
+interface RequestCustomOrderFormProps {
+  onSubmit: (data: FoodRequestPostData) => Promise<void>;
   onCancel: () => void;
   categoryOptions: { value: string; label: string }[];
   initialCategory?: string; // Prop for initial category
 }
 
-const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, categoryOptions, initialCategory }) => {
+const RequestCustomOrderForm: React.FC<RequestCustomOrderFormProps> = ({ onSubmit, onCancel, categoryOptions, initialCategory }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<ErrandPostData>({
+  const form = useForm<FoodRequestPostData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      type: initialCategory || "", // Set initial category
-      compensation: "",
-      deadline: "",
+      category: initialCategory || "", // Set initial category
       contact: "",
-      otherType: "",
+      otherCategory: "",
     },
   });
 
   // Update form default value if initialCategory changes
   useEffect(() => {
     if (initialCategory) {
-      form.setValue("type", initialCategory);
+      form.setValue("category", initialCategory);
     }
   }, [initialCategory, form]);
 
-  const selectedType = form.watch("type");
+  const selectedCategory = form.watch("category");
 
-  const handleSubmit = async (data: ErrandPostData) => {
+  const handleSubmit = async (data: FoodRequestPostData) => {
     setIsSubmitting(true);
     try {
-      // If 'other' is selected, use the value from 'otherType'
+      // If 'other' is selected, use the value from 'otherCategory'
       const finalData = {
         ...data,
-        type: data.type === "other" && data.otherType ? data.otherType : data.type,
+        category: data.category === "other" && data.otherCategory ? data.otherCategory : data.category,
       };
       await onSubmit(finalData);
       form.reset();
     } catch (error: any) {
-      console.error("Error posting errand:", error);
-      toast.error(error.message || "Failed to post errand.");
+      console.error("Error requesting custom order:", error);
+      toast.error(error.message || "Failed to request custom order.");
     } finally {
       setIsSubmitting(false);
     }
@@ -85,7 +81,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Errand Title</FormLabel>
+              <FormLabel className="text-foreground">Request Title</FormLabel>
               <FormControl>
                 <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
@@ -108,14 +104,14 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
         />
         <FormField
           control={form.control}
-          name="type"
+          name="category"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Errand Type</FormLabel>
+              <FormLabel className="text-foreground">Category</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
                   <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                    <SelectValue placeholder="Select an errand type" />
+                    <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent className="bg-popover text-popover-foreground border-border">
@@ -130,13 +126,13 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
             </FormItem>
           )}
         />
-        {selectedType === "other" && (
+        {selectedCategory === "other" && (
           <FormField
             control={form.control}
-            name="otherType"
+            name="otherCategory"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground">Specify Other Errand Type</FormLabel>
+                <FormLabel className="text-foreground">Specify Other Category</FormLabel>
                 <FormControl>
                   <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
                 </FormControl>
@@ -145,32 +141,6 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
             )}
           />
         )}
-        <FormField
-          control={form.control}
-          name="compensation"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Compensation</FormLabel>
-              <FormControl>
-                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="deadline"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Deadline (Optional)</FormLabel>
-              <FormControl>
-                <Input type="date" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
         <FormField
           control={form.control}
           name="contact"
@@ -189,7 +159,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Post Errand</>}
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Request Order</>}
           </Button>
         </DialogFooter>
       </form>
@@ -197,4 +167,4 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
   );
 };
 
-export default PostErrandForm;
+export default RequestCustomOrderForm;

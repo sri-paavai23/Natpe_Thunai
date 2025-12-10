@@ -1,182 +1,142 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+"use client";
+
+import React, { useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import HomePage from "./pages/HomePage";
+import ProfilePage from "./pages/ProfilePage";
 import MarketPage from "./pages/MarketPage";
 import ServicesPage from "./pages/ServicesPage";
 import ActivityPage from "./pages/ActivityPage";
-import ProfilePage from "./pages/ProfilePage";
-import TournamentPage from "./pages/TournamentPage";
-import ComingSoonPage from "./pages/ComingSoonPage";
-import BottomNavbar from "./components/layout/BottomNavbar";
-import Header from "./components/layout/Header";
-import React from "react";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { Loader2 } from "lucide-react";
-import VerificationBanner from "./components/VerificationBanner";
-import { useOnlineStatus } from "./hooks/useOnlineStatus";
-
-// Import new Activity sub-pages
-import TrackingPage from "./pages/TrackingPage";
-import CashExchangePage from "./pages/CashExchangePage";
-import LostAndFoundPage from "./pages/LostAndFoundPage";
-
-// Import new Profile sub-pages
-import ProfileDetailsPage from "./pages/ProfileDetailsPage";
-import WalletPage from "./pages/WalletPage";
-import PoliciesPage from "./pages/PoliciesPage";
-
-// Import new Services sub-pages
+import SettingsPage from "./pages/SettingsPage";
+import ProductDetailsPage from "./pages/ProductDetailsPage";
+import ServiceDetailsPage from "./pages/ServiceDetailsPage";
+import ErrandDetailsPage from "./pages/ErrandDetailsPage";
+import ShortTermDetailsPage from "./pages/ShortTermDetailsPage";
+import FoodWellnessDetailsPage from "./pages/FoodWellnessDetailsPage";
+import AmbassadorProgramPage from "./pages/AmbassadorProgramPage";
 import FreelancePage from "./pages/FreelancePage";
-import ErrandsPage from "./pages/ErrandsPage";
 import ShortTermNeedsPage from "./pages/ShortTermNeedsPage";
 import FoodWellnessPage from "./pages/FoodWellnessPage";
-import TicketBookingPage from "./pages/TicketBookingPage";
-import CollaboratorsPage from "./pages/CollaboratorsPage";
-import PostJobPage from "./pages/PostJobPage";
-import AmbassadorProgramPage from "./pages/AmbassadorProgramPage";
-
-// Import new Market sub-pages
-import ProductDetailsPage from "./pages/ProductDetailsPage";
-import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
-
-// Import new Auth-related pages
+import ErrandsPage from "./pages/ErrandsPage";
+import TournamentsPage from "./pages/TournamentsPage"; // NEW: Import TournamentsPage
+import NotFoundPage from "./pages/NotFoundPage";
+import BottomNavbar from "./components/BottomNavbar";
+import TopNavbar from "./components/TopNavbar";
+import { Toaster } from "@/components/ui/sonner";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
+import PoliciesPage from "./pages/PoliciesPage";
+import ChatPage from "./pages/ChatPage";
+import ChatRoomPage from "./pages/ChatRoomPage";
+import BargainRequestsPage from "./pages/BargainRequestsPage";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
+import AdminListingsPage from "./pages/AdminListingsPage";
+import AdminReportsPage from "./pages/AdminReportsPage";
+import AdminTransactionsPage from "./pages/AdminTransactionsPage";
+import AdminErrandsPage from "./pages/AdminErrandsPage";
+import AdminServicesPage from "./pages/AdminServicesPage";
+import AdminFoodWellnessPage from "./pages/AdminFoodWellnessPage";
+import AdminTournamentsPage from "./pages/AdminTournamentsPage"; // NEW: Import AdminTournamentsPage
 
-// Import new Developer Dashboard page
-import DeveloperDashboardPage from "./pages/DeveloperDashboardPage";
+// Scroll to top on route change
+function ScrollToTop() {
+  const { pathname } = useLocation();
 
-// Import Offline Page
-import OfflinePage from "./pages/OfflinePage";
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
-// NEW: Import ImageToUrlHelpPage
-import ImageToUrlHelpPage from "./pages/ImageToUrlHelpPage";
+  return null;
+}
 
-
-const queryClient = new QueryClient();
-
-const AppLayout = () => {
-  const { isAuthenticated, isVerified } = useAuth();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      {!isVerified && <VerificationBanner />}
-      <div className="flex-grow">
-        <Outlet />
-      </div>
-      <BottomNavbar />
-    </div>
-  );
-};
-
-const DeveloperLayout = () => {
-  const { isAuthenticated, userProfile, isLoading } = useAuth();
+function AppRoutes() {
+  const { isAuthenticated, isLoading, userProfile } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
-        <p className="ml-3 text-lg text-muted-foreground">Loading application...</p>
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+        <p>Loading application...</p>
       </div>
     );
   }
 
-  if (!isAuthenticated || userProfile?.role !== "developer") {
-    return <Navigate to="/auth" replace />;
-  }
-
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header />
-      <div className="flex-grow">
-        <Outlet />
-      </div>
-      <BottomNavbar />
-    </div>
-  );
-};
+    <>
+      <ScrollToTop />
+      {isAuthenticated && <TopNavbar />}
+      <main className="flex-grow">
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/profile/policies" element={<PoliciesPage />} />
 
-// New component to hold all the routes when online
-const OnlineRoutes = () => {
+          {isAuthenticated ? (
+            <>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/home" element={<HomePage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/market" element={<MarketPage />} />
+              <Route path="/market/:productId" element={<ProductDetailsPage />} />
+              <Route path="/services" element={<ServicesPage />} />
+              <Route path="/services/freelance" element={<FreelancePage />} />
+              <Route path="/services/freelance/:serviceId" element={<ServiceDetailsPage />} />
+              <Route path="/services/short-term" element={<ShortTermNeedsPage />} />
+              <Route path="/services/short-term/:serviceId" element={<ShortTermDetailsPage />} />
+              <Route path="/services/food-wellness" element={<FoodWellnessPage />} />
+              <Route path="/services/food-wellness/:offeringId" element={<FoodWellnessDetailsPage />} />
+              <Route path="/services/errands" element={<ErrandsPage />} />
+              <Route path="/services/errands/:errandId" element={<ErrandDetailsPage />} />
+              <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} />
+              <Route path="/tournaments" element={<TournamentsPage />} /> {/* NEW: Tournaments Page */}
+              <Route path="/activity" element={<ActivityPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/chat/:chatRoomId" element={<ChatRoomPage />} />
+              <Route path="/bargain-requests" element={<BargainRequestsPage />} />
+
+              {/* Admin Routes */}
+              {userProfile?.role === "developer" && (
+                <>
+                  <Route path="/admin" element={<AdminDashboardPage />} />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
+                  <Route path="/admin/listings" element={<AdminListingsPage />} />
+                  <Route path="/admin/reports" element={<AdminReportsPage />} />
+                  <Route path="/admin/transactions" element={<AdminTransactionsPage />} />
+                  <Route path="/admin/errands" element={<AdminErrandsPage />} />
+                  <Route path="/admin/services" element={<AdminServicesPage />} />
+                  <Route path="/admin/food-wellness" element={<AdminFoodWellnessPage />} />
+                  <Route path="/admin/tournaments" element={<AdminTournamentsPage />} /> {/* NEW: Admin Tournaments Page */}
+                </>
+              )}
+            </>
+          ) : (
+            <Route path="*" element={<AuthPage />} />
+          )}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </main>
+      {isAuthenticated && <BottomNavbar />}
+      <Toaster richColors />
+    </>
+  );
+}
+
+function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/auth" element={<AuthPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/help/image-to-url" element={<ImageToUrlHelpPage />} />
-      
-      {/* Protected Routes for all authenticated users */}
-      <Route element={<AppLayout />}>
-        <Route path="/home" element={<HomePage />} />
-        <Route path="/market" element={<MarketPage />} />
-        <Route path="/market/product/:productId" element={<ProductDetailsPage />} />
-        <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} />
-        <Route path="/services" element={<ServicesPage />} />
-        <Route path="/activity" element={<ActivityPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/tournaments" element={<TournamentPage />} />
-
-        {/* Activity Sub-pages */}
-        <Route path="/activity/tracking" element={<TrackingPage />} />
-        <Route path="/activity/cash-exchange" element={<CashExchangePage />} />
-        <Route path="/activity/lost-found" element={<LostAndFoundPage />} />
-
-        {/* Profile Sub-pages */}
-        <Route path="/profile/details" element={<ProfileDetailsPage />} />
-        <Route path="/profile/wallet" element={<WalletPage />} />
-        <Route path="/profile/policies" element={<PoliciesPage />} />
-
-        {/* Services Sub-pages */}
-        <Route path="/services/freelance" element={<FreelancePage />} />
-        <Route path="/services/errands" element={<ErrandsPage />} />
-        <Route path="/services/short-term" element={<ShortTermNeedsPage />} />
-        <Route path="/services/food-wellness" element={<FoodWellnessPage />} />
-        <Route path="/services/ticket-booking" element={<TicketBookingPage />} />
-        <Route path="/services/collaborators" element={<CollaboratorsPage />} />
-        <Route path="/services/post-job" element={<PostJobPage />} />
-        <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} />
-      </Route>
-
-      {/* Protected Routes for Developers Only */}
-      <Route element={<DeveloperLayout />}>
-        <Route path="/developer-dashboard" element={<DeveloperDashboardPage />} />
-      </Route>
-
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <Router>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </Router>
   );
-};
-
-const App = () => {
-  const isOnline = useOnlineStatus(); // Call hook unconditionally at the top level of App
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            {isOnline ? <OnlineRoutes /> : <OfflinePage />}
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-};
+}
 
 export default App;

@@ -18,60 +18,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const formSchema = z.object({
   title: z.string().min(1, "Title is required."),
   description: z.string().min(1, "Description is required."),
-  type: z.string().min(1, "Errand type is required."),
-  compensation: z.string().min(1, "Compensation is required."),
-  deadline: z.string().optional(), // Optional deadline
+  type: z.enum(["lost", "found"], {
+    required_error: "Please select if the item is lost or found.",
+  }),
+  location: z.string().min(1, "Location is required."),
   contact: z.string().min(1, "Contact information is required."),
-  otherType: z.string().optional(), // For custom type if 'other' is selected
 });
 
-export type ErrandPostData = z.infer<typeof formSchema>;
+export type LostFoundPostData = z.infer<typeof formSchema>;
 
-interface PostErrandFormProps {
-  onSubmit: (data: ErrandPostData) => Promise<void>;
+interface PostLostFoundFormProps {
+  onSubmit: (data: LostFoundPostData) => Promise<void>;
   onCancel: () => void;
-  categoryOptions: { value: string; label: string }[];
-  initialCategory?: string; // Prop for initial category
+  initialType?: "lost" | "found"; // Prop for initial type
 }
 
-const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, categoryOptions, initialCategory }) => {
+const PostLostFoundForm: React.FC<PostLostFoundFormProps> = ({ onSubmit, onCancel, initialType }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<ErrandPostData>({
+  const form = useForm<LostFoundPostData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      type: initialCategory || "", // Set initial category
-      compensation: "",
-      deadline: "",
+      type: initialType || "lost", // Set initial type, default to 'lost'
+      location: "",
       contact: "",
-      otherType: "",
     },
   });
 
-  // Update form default value if initialCategory changes
+  // Update form default value if initialType changes
   useEffect(() => {
-    if (initialCategory) {
-      form.setValue("type", initialCategory);
+    if (initialType) {
+      form.setValue("type", initialType);
     }
-  }, [initialCategory, form]);
+  }, [initialType, form]);
 
-  const selectedType = form.watch("type");
-
-  const handleSubmit = async (data: ErrandPostData) => {
+  const handleSubmit = async (data: LostFoundPostData) => {
     setIsSubmitting(true);
     try {
-      // If 'other' is selected, use the value from 'otherType'
-      const finalData = {
-        ...data,
-        type: data.type === "other" && data.otherType ? data.otherType : data.type,
-      };
-      await onSubmit(finalData);
+      await onSubmit(data);
       form.reset();
     } catch (error: any) {
-      console.error("Error posting errand:", error);
-      toast.error(error.message || "Failed to post errand.");
+      console.error("Error posting lost/found item:", error);
+      toast.error(error.message || "Failed to post item.");
     } finally {
       setIsSubmitting(false);
     }
@@ -85,7 +75,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Errand Title</FormLabel>
+              <FormLabel className="text-foreground">Item Title</FormLabel>
               <FormControl>
                 <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
@@ -111,61 +101,30 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
           name="type"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Errand Type</FormLabel>
+              <FormLabel className="text-foreground">Item Status</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
                   <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                    <SelectValue placeholder="Select an errand type" />
+                    <SelectValue placeholder="Select if item is lost or found" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent className="bg-popover text-popover-foreground border-border">
-                  {categoryOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="lost">Lost</SelectItem>
+                  <SelectItem value="found">Found</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )}
         />
-        {selectedType === "other" && (
-          <FormField
-            control={form.control}
-            name="otherType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Specify Other Errand Type</FormLabel>
-                <FormControl>
-                  <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         <FormField
           control={form.control}
-          name="compensation"
+          name="location"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Compensation</FormLabel>
+              <FormLabel className="text-foreground">Location (Where it was lost/found)</FormLabel>
               <FormControl>
                 <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="deadline"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Deadline (Optional)</FormLabel>
-              <FormControl>
-                <Input type="date" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -189,7 +148,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Post Errand</>}
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Post Item</>}
           </Button>
         </DialogFooter>
       </form>
@@ -197,4 +156,4 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, cat
   );
 };
 
-export default PostErrandForm;
+export default PostLostFoundForm;

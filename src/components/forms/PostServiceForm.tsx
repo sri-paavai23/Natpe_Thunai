@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -8,67 +8,71 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Loader2, PlusCircle } from "lucide-react";
+import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// Define the form schema using Zod
 const formSchema = z.object({
   title: z.string().min(1, "Title is required."),
   description: z.string().min(1, "Description is required."),
-  category: z.string().min(1, "Category is required."),
-  price: z.string().min(1, "Price is required."),
-  contact: z.string().min(10, "Contact information is required."),
-  customOrderDescription: z.string().optional(),
-  ambassadorDelivery: z.boolean().default(false).optional(),
-  ambassadorMessage: z.string().optional(),
+  category: z.string().min(1, "Service category is required."),
+  compensation: z.string().min(1, "Compensation is required."),
+  deadline: z.string().optional(), // Optional deadline
+  contact: z.string().min(1, "Contact information is required."),
+  otherCategory: z.string().optional(), // For custom category if 'other' is selected
 });
 
+export type ServicePostData = z.infer<typeof formSchema>;
+
 interface PostServiceFormProps {
-  onSubmit: (data: z.infer<typeof formSchema>) => Promise<void>;
+  onSubmit: (data: ServicePostData) => Promise<void>;
   onCancel: () => void;
-  isCustomOrder?: boolean;
   categoryOptions: { value: string; label: string }[];
-  titlePlaceholder?: string;
-  descriptionPlaceholder?: string;
-  pricePlaceholder?: string;
-  contactPlaceholder?: string;
-  customOrderDescriptionPlaceholder?: string;
-  ambassadorMessagePlaceholder?: string;
+  initialCategory?: string; // Prop for initial category
+  serviceType: "freelance" | "short-term"; // Prop to specify service type
 }
 
-const PostServiceForm: React.FC<PostServiceFormProps> = ({
-  onSubmit,
-  onCancel,
-  isCustomOrder = false,
-  categoryOptions,
-  titlePlaceholder = "e.g., Delicious Homemade Biryani",
-  descriptionPlaceholder = "Describe your offering or request in detail...",
-  pricePlaceholder = "e.g., 150 INR or Negotiable",
-  contactPlaceholder = "e.g., +91 9876543210 or @your_telegram_id",
-  customOrderDescriptionPlaceholder = "Specify your custom food or remedy request...",
-  ambassadorMessagePlaceholder = "e.g., Deliver to Block A, Room 101 by 7 PM",
-}) => {
+const PostServiceForm: React.FC<PostServiceFormProps> = ({ onSubmit, onCancel, categoryOptions, initialCategory, serviceType }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<ServicePostData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      category: "",
-      price: "",
+      category: initialCategory || "", // Set initial category
+      compensation: "",
+      deadline: "",
       contact: "",
-      customOrderDescription: "",
-      ambassadorDelivery: false,
-      ambassadorMessage: "",
+      otherCategory: "",
     },
   });
 
-  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+  // Update form default value if initialCategory changes
+  useEffect(() => {
+    if (initialCategory) {
+      form.setValue("category", initialCategory);
+    }
+  }, [initialCategory, form]);
+
+  const selectedCategory = form.watch("category");
+
+  const handleSubmit = async (data: ServicePostData) => {
     setIsSubmitting(true);
     try {
-      await onSubmit(data);
+      // If 'other' is selected, use the value from 'otherCategory'
+      const finalData = {
+        ...data,
+        category: data.category === "other" && data.otherCategory ? data.otherCategory : data.category,
+      };
+      await onSubmit(finalData);
+      form.reset();
+    } catch (error: any) {
+      console.error("Error posting service:", error);
+      toast.error(error.message || "Failed to post service.");
     } finally {
       setIsSubmitting(false);
     }
@@ -82,9 +86,9 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">{isCustomOrder ? "Request Title" : "Offering Title"}</FormLabel>
+              <FormLabel className="text-foreground">Service Title</FormLabel>
               <FormControl>
-                <Input {...field} placeholder={titlePlaceholder} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -97,37 +101,22 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Description</FormLabel>
               <FormControl>
-                <Textarea {...field} placeholder={descriptionPlaceholder} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring min-h-[80px]" />
+                <Textarea {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        {isCustomOrder && (
-          <FormField
-            control={form.control}
-            name="customOrderDescription"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Custom Request Details</FormLabel>
-                <FormControl>
-                  <Textarea {...field} placeholder={customOrderDescriptionPlaceholder} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring min-h-[80px]" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
         <FormField
           control={form.control}
           name="category"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Category</FormLabel>
+              <FormLabel className="text-foreground">Service Category</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
-                  <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                    <SelectValue placeholder="Select a category" />
+                  <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
+                    <SelectValue placeholder={`Select a ${serviceType} category`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent className="bg-popover text-popover-foreground border-border">
@@ -142,14 +131,42 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
             </FormItem>
           )}
         />
+        {selectedCategory === "other" && (
+          <FormField
+            control={form.control}
+            name="otherCategory"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">Specify Other Category</FormLabel>
+                <FormControl>
+                  <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField
           control={form.control}
-          name="price"
+          name="compensation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Price</FormLabel>
+              <FormLabel className="text-foreground">Compensation</FormLabel>
               <FormControl>
-                <Input {...field} placeholder={pricePlaceholder} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="deadline"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Deadline (Optional)</FormLabel>
+              <FormControl>
+                <Input type="date" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -162,59 +179,20 @@ const PostServiceForm: React.FC<PostServiceFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Contact Information</FormLabel>
               <FormControl>
-                <Input {...field} placeholder={contactPlaceholder} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="ambassadorDelivery"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-border p-4 shadow">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  disabled={isSubmitting}
-                  className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground"
-                />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel className="text-foreground">
-                  Ambassador Delivery
-                </FormLabel>
-                <p className="text-sm text-muted-foreground">
-                  Opt-in for delivery by a campus ambassador (additional charges may apply).
-                </p>
-              </div>
-            </FormItem>
-          )}
-        />
-        {form.watch("ambassadorDelivery") && (
-          <FormField
-            control={form.control}
-            name="ambassadorMessage"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Delivery Instructions</FormLabel>
-                <FormControl>
-                  <Textarea {...field} placeholder={ambassadorMessagePlaceholder} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring min-h-[60px]" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="border-border text-primary-foreground hover:bg-muted">
+        <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
             Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isCustomOrder ? "Post Request" : "Post Offering")}
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Post Service</>}
           </Button>
-        </div>
+        </DialogFooter>
       </form>
     </Form>
   );

@@ -1,111 +1,57 @@
 "use client";
 
 import React from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Briefcase, MapPin, DollarSign, MessageSquareText, Award } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquareText, DollarSign, Star } from "lucide-react";
-import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { useServiceReviews } from "@/hooks/useServiceReviews";
-import { ServicePost } from "@/hooks/useServiceListings";
-import { cn } from "@/lib/utils";
+import { ServicePost } from "@/hooks/useServiceListings"; // Import ServicePost
+import { getLevelBadge } from "@/utils/badges"; // Assuming this utility exists
 
 interface ServiceListingCardProps {
   service: ServicePost;
-  onOpenBargainDialog: (service: ServicePost) => void;
-  onOpenReviewDialog: (service: ServicePost) => void;
-  isFoodOrWellnessCategory: boolean;
+  onViewDetails: (service: ServicePost) => void;
+  onBargain: (service: ServicePost) => void;
+  sellerLevel?: number; // Optional prop for seller's level
 }
 
-// Helper function to format category slug into readable title
-const formatCategoryTitle = (categorySlug: string | undefined) => {
-  if (!categorySlug || categorySlug === "all") return "All Service Listings";
-  return categorySlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-};
-
-const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
-  service,
-  onOpenBargainDialog,
-  onOpenReviewDialog,
-  isFoodOrWellnessCategory,
-}) => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { averageRating, isLoading: isReviewsLoading, error: reviewsError } = useServiceReviews(service.$id);
-  const hasReviewed = false; // Simulate: In a real app, check if user has already reviewed this service
-
-  const handleContactProvider = (contact: string, title: string) => {
-    toast.info(`Contacting provider for "${title}" at ${contact}.`);
-    // In a real app, this would open a chat or email client.
-  };
+const ServiceListingCard: React.FC<ServiceListingCardProps> = ({ service, onViewDetails, onBargain, sellerLevel }) => {
+  const sellerBadge = sellerLevel ? getLevelBadge(sellerLevel) : undefined;
 
   return (
-    <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center">
-      <div>
-        <h3 className="font-semibold text-foreground">{service.title}</h3>
-        <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
-        <p className="text-xs text-muted-foreground mt-1">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p>
+    <Card className="bg-card text-card-foreground shadow-lg border-border hover:shadow-xl transition-shadow duration-200">
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-secondary-neon" /> {service.title}
+          </CardTitle>
+          <CardDescription className="text-secondary-neon font-bold text-md">{service.compensation}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-2">
+        <p className="text-sm text-muted-foreground">{service.description}</p>
+        <p className="text-xs text-muted-foreground mt-1">Category: <span className="font-medium text-foreground">{service.category}</span></p>
+        <p className="text-xs text-muted-foreground mt-1">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p> {/* Correctly access service.price */}
         <p className="text-xs text-muted-foreground">Posted by: {service.posterName}</p>
-        <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
-        
-        <div className="flex items-center gap-2 mt-2">
-          {service.category && (
-            <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-              {formatCategoryTitle(service.category)}
-            </Badge>
-          )}
-          {service.isCustomOrder && (
-            <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
-              Custom Request
-            </Badge>
-          )}
+        <div className="flex items-center text-xs text-muted-foreground">
+          <MapPin className="h-3 w-3 mr-1" />
+          <span>{service.collegeName}</span>
         </div>
-
-        <div className="flex items-center text-sm text-muted-foreground mt-2">
-          {isReviewsLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-1 text-secondary-neon" />
-          ) : reviewsError ? (
-            <span className="text-destructive">Error loading rating</span>
-          ) : (
-            <>
-              <Star className={cn("h-4 w-4 mr-1", averageRating > 0 ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} />
-              <span className="font-medium text-foreground">{averageRating.toFixed(1)}</span>
-              <span className="ml-1">({useServiceReviews(service.$id).reviews.length} reviews)</span>
-            </>
-          )}
+        {sellerBadge && (
+          <Badge className="bg-blue-500 text-white flex items-center gap-1">
+            <Award className="h-3 w-3" /> {sellerBadge}
+          </Badge>
+        )}
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="outline" size="sm" onClick={() => onBargain(service)} className="border-primary text-primary hover:bg-primary/10">
+            <MessageSquareText className="h-3 w-3 mr-1" /> Bargain
+          </Button>
+          <Button size="sm" onClick={() => onViewDetails(service)} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+            View Details
+          </Button>
         </div>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-2 mt-2 sm:mt-0">
-        <Button 
-          size="sm" 
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-          onClick={() => handleContactProvider(service.contact, service.title)}
-        >
-          Contact Provider
-        </Button>
-        {!isFoodOrWellnessCategory && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-            onClick={() => onOpenBargainDialog(service)}
-          >
-            <DollarSign className="mr-2 h-4 w-4" /> Bargain (15% off)
-          </Button>
-        )}
-        {!hasReviewed && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-            onClick={() => onOpenReviewDialog(service)}
-          >
-            <Star className="mr-2 h-4 w-4" /> Leave a Review
-          </Button>
-        )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
