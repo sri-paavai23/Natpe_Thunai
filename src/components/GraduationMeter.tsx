@@ -93,7 +93,7 @@ const GraduationMeter: React.FC = () => {
     const targetLevel = 25;
     const userLevel = userProfile.level;
     const levelsToGo = targetLevel - userLevel;
-    const daysRemaining = countdown.days;
+    const daysRemaining = countdown.totalDays; // Use totalDays for motivation logic
 
     if (isGraduated) {
       return null; // Already graduated, the main message handles it
@@ -134,7 +134,7 @@ const GraduationMeter: React.FC = () => {
   };
 
   return (
-    <Card className="bg-card text-card-foreground shadow-lg border-border">
+    <Card className="bg-card text-card-foreground shadow-lg border-border w-full max-w-md mx-auto"> {/* Added max-w-md and mx-auto for better mobile centering */}
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
           <GraduationCap className="h-5 w-5 text-secondary-neon" /> Graduation Meter
@@ -157,11 +157,11 @@ const GraduationMeter: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row items-center justify-between text-sm text-muted-foreground gap-2 sm:gap-0"> {/* Adjusted for better mobile stacking */}
               <span className="flex items-center gap-1">
                 <Clock className="h-4 w-4" /> Time Remaining:
               </span>
-              <span className="font-bold text-foreground">{countdownDisplay}</span>
+              <span className="font-bold text-foreground text-base sm:text-sm">{countdownDisplay}</span> {/* Ensured text size is good */}
             </div>
             <Progress
               value={progressPercentage}
