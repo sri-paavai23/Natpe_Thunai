@@ -48,7 +48,7 @@ export const useServiceListings = (serviceType: "freelance" | "short-term", cate
           APPWRITE_SERVICES_COLLECTION_ID,
           queries
         );
-        setServices(response.documents as ServicePost[]);
+        setServices(response.documents as unknown as ServicePost[]);
       } catch (err: any) {
         console.error("Error fetching services:", err);
         setError(err.message || "Failed to fetch services.");
@@ -64,17 +64,17 @@ export const useServiceListings = (serviceType: "freelance" | "short-term", cate
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICES_COLLECTION_ID}.documents`,
       (response) => {
         if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          const newService = response.payload as ServicePost;
+          const newService = response.payload as unknown as ServicePost;
           if (newService.serviceType === serviceType && (!category || newService.category === category) && newService.collegeName === userProfile?.collegeName) {
             setServices((prev) => [newService, ...prev]);
           }
         } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          const updatedService = response.payload as ServicePost;
+          const updatedService = response.payload as unknown as ServicePost;
           setServices((prev) =>
             prev.map((s) => (s.$id === updatedService.$id ? updatedService : s))
           );
         } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          const deletedService = response.payload as ServicePost;
+          const deletedService = response.payload as unknown as ServicePost;
           setServices((prev) => prev.filter((s) => s.$id !== deletedService.$id));
         }
       }

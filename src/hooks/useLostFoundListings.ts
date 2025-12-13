@@ -39,7 +39,7 @@ export const useLostFoundListings = (collegeName?: string) => {
           APPWRITE_LOST_FOUND_COLLECTION_ID,
           queries
         );
-        setListings(response.documents as LostFoundPost[]);
+        setListings(response.documents as unknown as LostFoundPost[]);
       } catch (err: any) {
         console.error("Error fetching lost and found listings:", err);
         setError(err.message || "Failed to fetch lost and found listings.");
@@ -55,17 +55,17 @@ export const useLostFoundListings = (collegeName?: string) => {
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_LOST_FOUND_COLLECTION_ID}.documents`,
       (response) => {
         if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          const newListing = response.payload as LostFoundPost;
+          const newListing = response.payload as unknown as LostFoundPost;
           if (newListing.collegeName === targetCollegeName) {
             setListings((prev) => [newListing, ...prev]);
           }
         } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          const updatedListing = response.payload as LostFoundPost;
+          const updatedListing = response.payload as unknown as LostFoundPost;
           setListings((prev) =>
             prev.map((l) => (l.$id === updatedListing.$id ? updatedListing : l))
           );
         } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          const deletedListing = response.payload as LostFoundPost;
+          const deletedListing = response.payload as unknown as LostFoundPost;
           setListings((prev) => prev.filter((l) => l.$id !== deletedListing.$id));
         }
       }

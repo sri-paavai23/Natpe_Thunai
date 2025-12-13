@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { DialogFooter } from "@/components/ui/dialog";
 import { Loader2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea"; // Added missing import
 import { FoodOffering } from "@/hooks/useFoodOfferings"; // Import FoodOffering type
 
 // Define the form schema using Zod

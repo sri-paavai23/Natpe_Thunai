@@ -63,12 +63,12 @@ export const useTournamentData = (collegeName?: string) => {
 
       const parsedTournaments: Tournament[] = response.documents.map(doc => {
         // Parse registeredTeams from JSON string back to array
-        const registeredTeams = typeof doc.registeredTeams === 'string'
-          ? JSON.parse(doc.registeredTeams)
-          : doc.registeredTeams;
+        const registeredTeams = typeof (doc as any).registeredTeams === 'string'
+          ? JSON.parse((doc as any).registeredTeams)
+          : (doc as any).registeredTeams;
 
         return {
-          ...doc,
+          ...(doc as any),
           registeredTeams,
         } as Tournament;
       });
@@ -92,7 +92,7 @@ export const useTournamentData = (collegeName?: string) => {
       );
       // Optimistically update state or refetch
       setTournaments((prev) =>
-        prev.map((t) => (t.$id === updatedDoc.$id ? { ...updatedDoc, registeredTeams: JSON.parse(updatedDoc.registeredTeams as string) } as Tournament : t))
+        prev.map((t) => (t.$id === updatedDoc.$id ? { ...(updatedDoc as any), registeredTeams: JSON.parse((updatedDoc as any).registeredTeams as string) } as Tournament : t))
       );
       return updatedDoc;
     } catch (err: any) {
@@ -109,23 +109,23 @@ export const useTournamentData = (collegeName?: string) => {
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TOURNAMENTS_COLLECTION_ID}.documents`,
       (response) => {
         if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          const newTournament = response.payload as Tournament;
+          const newTournament = response.payload as unknown as Tournament;
           // Parse registeredTeams for new document
-          const registeredTeams = typeof newTournament.registeredTeams === 'string'
-            ? JSON.parse(newTournament.registeredTeams)
-            : newTournament.registeredTeams;
+          const registeredTeams = typeof (newTournament as any).registeredTeams === 'string'
+            ? JSON.parse((newTournament as any).registeredTeams)
+            : (newTournament as any).registeredTeams;
           setTournaments((prev) => [{ ...newTournament, registeredTeams }, ...prev]);
         } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          const updatedTournament = response.payload as Tournament;
+          const updatedTournament = response.payload as unknown as Tournament;
           // Parse registeredTeams for updated document
-          const registeredTeams = typeof updatedTournament.registeredTeams === 'string'
-            ? JSON.parse(updatedTournament.registeredTeams)
-            : updatedTournament.registeredTeams;
+          const registeredTeams = typeof (updatedTournament as any).registeredTeams === 'string'
+            ? JSON.parse((updatedTournament as any).registeredTeams)
+            : (updatedTournament as any).registeredTeams;
           setTournaments((prev) =>
             prev.map((t) => (t.$id === updatedTournament.$id ? { ...updatedTournament, registeredTeams } : t))
           );
         } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          const deletedTournament = response.payload as Tournament;
+          const deletedTournament = response.payload as unknown as Tournament;
           setTournaments((prev) => prev.filter((t) => t.$id !== deletedTournament.$id));
         }
       }

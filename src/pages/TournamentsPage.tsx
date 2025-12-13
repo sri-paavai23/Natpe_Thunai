@@ -77,7 +77,7 @@ const TournamentsPage = () => {
                   <DialogTitle className="text-foreground">Post New Esports Tournament</DialogTitle>
                 </DialogHeader>
                 <PostTournamentForm 
-                  onSubmit={handlePostTournament} // Corrected prop name
+                  onSubmit={handlePostTournament} 
                   onCancel={() => setIsPostTournamentDialogOpen(false)} 
                 />
               </DialogContent>

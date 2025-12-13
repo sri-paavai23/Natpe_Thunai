@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { Tournament, useTournamentData } from "@/hooks/useTournamentData"; // Import Tournament and useTournamentData
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TOURNAMENTS_COLLECTION_ID } from "@/lib/appwrite"; // Added missing imports
 
 // Define the form schema using Zod
 const formSchema = z.object({
@@ -302,7 +303,7 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
               <div key={team} className="flex items-center justify-between p-2 bg-muted rounded-md text-muted-foreground">
                 <span>{team}</span>
                 <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveTeam(team)} disabled={isSaving}>
-                  <XCircle className="h-4 w-4 text-destructive" />
+                  <XCircle className="h-4 w-4" />
                 </Button>
               </div>
             ))}

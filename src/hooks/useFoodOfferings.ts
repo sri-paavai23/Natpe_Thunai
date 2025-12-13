@@ -54,7 +54,7 @@ export const useFoodOfferings = (collegeName?: string) => {
           APPWRITE_FOOD_OFFERINGS_COLLECTION_ID,
           queries
         );
-        setOfferings(response.documents as FoodOffering[]);
+        setOfferings(response.documents as unknown as FoodOffering[]);
       } catch (err: any) {
         console.error("Error fetching food offerings:", err);
         setErrorOfferings(err.message || "Failed to fetch food offerings.");
@@ -69,17 +69,17 @@ export const useFoodOfferings = (collegeName?: string) => {
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_OFFERINGS_COLLECTION_ID}.documents`,
       (response) => {
         if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          const newOffering = response.payload as FoodOffering;
+          const newOffering = response.payload as unknown as FoodOffering;
           if (newOffering.collegeName === targetCollegeName) {
             setOfferings((prev) => [newOffering, ...prev]);
           }
         } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          const updatedOffering = response.payload as FoodOffering;
+          const updatedOffering = response.payload as unknown as FoodOffering;
           setOfferings((prev) =>
             prev.map((o) => (o.$id === updatedOffering.$id ? updatedOffering : o))
           );
         } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          const deletedOffering = response.payload as FoodOffering;
+          const deletedOffering = response.payload as unknown as FoodOffering;
           setOfferings((prev) => prev.filter((o) => o.$id !== deletedOffering.$id));
         }
       }
@@ -105,7 +105,7 @@ export const useFoodOfferings = (collegeName?: string) => {
           APPWRITE_FOOD_REQUESTS_COLLECTION_ID,
           queries
         );
-        setRequests(response.documents as FoodRequest[]);
+        setRequests(response.documents as unknown as FoodRequest[]);
       } catch (err: any) {
         console.error("Error fetching food requests:", err);
         setErrorRequests(err.message || "Failed to fetch food requests.");
@@ -120,17 +120,17 @@ export const useFoodOfferings = (collegeName?: string) => {
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_REQUESTS_COLLECTION_ID}.documents`,
       (response) => {
         if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          const newRequest = response.payload as FoodRequest;
+          const newRequest = response.payload as unknown as FoodRequest;
           if (newRequest.collegeName === targetCollegeName) {
             setRequests((prev) => [newRequest, ...prev]);
           }
         } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          const updatedRequest = response.payload as FoodRequest;
+          const updatedRequest = response.payload as unknown as FoodRequest;
           setRequests((prev) =>
             prev.map((r) => (r.$id === updatedRequest.$id ? updatedRequest : r))
           );
         } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          const deletedRequest = response.payload as FoodRequest;
+          const deletedRequest = response.payload as unknown as FoodRequest;
           setRequests((prev) => prev.filter((r) => r.$id !== deletedRequest.$id));
         }
       }
