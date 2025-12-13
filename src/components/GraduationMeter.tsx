@@ -93,7 +93,7 @@ const GraduationMeter: React.FC = () => {
     const targetLevel = 25;
     const userLevel = userProfile.level;
     const levelsToGo = targetLevel - userLevel;
-    const daysRemaining = countdown.days;
+    const daysRemaining = countdown.totalDays; // Use totalDays for motivation logic
 
     if (isGraduated) {
       return null; // Already graduated, the main message handles it
@@ -121,7 +121,7 @@ const GraduationMeter: React.FC = () => {
     }
 
     if (daysRemaining > 0 && levelsToGo > 0) {
-      motivationMessage += ` You have ${daysRemaining} days left before graduation.`;
+      motivationMessage += ` You have approximately ${daysRemaining} days left before graduation.`;
     } else if (daysRemaining <= 0 && levelsToGo > 0) {
       motivationMessage += ` Time is running out! Focus on learning new skills to reach Level ${targetLevel}.`;
     }
@@ -134,55 +134,59 @@ const GraduationMeter: React.FC = () => {
   };
 
   return (
-    <Card className="bg-card text-card-foreground shadow-lg border-border">
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-          <GraduationCap className="h-5 w-5 text-secondary-neon" /> Graduation Meter
+    <Card className="bg-card text-card-foreground shadow-lg border-border overflow-hidden">
+      <CardHeader className="p-4 pb-2 bg-gradient-to-r from-primary-blue-light to-secondary-neon text-primary-foreground">
+        <CardTitle className="text-xl font-bold flex items-center justify-center gap-2">
+          <GraduationCap className="h-6 w-6" /> Your Campus Journey
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-4">
+      <CardContent className="p-4 pt-4 space-y-5 flex flex-col items-center text-center">
         {isGraduated ? (
-          <div className="text-center text-destructive-foreground bg-destructive/10 p-3 rounded-md">
-            <AlertTriangle className="h-6 w-6 mx-auto mb-2 text-destructive" />
-            <p className="font-bold text-lg text-destructive">Graduation Protocol Activated!</p>
-            <p className="text-sm text-muted-foreground">Your account is scheduled for deletion. Please back up any important data.</p>
-            <div className="mt-4 space-y-2">
-              <Button onClick={handleExportData} className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90">
+          <div className="text-center text-destructive-foreground bg-destructive/10 p-4 rounded-lg w-full">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-destructive" />
+            <p className="font-bold text-xl text-destructive">Graduation Protocol Activated!</p>
+            <p className="text-sm text-muted-foreground mt-2">Your account is scheduled for deletion. Please back up any important data.</p>
+            <div className="mt-5 space-y-3">
+              <Button onClick={handleExportData} className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all duration-200">
                 <Download className="mr-2 h-4 w-4" /> Export My Data
               </Button>
-              <Button onClick={handleConnectAlumni} variant="outline" className="w-full border-primary text-primary-foreground hover:bg-primary/10">
+              <Button onClick={handleConnectAlumni} variant="outline" className="w-full border-primary text-primary-foreground hover:bg-primary/10 transition-all duration-200">
                 <Users className="mr-2 h-4 w-4" /> Connect with Alumni
               </Button>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Clock className="h-4 w-4" /> Time Remaining:
+            <div className="flex flex-col items-center gap-2 w-full">
+              <span className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Clock className="h-5 w-5 text-secondary-neon" /> Time Remaining:
               </span>
-              <span className="font-bold text-foreground">{countdownDisplay}</span>
+              <span className="text-3xl font-extrabold text-secondary-neon animate-pulse-slow">
+                {countdownDisplay}
+              </span>
             </div>
-            <Progress
-              value={progressPercentage}
-              className="h-3 bg-muted-foreground/30"
-              indicatorClassName={progressColorClass}
-            />
-            <p className="text-xs text-muted-foreground text-center">
-              {isGraduationProtocolActive
-                ? "Graduation Protocol Active! Time to prepare for your next chapter."
-                : "Your journey continues. Keep engaging!"}
-            </p>
+            <div className="w-full">
+              <Progress
+                value={progressPercentage}
+                className="h-4 bg-muted-foreground/30 rounded-full shadow-inner"
+                indicatorClassName={cn(progressColorClass, "transition-all duration-500 ease-out")}
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                {isGraduationProtocolActive
+                  ? "Graduation Protocol Active! Time to prepare for your next chapter."
+                  : "Your journey continues. Keep engaging!"}
+              </p>
+            </div>
             {renderGraduationMotivation()}
             {isGraduationProtocolActive && (
-              <div className="mt-4 space-y-2">
-                <Button onClick={handleExportData} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+              <div className="mt-5 space-y-3 w-full">
+                <Button onClick={handleExportData} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200">
                   <Download className="mr-2 h-4 w-4" /> Export My Data
                 </Button>
-                <Button onClick={handleConnectAlumni} variant="outline" className="w-full border-primary text-primary-foreground hover:bg-primary/10">
+                <Button onClick={handleConnectAlumni} variant="outline" className="w-full border-primary text-primary-foreground hover:bg-primary/10 transition-all duration-200">
                   <Users className="mr-2 h-4 w-4" /> Connect with Alumni
                 </Button>
-                <Button onClick={handleCompleteChecklist} className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+                <Button onClick={handleCompleteChecklist} className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 transition-all duration-200">
                   <CheckCircle className="mr-2 h-4 w-4" /> Complete Graduation Checklist (+100 XP)
                 </Button>
               </div>
