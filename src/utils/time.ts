@@ -1,4 +1,4 @@
-import { differenceInSeconds, addYears, intervalToDuration, isPast } from 'date-fns';
+import { differenceInSeconds, addYears, intervalToDuration, isPast, Duration } from 'date-fns';
 
 const GRADUATION_PERIOD_YEARS = 4; // 4 years for graduation
 
