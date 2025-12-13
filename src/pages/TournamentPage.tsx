@@ -1,108 +1,83 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trophy, Calendar, DollarSign, Users, Gamepad2, Loader2, AlertTriangle, Edit, PlusCircle, Info, Clock } from "lucide-react"; // Added Clock
+import { PlusCircle, Loader2, Gamepad2, CalendarDays, DollarSign, Trophy, Users, Info, Scale } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import DetailedTournamentRegistrationForm from "@/components/forms/DetailedTournamentRegistrationForm";
-import TournamentManagementForm from "@/components/forms/TournamentManagementForm"; // Assuming this exists and is functional
-import PostTournamentForm from "@/components/forms/PostTournamentForm";
-import { useTournamentData, Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import PostTournamentForm, { TournamentPostData } from "@/components/forms/PostTournamentForm";
+import { useTournamentData, Tournament } from "@/hooks/useTournamentData";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TOURNAMENTS_COLLECTION_ID } from "@/lib/appwrite";
+import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
 
-const TournamentPage = () => {
-  const { user } = useAuth();
-  const { tournaments, isLoading, error } = useTournamentData();
-  const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
-  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
-  const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false);
+const TournamentsPage = () => {
+  const { user, userProfile } = useAuth();
   const [isPostTournamentDialogOpen, setIsPostTournamentDialogOpen] = useState(false);
-
-  // Scroll to top on component mount
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
-  // Aggregate data from all tournaments
-  const upcomingTournaments = tournaments.filter(t => t.status === "Open");
-  const ongoingTournaments = tournaments.filter(t => t.status === "Ongoing");
-  const completedTournaments = tournaments.filter(t => t.status === "Completed");
   
-  // Aggregate all winners from all tournaments
-  const allWinners: Winner[] = tournaments.flatMap(t => t.winners || []);
-  
-  // Aggregate all standings (assuming standings are for the most recent/active tournament)
-  // For simplicity, we'll display standings from the first tournament that has them, or an empty array.
-  const activeStandings: TeamStanding[] = tournaments.find(t => t.standings && t.standings.length > 0)?.standings || [];
+  const { tournaments, isLoading, error } = useTournamentData();
 
+  const handlePostTournament = async (data: TournamentPostData) => {
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to post a tournament.");
+      return;
+    }
 
-  const handleRegisterClick = (tournament: Tournament) => {
-    setSelectedTournament(tournament);
-    setIsRegisterDialogOpen(true);
+    try {
+      const newTournamentData = {
+        ...data,
+        date: format(data.date, "yyyy-MM-dd"), // Format date to string for Appwrite
+        posterId: user.$id,
+        posterName: user.name,
+        collegeName: userProfile.collegeName,
+        registeredTeams: JSON.stringify([]), // Initialize as empty JSON array string
+      };
+
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TOURNAMENTS_COLLECTION_ID,
+        ID.unique(),
+        newTournamentData
+      );
+      
+      toast.success(`Your tournament "${data.name}" has been posted!`);
+      setIsPostTournamentDialogOpen(false);
+    } catch (e: any) {
+      console.error("Error posting tournament:", e);
+      toast.error(e.message || "Failed to post tournament listing.");
+    }
   };
-
-  const handleRegistrationSubmit = (data: { teamName: string; contactEmail: string; players: { name: string; inGameId: string }[] }) => {
-    if (!selectedTournament) return;
-    // The payment initiation is now handled inside the form before calling onRegister.
-    // If onRegister is called, we assume payment initiation was successful (or fee was zero).
-    toast.success(`Successfully registered "${data.teamName}" (${data.players.length} players) for ${selectedTournament.name}!`);
-    // Reset form state if needed, but closing the dialog handles it.
-    setIsRegisterDialogOpen(false);
-  };
-
-  const handleManageTournamentClick = (tournament: Tournament) => {
-    setSelectedTournament(tournament);
-    setIsManagementDialogOpen(true);
-  };
-
-  const handleTournamentPosted = () => {
-    setIsPostTournamentDialogOpen(false);
-    // The useTournamentData hook will refetch automatically
-  };
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-4">
-        <AlertTriangle className="h-6 w-6 text-destructive mr-2" />
-        <p className="text-lg text-destructive">Error loading tournaments: {error}</p>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Esports Arena (Tournaments)</h1>
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Esports Arena</h1>
       <div className="max-w-md mx-auto space-y-6">
-
-        {/* Create Tournament Card */}
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <PlusCircle className="h-5 w-5 text-secondary-neon" /> Host Your Own Tournament
+              <Gamepad2 className="h-5 w-5 text-secondary-neon" /> Host a Tournament
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Organize and manage your own esports tournaments for the campus community!
+              Organize and manage esports tournaments for your college community!
             </p>
             <Dialog open={isPostTournamentDialogOpen} onOpenChange={setIsPostTournamentDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Create New Tournament
+                <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4">
+                  <PlusCircle className="mr-2 h-4 w-4" /> Post New Tournament
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
                 <DialogHeader>
-                  <DialogTitle className="text-foreground">Create New Tournament</DialogTitle>
+                  <DialogTitle className="text-foreground">Post New Esports Tournament</DialogTitle>
                 </DialogHeader>
                 <PostTournamentForm 
-                  onTournamentPosted={handleTournamentPosted} 
+                  onSubmit={handlePostTournament} 
                   onCancel={() => setIsPostTournamentDialogOpen(false)} 
                 />
               </DialogContent>
@@ -110,12 +85,9 @@ const TournamentPage = () => {
           </CardContent>
         </Card>
 
-        {/* Upcoming Tournaments Section */}
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <Gamepad2 className="h-5 w-5 text-secondary-neon" /> Upcoming Tournaments
-            </CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground">Upcoming Tournaments</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
             {isLoading ? (
@@ -123,227 +95,46 @@ const TournamentPage = () => {
                 <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
                 <p className="ml-3 text-muted-foreground">Loading tournaments...</p>
               </div>
-            ) : upcomingTournaments.length > 0 ? (
-              upcomingTournaments.map((tournament) => (
-                <div key={tournament.$id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
-                  <div>
-                    <h3 className="font-semibold text-foreground">{tournament.name}</h3>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Gamepad2 className="h-3 w-3" /> {tournament.game}
-                    </p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> {tournament.date}
-                    </p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" /> Fee: {tournament.fee === 0 ? "Free" : `₹${tournament.fee}`} | Prize: {tournament.prizePool}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Hosted by: <span className="font-medium text-foreground">{tournament.posterName}</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      <Users className="h-3 w-3" /> Players per team: {tournament.minPlayers}-{tournament.maxPlayers}
-                    </p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      <Info className="h-3 w-3" /> {tournament.description}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 mt-3 sm:mt-0">
-                    {user?.$id === tournament.posterId && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-                        onClick={() => handleManageTournamentClick(tournament)}
-                      >
-                        <Edit className="mr-2 h-4 w-4" /> Manage
-                      </Button>
-                    )}
-                    <Button
-                      className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-                      onClick={() => handleRegisterClick(tournament)}
-                    >
-                      Register
-                    </Button>
-                  </div>
+            ) : error ? (
+              <p className="text-center text-destructive py-4">Error loading tournaments: {error}</p>
+            ) : tournaments.length > 0 ? (
+              tournaments.map((tournament) => (
+                <div key={tournament.$id} className="p-3 border border-border rounded-md bg-background">
+                  <h3 className="font-semibold text-foreground text-lg">{tournament.name}</h3>
+                  <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                    <Gamepad2 className="h-4 w-4 text-primary-blue-light" /> Game: <span className="font-medium text-foreground">{tournament.game}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <CalendarDays className="h-4 w-4 text-primary-blue-light" /> Date: <span className="font-medium text-foreground">{format(new Date(tournament.date), "PPP")}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <DollarSign className="h-4 w-4 text-primary-blue-light" /> Fee: <span className="font-medium text-foreground">₹{tournament.fee}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Trophy className="h-4 w-4 text-primary-blue-light" /> Prize Pool: <span className="font-medium text-foreground">{tournament.prizePool}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Users className="h-4 w-4 text-primary-blue-light" /> Players/Team: <span className="font-medium text-foreground">{tournament.minPlayers}-{tournament.maxPlayers}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Info className="h-4 w-4 text-primary-blue-light" /> Status: <Badge variant="secondary" className="bg-primary-blue-light text-primary-foreground">{tournament.status}</Badge>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">Posted by: <span className="font-medium text-foreground">{tournament.posterName}</span> from <span className="font-medium text-foreground">{tournament.collegeName}</span></p>
+                  <p className="text-xs text-muted-foreground">Registered Teams: <span className="font-medium text-foreground">{tournament.registeredTeams.length > 0 ? tournament.registeredTeams.join(', ') : 'None'}</span></p>
+                  <Button variant="outline" size="sm" className="mt-3 w-full border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10">
+                    View Details / Register
+                  </Button>
                 </div>
               ))
             ) : (
-              <p className="text-center text-muted-foreground py-4">No upcoming tournaments currently open for registration.</p>
+              <p className="text-center text-muted-foreground py-4">No tournaments posted yet for your college. Be the first!</p>
             )}
           </CardContent>
         </Card>
-
-        {/* Ongoing Tournaments Section */}
-        {ongoingTournaments.length > 0 && (
-          <Card className="bg-card text-card-foreground shadow-lg border-border">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-                <Clock className="h-5 w-5 text-orange-500" /> Ongoing Tournaments
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-4">
-              {ongoingTournaments.map((tournament) => (
-                <div key={tournament.$id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
-                  <div>
-                    <h3 className="font-semibold text-foreground">{tournament.name}</h3>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Gamepad2 className="h-3 w-3" /> {tournament.game}
-                    </p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> {tournament.date}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Hosted by: <span className="font-medium text-foreground">{tournament.posterName}</span>
-                    </p>
-                  </div>
-                  <Badge className="bg-orange-500 text-white mt-3 sm:mt-0">Ongoing</Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Winner Announcements Section */}
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-secondary-neon" /> Winner Announcements
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-2">
-            {isLoading ? (
-              <p className="text-center text-muted-foreground py-4">Loading winners...</p>
-            ) : allWinners.length > 0 ? (
-              allWinners.map((winner, index) => (
-                <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-b-0">
-                  <p className="text-foreground font-medium">{winner.tournament}</p>
-                  <p className="text-muted-foreground">Winner: <span className="font-semibold text-secondary-neon">{winner.winner}</span> (Prize: {winner.prize})</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-muted-foreground py-4">No winners announced yet.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tournament Standings / Team Table Section */}
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <Users className="h-5 w-5 text-secondary-neon" /> Tournament Standings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            {isLoading ? (
-              <p className="text-center text-muted-foreground py-4">Loading standings...</p>
-            ) : activeStandings.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px] text-foreground">Rank</TableHead>
-                    <TableHead className="text-foreground">Team Name</TableHead>
-                    <TableHead className="text-foreground">Status</TableHead>
-                    <TableHead className="text-right text-foreground">Points</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeStandings.map((team) => (
-                    <TableRow key={team.rank}>
-                      <TableCell className="font-medium text-foreground">{team.rank}</TableCell>
-                      <TableCell className="text-foreground">{team.teamName}</TableCell>
-                      <TableCell>
-                        <Badge
-                          className={cn(
-                            "px-2 py-1 text-xs font-semibold",
-                            team.status === "1st" && "bg-secondary-neon text-primary-foreground",
-                            team.status === "2nd" && "bg-blue-500 text-white",
-                            team.status === "Eliminated" && "bg-destructive text-destructive-foreground",
-                            team.status === "Participating" && "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {team.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-foreground">{team.points}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-center text-muted-foreground py-4">No active tournament standings available.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Completed Tournaments Section */}
-        {completedTournaments.length > 0 && (
-          <Card className="bg-card text-card-foreground shadow-lg border-border">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-green-500" /> Past Tournaments
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-4">
-              {completedTournaments.map((tournament) => (
-                <div key={tournament.$id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
-                  <div>
-                    <h3 className="font-semibold text-foreground">{tournament.name}</h3>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Gamepad2 className="h-3 w-3" /> {tournament.game}
-                    </p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> {tournament.date}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Hosted by: <span className="font-medium text-foreground">{tournament.posterName}</span>
-                    </p>
-                  </div>
-                  <Badge className="bg-green-500 text-white mt-3 sm:mt-0">Completed</Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
       </div>
       <MadeWithDyad />
-
-      {/* Registration Dialog */}
-      <Dialog open={isRegisterDialogOpen} onOpenChange={setIsRegisterDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Register for {selectedTournament?.name}</DialogTitle>
-          </DialogHeader>
-          {selectedTournament && (
-            <DetailedTournamentRegistrationForm
-              tournamentName={selectedTournament.name}
-              gameName={selectedTournament.game}
-              fee={selectedTournament.fee}
-              minPlayers={selectedTournament.minPlayers}
-              maxPlayers={selectedTournament.maxPlayers}
-              onRegister={handleRegistrationSubmit}
-              onCancel={() => setIsRegisterDialogOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Tournament Management Dialog */}
-      <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Manage Tournament: {selectedTournament?.name}</DialogTitle>
-          </DialogHeader>
-          {selectedTournament && (
-            <TournamentManagementForm
-              tournament={selectedTournament}
-              onClose={() => setIsManagementDialogOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
 
-export default TournamentPage;
+export default TournamentsPage;
