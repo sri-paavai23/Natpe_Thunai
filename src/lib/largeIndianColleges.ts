@@ -357,4 +357,5 @@ export const largeIndianColleges = [
   "Indira Gandhi Dental College and Hospital",
   "Jawaharlal Nehru Institute of Dental Sciences",
   "Mahatma Gandhi Dental College and Hospital",
+  
 ];
