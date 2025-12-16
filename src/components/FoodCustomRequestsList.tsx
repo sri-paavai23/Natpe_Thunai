@@ -1,56 +1,48 @@
 "use client";
 
 import React from "react";
-import { Button } from "@/components/ui/button";
-import { Loader2, MessageSquareText } from "lucide-react";
-import { toast } from "sonner";
 import { ServicePost } from "@/hooks/useServiceListings";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 interface FoodCustomRequestsListProps {
-  requests: ServicePost[];
-  isLoading: boolean;
-  error: string | null;
+  customRequests: ServicePost[];
 }
 
-const FoodCustomRequestsList: React.FC<FoodCustomRequestsListProps> = ({ requests, isLoading, error }) => {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-4">
-        <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
-        <p className="ml-3 text-muted-foreground">Loading requests...</p>
-      </div>
-    );
-  }
-  if (error) {
-    return <p className="text-center text-destructive py-4">Error loading requests: {error}</p>;
-  }
-  if (requests.length === 0) {
-    return <p className="text-center text-muted-foreground py-4">No custom order requests posted yet for your college.</p>;
-  }
-
+const FoodCustomRequestsList: React.FC<FoodCustomRequestsListProps> = ({ customRequests }) => {
   return (
     <div className="space-y-4">
-      {requests.map((post) => (
-        <div key={post.$id} className="p-3 border border-border rounded-md bg-background">
-          <h3 className="font-semibold text-foreground">{post.title}</h3>
-          <p className="text-sm text-muted-foreground mt-1">{post.description}</p>
-          {post.isCustomOrder && post.customOrderDescription && (
-            <p className="text-xs text-muted-foreground mt-1">Details: <span className="font-medium text-foreground">{post.customOrderDescription}</span></p>
-          )}
-          <p className="text-xs text-muted-foreground mt-1">Category: <span className="font-medium text-foreground">{post.category}</span></p>
-          <p className="text-xs text-muted-foreground">{post.isCustomOrder ? "Budget" : "Price"}: <span className="font-medium text-foreground">{post.price}</span></p>
-          <p className="text-xs text-muted-foreground">Posted by: {post.posterName}</p>
-          <p className="text-xs text-muted-foreground">Posted: {new Date(post.$createdAt).toLocaleDateString()}</p>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="mt-2 border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-            onClick={() => toast.info(`Contacting ${post.posterName} at ${post.contact} to fulfill this request.`)}
-          >
-            <MessageSquareText className="mr-2 h-4 w-4" /> Offer to Fulfill
-          </Button>
-        </div>
-      ))}
+      {customRequests.length > 0 ? (
+        customRequests.map((post) => (
+          <Card key={post.$id} className="bg-card text-card-foreground shadow-md border-border">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-lg font-semibold text-card-foreground">{post.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-1">
+              <p className="text-sm text-muted-foreground mt-1">{post.description}</p>
+              {post.isCustomOrder && post.customOrderDescription && (
+                <p className="text-xs text-muted-foreground mt-1">Details: <span className="font-medium text-foreground">{post.customOrderDescription}</span></p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">Category: <span className="font-medium text-foreground">{post.category}</span></p>
+              <p className="text-xs text-muted-foreground">{post.isCustomOrder ? "Budget" : "Price"}: <span className="font-medium text-foreground">{post.price}</span></p>
+              <p className="text-xs text-muted-foreground">Requested by: {post.providerName}</p> {/* Corrected from posterName */}
+              <p className="text-xs text-muted-foreground">Contact: {post.contact}</p>
+              <p className="text-xs text-muted-foreground">Posted: {new Date(post.$createdAt).toLocaleDateString()}</p>
+              <Button
+                variant="outline"
+                className="mt-2 border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
+                onClick={() => toast.info(`Contacting ${post.providerName} at ${post.contact} to fulfill this request.`)} // Corrected from posterName
+              >
+                Fulfill Request
+              </Button>
+            </CardContent>
+          </Card>
+        ))
+      ) : (
+        <p className="text-center text-muted-foreground py-4">No custom food requests posted yet.</p>
+      )}
     </div>
   );
 };

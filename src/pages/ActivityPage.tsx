@@ -9,7 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import BargainRequestsWidget from "@/components/BargainRequestsWidget";
 import UnlockingSoonCard from "@/components/UnlockingSoonCard";
-import CampusServicesCard from "@/components/CampusServicesCard"; // NEW IMPORT
+// import CampusServicesCard from "@/components/CampusServicesCard"; // REMOVED IMPORT
 
 const ActivityPage = () => {
   const navigate = useNavigate();
@@ -67,8 +67,8 @@ const ActivityPage = () => {
           </CardContent>
         </Card>
 
-        {/* Campus Services Card */}
-        <CampusServicesCard /> {/* NEW CARD ADDED HERE */}
+        {/* Campus Services Card - REMOVED FROM HERE */}
+        {/* <CampusServicesCard /> */}
 
         {/* Unlocking Soon Card */}
         <UnlockingSoonCard />

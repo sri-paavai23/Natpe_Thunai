@@ -1,111 +1,225 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+import {
+  Briefcase,
+  Utensils,
+  BookOpen,
+  HeartPulse,
+  Search,
+  PlusCircle,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import { HeartHandshake } from "lucide-react"; // Import HeartHandshake
-import StudentWelfareLinks from "@/components/StudentWelfareLinks"; // NEW IMPORT
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import PostServiceForm from "@/components/forms/PostServiceForm";
+import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
+import { ID } from "appwrite";
+import { useAuth } from "@/context/AuthContext";
+import CampusServicesCard from "@/components/CampusServicesCard"; // NEW IMPORT
+
+const SERVICE_TYPES = ["freelance", "food-wellness", "academic-support"];
+
+const STANDARD_SERVICE_OPTIONS = [
+  { value: "freelance", label: "Freelance Gigs" },
+  { value: "food-wellness", label: "Food & Wellness" },
+  { value: "academic-support", label: "Academic Support" },
+  { value: "other", label: "Other" },
+];
 
 const ServicesPage = () => {
-  const navigate = useNavigate();
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
+  const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
+  const [initialCategoryForForm, setInitialCategoryForForm] = useState<string | undefined>(undefined);
 
-  // Get user's age from profile, default to 0 if not available
-  const userAge = userProfile?.age || 0; 
-  // Content is age-gated if user is 25 or older (meaning they CANNOT access it)
-  const isAgeGated = userAge >= 25; 
+  const { services: postedServices, isLoading, error } = useServiceListings(SERVICE_TYPES);
 
-  const handleServiceClick = (path: string, serviceName: string) => {
-    if (isAgeGated && (path === "/services/errands" || path === "/services/short-term")) {
-      toast.error(`Access denied: "${serviceName}" is not available for users aged 25 and above.`);
+  const isAgeGated = (userProfile?.age ?? 0) >= 25;
+
+  const handleServiceClick = (categoryValue: string) => {
+    setInitialCategoryForForm(categoryValue);
+    setIsPostServiceDialogOpen(true);
+  };
+
+  const handlePostService = async (data: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "providerId" | "providerName" | "collegeName">) => {
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to post a service.");
       return;
     }
-    toast.info(`Navigating to "${serviceName}"...`);
-    navigate(path);
+
+    try {
+      const newServiceData = {
+        ...data,
+        providerId: user.$id,
+        providerName: user.name,
+        collegeName: userProfile.collegeName,
+      };
+
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_SERVICES_COLLECTION_ID,
+        ID.unique(),
+        newServiceData
+      );
+
+      toast.success(`Your service "${data.title}" has been posted!`);
+      setIsPostServiceDialogOpen(false);
+      setInitialCategoryForForm(undefined);
+    } catch (e: any) {
+      console.error("Error posting service:", e);
+      toast.error(e.message || "Failed to post service listing.");
+    }
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">The Grind (Services)</h1>
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Services Hub</h1>
       <div className="max-w-md mx-auto space-y-6">
-        {/* Student Welfare & E-commerce Links */}
-        <StudentWelfareLinks />
+        {/* Campus Services Card - NEWLY ADDED HERE */}
+        <CampusServicesCard />
 
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/freelance", "Freelance Section")}>
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Freelance Section</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">Resume Building, Video Editing, Content Writing, and more.</p>
-          </CardContent>
-        </Card>
-
-        {/* Errands Card (Age Gated) */}
-        <Card 
-          className={`bg-card p-4 rounded-lg shadow-md border border-border transition-shadow ${isAgeGated ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-xl'}`} 
-          onClick={() => handleServiceClick("/services/errands", "Errands")}
-        >
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Errands</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">Note-writing, small jobs, delivery services {isAgeGated ? "(Access Denied)" : "(Age-Gated)"}.</p>
-          </CardContent>
-        </Card>
-
-        {/* Short-Term Needs Card (Age Gated) */}
-        <Card 
-          className={`bg-card p-4 rounded-lg shadow-md border border-border transition-shadow ${isAgeGated ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-xl'}`} 
-          onClick={() => handleServiceClick("/services/short-term", "Short-Term Needs")}
-        >
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Short-Term Needs</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">Instant requests with extra charges for urgent tasks {isAgeGated ? "(Access Denied)" : "(Age-Gated)"}.</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/food-wellness", "Food & Wellness")}>
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Food & Wellness</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">Homemade food/remedies with cancellation warning and quality assurance.</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ticket-booking", "Ticket Booking")}>
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Ticket Booking</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">IRCTC, Abhi Bus, Paytm redirection for easy travel bookings.</p>
-            </CardContent>
-        </Card>
-
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/collaborators", "Project Collaborator Tab")}>
-          <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Project Collaborator Tab</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">Post or search for collaborators for academic or personal projects.</p>
-          </CardContent>
-        </Card>
-        
-        {/* New Ambassador Program Card */}
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ambassador-program", "Ambassador Program")}>
-          <CardHeader className="p-0 pb-2">
+        {/* Freelance Gigs Card */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <HeartHandshake className="h-5 w-5 text-secondary-neon" /> Ambassador Program
+              <Briefcase className="h-5 w-5 text-secondary-neon" /> Freelance Gigs
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <p className="text-muted-foreground">Join our team to facilitate deliveries and ensure trust in transactions.</p>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Offer your skills or find freelancers for various tasks.
+            </p>
+            <Link to="/services/freelance" className="block">
+              <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90">
+                <Search className="mr-2 h-4 w-4" /> Browse Freelance Gigs
+              </Button>
+            </Link>
+            <Button
+              className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4"
+              disabled={isAgeGated}
+              onClick={() => handleServiceClick("freelance")}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Post Your Service
+            </Button>
+            <p className="text-xs text-destructive-foreground mt-4">
+              Note: This section is age-gated for users under 25.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Food & Wellness Card */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Utensils className="h-5 w-5 text-secondary-neon" /> Food & Wellness
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Find homemade meals, healthy snacks, or wellness services on campus.
+            </p>
+            <Link to="/services/food-wellness" className="block">
+              <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90">
+                <Search className="mr-2 h-4 w-4" /> Browse Food & Wellness
+              </Button>
+            </Link>
+            <Button
+              className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4"
+              disabled={isAgeGated}
+              onClick={() => handleServiceClick("food-wellness")}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Post Your Offering
+            </Button>
+            <p className="text-xs text-destructive-foreground mt-4">
+              Note: This section is age-gated for users under 25.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Academic Support Card */}
+        <Card className="bg-card text-card-foreground shadow-lg border-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-secondary-neon" /> Academic Support
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Connect with tutors, study groups, or find help with assignments.
+            </p>
+            <Link to="/services/academic-support" className="block">
+              <Button className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90">
+                <Search className="mr-2 h-4 w-4" /> Browse Academic Support
+              </Button>
+            </Link>
+            <Button
+              className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4"
+              disabled={isAgeGated}
+              onClick={() => handleServiceClick("academic-support")}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Offer Academic Help
+            </Button>
+            <p className="text-xs text-destructive-foreground mt-4">
+              Note: This section is age-gated for users under 25.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Dialog for posting a new service */}
+        <Dialog open={isPostServiceDialogOpen} onOpenChange={setIsPostServiceDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Post New Service</DialogTitle>
+            </DialogHeader>
+            <PostServiceForm
+              onSubmit={handlePostService}
+              onCancel={() => {
+                setIsPostServiceDialogOpen(false);
+                setInitialCategoryForForm(undefined);
+              }}
+              categoryOptions={STANDARD_SERVICE_OPTIONS}
+              initialCategory={initialCategoryForForm}
+            />
+          </DialogContent>
+        </Dialog>
+
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Recently Posted Services</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading services...</p>
+              </div>
+            ) : error ? (
+              <p className="text-center text-destructive py-4">Error loading services: {error}</p>
+            ) : postedServices.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {postedServices.map((service) => (
+                  <div key={service.$id} className="p-3 border border-border rounded-md bg-background">
+                    <h3 className="font-semibold text-foreground">{service.title}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Category: <span className="font-medium text-foreground">{STANDARD_SERVICE_OPTIONS.find(opt => opt.value === service.category)?.label || service.category}</span></p>
+                    {service.category === 'other' && service.otherCategoryDescription && (
+                      <p className="text-xs text-muted-foreground">Other: <span className="font-medium text-foreground">{service.otherCategoryDescription}</span></p>
+                    )}
+                    <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{service.compensation}</span></p>
+                    {service.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{service.deadline}</span></p>}
+                    <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{service.contact}</span></p>
+                    <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No services posted yet for your college. Be the first!</p>
+            )}
           </CardContent>
         </Card>
       </div>

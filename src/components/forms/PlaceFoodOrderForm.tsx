@@ -1,231 +1,166 @@
 "use client";
 
 import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { DialogFooter } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ServicePost } from "@/hooks/useServiceListings";
-import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
-import { Loader2, DollarSign, Truck, AlertTriangle } from "lucide-react"; // NEW: Import AlertTriangle
-import { DEVELOPER_UPI_ID } from "@/lib/config"; // Import DEVELOPER_UPI_ID
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"; // Import Dialog components
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // NEW: Import AmbassadorDeliveryOption
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // NEW: Import Alert components
+import { useAuth } from "@/context/AuthContext";
+
+const formSchema = z.object({
+  quantity: z.number().min(1, { message: "Quantity must be at least 1." }),
+  specialInstructions: z.string().optional(),
+  deliveryAddress: z.string().min(5, { message: "Delivery address is required." }),
+  contactNumber: z.string().min(10, { message: "Contact number is required." }),
+});
 
 interface PlaceFoodOrderFormProps {
   offering: ServicePost;
-  onOrderPlaced: () => void;
-  onCancel: () => void;
+  onClose: () => void;
 }
 
-const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onOrderPlaced, onCancel }) => {
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth(); // NEW: Get incrementAmbassadorDeliveriesCount
-  const [quantity, setQuantity] = useState(1);
-  const [deliveryLocation, setDeliveryLocation] = useState(userProfile?.mobileNumber || ""); // Using mobile number field for location placeholder
-  const [notes, setNotes] = useState("");
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false); // NEW
-  const [ambassadorMessage, setAmbassadorMessage] = useState(""); // NEW
+const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ offering, onClose }) => {
+  const { user, userProfile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
 
   // Simple price parsing (assuming price is like "₹150" or "₹500/hour")
   const priceMatch = offering.price.match(/₹(\d+(\.\d+)?)/);
   const unitPrice = priceMatch ? parseFloat(priceMatch[1]) : 0;
-  const totalAmount = unitPrice * quantity;
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      quantity: 1,
+      specialInstructions: "",
+      deliveryAddress: userProfile?.hostelRoom || "", // Pre-fill if available
+      contactNumber: userProfile?.phone || "", // Pre-fill if available
+    },
+  });
+
+  const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
     if (!user || !userProfile) {
       toast.error("You must be logged in to place an order.");
       return;
     }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
-      return;
-    }
-    if (quantity <= 0 || !deliveryLocation.trim()) {
-      toast.error("Please specify a valid quantity and delivery location.");
-      return;
-    }
-    if (totalAmount <= 0) {
-        toast.error("Invalid price or quantity.");
-        return;
-    }
-    setIsConfirming(true);
-  };
 
-  const handlePaymentInitiation = async () => {
-    setIsConfirming(false);
     setIsSubmitting(true);
-
-    if (!user || !userProfile) return;
-
-    const orderTitle = `${offering.title} x${quantity}`;
-    const transactionNote = `Food Order: ${orderTitle}`;
-
     try {
-      // 1. Create Appwrite Food Order Document (Status: payment_initiated)
-      // We use the Food Order collection directly for tracking this transaction type
-      const newOrder = await databases.createDocument(
+      await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
         ID.unique(),
         {
           offeringId: offering.$id,
           offeringTitle: offering.title,
-          providerId: offering.posterId,
-          providerName: offering.posterName,
+          providerId: offering.providerId, // Corrected from posterId
+          providerName: offering.providerName, // Corrected from posterName
           buyerId: user.$id,
           buyerName: user.name,
-          quantity: quantity,
-          totalAmount: totalAmount,
-          deliveryLocation: deliveryLocation.trim(),
-          notes: notes.trim(),
-          status: "Pending Confirmation", // We keep this status for the provider flow, but payment is initiated now.
-          collegeName: userProfile.collegeName, // NEW: Add collegeName
-          ambassadorDelivery: ambassadorDelivery, // NEW
-          ambassadorMessage: ambassadorMessage || null, // NEW
+          quantity: data.quantity,
+          unitPrice: offering.price, // Store original price string
+          totalPrice: `₹${(unitPrice * data.quantity).toFixed(2)}`,
+          specialInstructions: data.specialInstructions,
+          deliveryAddress: data.deliveryAddress,
+          contactNumber: data.contactNumber,
+          status: "pending",
+          collegeName: userProfile.collegeName,
         }
       );
-      
-      const orderId = newOrder.$id;
-
-      // NEW: Increment ambassador deliveries count if opted
-      if (ambassadorDelivery) {
-        await incrementAmbassadorDeliveriesCount();
-      }
-
-      // 2. Generate UPI Deep Link (Payment goes to Developer UPI ID)
-      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${totalAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (Order ID: ${orderId})`)}`;
-
-      // 3. Redirect to UPI App
-      window.open(upiDeepLink, "_blank");
-      
-      toast.info(`Redirecting to UPI app to pay ₹${totalAmount.toFixed(2)} to the developer. Please complete the payment and note the UTR ID.`);
-
-      // 4. Redirect to a confirmation page (or just close the modal and let user track it)
-      // Since we don't have a dedicated Food Order confirmation page, we rely on the TrackingPage.
-      onOrderPlaced();
-
-    } catch (e: any) {
-      console.error("Error placing food order:", e);
-      toast.error(e.message || "Failed to place order.");
+      toast.success("Food order placed successfully!");
+      onClose();
+    } catch (error: any) {
+      console.error("Error placing food order:", error);
+      toast.error(error.message || "Failed to place food order.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const watchQuantity = form.watch("quantity");
+  const calculatedTotalPrice = unitPrice * watchQuantity;
+
   return (
-    <>
-      <form onSubmit={handleFormSubmit} className="grid gap-4 py-4">
-        {/* NEW: Cancellation Warning */}
-        <Alert variant="destructive" className="mb-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle className="font-semibold">Cancellation Policy</AlertTitle>
-          <AlertDescription className="text-sm text-foreground">
-            Cancellation is generally **not available** for homemade food and wellness remedies once the order is confirmed and payment is initiated, as ingredients may have already been purchased or preparation started. Please ensure your order is correct before proceeding.
-          </AlertDescription>
-        </Alert>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Ordering: <span className="font-semibold text-foreground">{offering.title}</span>
+        </p>
+        <p className="text-xs text-muted-foreground">Price per unit: <span className="font-medium text-secondary-neon">{offering.price}</span></p>
+        <p className="text-xs text-muted-foreground">Provider: {offering.providerName}</p> {/* Corrected from posterName */}
 
-        <div className="space-y-2">
-          <Label htmlFor="quantity" className="text-foreground">Quantity</Label>
-          <Input
-            id="quantity"
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-            min="1"
-            className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-            required
-            disabled={isSubmitting}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="deliveryLocation" className="text-foreground">Delivery Location (Hostel/Room/Block)</Label>
-          <Input
-            id="deliveryLocation"
-            type="text"
-            value={deliveryLocation}
-            onChange={(e) => setDeliveryLocation(e.target.value)}
-            placeholder="e.g., Block C, Room 404"
-            className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-            required
-            disabled={isSubmitting}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="notes" className="text-foreground">Special Notes (Optional)</Label>
-          <Textarea
-            id="notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g., Make it spicy, deliver after 7 PM."
-            className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <AmbassadorDeliveryOption // NEW
-          ambassadorDelivery={ambassadorDelivery}
-          setAmbassadorDelivery={setAmbassadorDelivery}
-          ambassadorMessage={ambassadorMessage}
-          setAmbassadorMessage={setAmbassadorMessage}
+        <FormField
+          control={form.control}
+          name="quantity"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Quantity</FormLabel>
+              <FormControl>
+                <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
+        <p className="text-sm text-muted-foreground">Total Price: <span className="font-bold text-secondary-neon">₹{calculatedTotalPrice.toFixed(2)}</span></p>
 
+        <FormField
+          control={form.control}
+          name="specialInstructions"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Special Instructions (Optional)</FormLabel>
+              <FormControl>
+                <Textarea placeholder="e.g., 'Less spicy', 'No onions'" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="deliveryAddress"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Delivery Address</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Hostel Block A, Room 101" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="contactNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Contact Number</FormLabel>
+              <FormControl>
+                <Input type="tel" placeholder="e.g., 9876543210" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Place Order"}
           </Button>
         </DialogFooter>
       </form>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={isConfirming} onOpenChange={setIsConfirming}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-          <DialogHeader>
-            <DialogTitle className="text-foreground flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-secondary-neon" /> Confirm Payment
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
-              <p>You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then process your order.</p>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-foreground">Item: <span className="font-semibold">{offering.title} x{quantity}</span></p>
-            <p className="text-xl font-bold text-secondary-neon">Total Amount: ₹{totalAmount.toFixed(2)}</p>
-            {ambassadorDelivery && ( // NEW
-              <p className="text-sm text-muted-foreground flex items-center gap-1">
-                <Truck className="h-4 w-4" /> Ambassador Delivery Requested
-                {ambassadorMessage && <span className="ml-1">({ambassadorMessage})</span>}
-              </p>
-            )}
-            <p className="text-xs text-destructive-foreground">
-                Recipient: Natpe Thunai Developers (UPI ID: {DEVELOPER_UPI_ID})
-            </p>
-            <p className="text-xs text-muted-foreground">
-                You will be redirected to your UPI app. If redirection fails, please use the developer UPI ID/QR code found in the 'Chat with Developers' section of your profile.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsConfirming(false)} className="border-border text-primary-foreground hover:bg-muted">
-              Go Back
-            </Button>
-            <Button onClick={handlePaymentInitiation} disabled={isSubmitting} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Pay Now & Place Order"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    </Form>
   );
 };
 
