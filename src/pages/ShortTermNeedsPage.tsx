@@ -27,8 +27,8 @@ const URGENT_ERRAND_OPTIONS = [
 const ErrandFormSchema = z.object({
   title: z.string(),
   description: z.string(),
-  category: z.string(),
-  otherCategoryDescription: z.string().optional(),
+  type: z.string(), // Changed from category to type
+  otherTypeDescription: z.string().optional(), // Changed from otherCategoryDescription
   compensation: z.string(),
   deadline: z.string().optional(),
   contact: z.string(),
@@ -37,7 +37,7 @@ const ErrandFormSchema = z.object({
 const ShortTermNeedsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
-  const [initialCategoryForForm, setInitialCategoryForForm] = useState<string | undefined>(undefined);
+  const [initialTypeForForm, setInitialTypeForForm] = useState<string | undefined>(undefined); // Changed from initialCategoryForForm
   
   // Fetch only urgent requests for the user's college
   const { errands: postedUrgentRequests, isLoading, error } = useErrandListings(URGENT_TYPES);
@@ -51,7 +51,7 @@ const ShortTermNeedsPage = () => {
   }, []);
 
   const handleNeedClick = (needType: string) => {
-    setInitialCategoryForForm(needType);
+    setInitialTypeForForm(needType); // Changed from setInitialCategoryForForm
     setIsPostErrandDialogOpen(true);
   };
 
@@ -64,10 +64,10 @@ const ShortTermNeedsPage = () => {
     try {
       const newRequestData = {
         ...data,
-        // If category is 'other', use otherCategoryDescription as the actual category
-        category: data.category === 'other' && data.otherCategoryDescription 
-                  ? data.otherCategoryDescription 
-                  : data.category,
+        // If type is 'other', use otherTypeDescription as the actual type
+        type: data.type === 'other' && data.otherTypeDescription 
+                  ? data.otherTypeDescription 
+                  : data.type,
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName,
@@ -82,7 +82,7 @@ const ShortTermNeedsPage = () => {
       
       toast.success(`Your urgent request "${data.title}" has been posted!`);
       setIsPostErrandDialogOpen(false);
-      setInitialCategoryForForm(undefined); // Reset initial category
+      setInitialTypeForForm(undefined); // Reset initial type
     } catch (e: any) {
       console.error("Error posting urgent request:", e);
       toast.error(e.message || "Failed to post urgent request listing.");
@@ -127,9 +127,9 @@ const ShortTermNeedsPage = () => {
                 </DialogHeader>
                 <PostErrandForm 
                   onSubmit={handlePostErrand} 
-                  onCancel={() => { setIsPostErrandDialogOpen(false); setInitialCategoryForForm(undefined); }} 
-                  categoryOptions={URGENT_ERRAND_OPTIONS}
-                  initialCategory={initialCategoryForForm}
+                  onCancel={() => { setIsPostErrandDialogOpen(false); setInitialTypeForForm(undefined); }} // Changed to setInitialTypeForForm
+                  typeOptions={URGENT_ERRAND_OPTIONS} // Changed to typeOptions
+                  initialType={initialTypeForForm} // Changed to initialType
                 />
               </DialogContent>
             </Dialog>

@@ -17,8 +17,8 @@ import { toast } from "sonner";
 const formSchema = z.object({
   title: z.string().min(2, { message: "Title must be at least 2 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
-  category: z.string().min(1, { message: "Please select a category." }),
-  otherCategoryDescription: z.string().optional(), // New field for 'other' category
+  type: z.string().min(1, { message: "Please select a type." }), // Changed from category to type
+  otherTypeDescription: z.string().optional(), // New field for 'other' type
   compensation: z.string().min(2, { message: "Compensation details are required." }),
   deadline: z.string().optional(),
   contact: z.string().min(5, { message: "Contact information is required." }),
@@ -28,15 +28,15 @@ const formSchema = z.object({
 interface PostErrandFormProps {
   onSubmit: (data: z.infer<typeof formSchema>) => void;
   onCancel: () => void;
-  categoryOptions: { value: string; label: string }[];
-  initialCategory?: string; // New prop for pre-filling category
+  typeOptions: { value: string; label: string }[]; // Changed from categoryOptions to typeOptions
+  initialType?: string; // Changed from initialCategory to initialType
 }
 
 const PostErrandForm: React.FC<PostErrandFormProps> = ({
   onSubmit,
   onCancel,
-  categoryOptions,
-  initialCategory,
+  typeOptions, // Changed from categoryOptions
+  initialType, // Changed from initialCategory
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,31 +45,31 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
     defaultValues: {
       title: "",
       description: "",
-      category: initialCategory || "", // Use initialCategory if provided
-      otherCategoryDescription: "",
+      type: initialType || "", // Use initialType if provided
+      otherTypeDescription: "",
       compensation: "",
       deadline: "",
       contact: "",
     },
   });
 
-  // Update form's category if initialCategory changes
+  // Update form's type if initialType changes
   useEffect(() => {
-    if (initialCategory && initialCategory !== form.getValues("category")) {
-      form.setValue("category", initialCategory);
+    if (initialType && initialType !== form.getValues("type")) {
+      form.setValue("type", initialType);
     }
-  }, [initialCategory, form]);
+  }, [initialType, form]);
 
   const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      // If category is 'other' and otherCategoryDescription is empty, show error
-      if (data.category === 'other' && !data.otherCategoryDescription?.trim()) {
-        form.setError("otherCategoryDescription", {
+      // If type is 'other' and otherTypeDescription is empty, show error
+      if (data.type === 'other' && !data.otherTypeDescription?.trim()) {
+        form.setError("otherTypeDescription", {
           type: "manual",
-          message: "Please specify the 'Other' category.",
+          message: "Please specify the 'Other' type.",
         });
-        toast.error("Please specify the 'Other' category.");
+        toast.error("Please specify the 'Other' type.");
         return;
       }
       await onSubmit(data);
@@ -81,7 +81,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
     }
   };
 
-  const selectedCategory = form.watch("category");
+  const selectedType = form.watch("type"); // Changed from selectedCategory
 
   return (
     <Form {...form}>
@@ -114,18 +114,18 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
         />
         <FormField
           control={form.control}
-          name="category"
+          name="type" // Changed from category
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Category</FormLabel>
+              <FormLabel className="text-foreground">Type</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
                   <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                    <SelectValue placeholder="Select a category" />
+                    <SelectValue placeholder="Select a type" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent className="bg-popover text-popover-foreground border-border">
-                  {categoryOptions.map((option) => (
+                  {typeOptions.map((option) => ( // Changed from categoryOptions
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -136,13 +136,13 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             </FormItem>
           )}
         />
-        {selectedCategory === 'other' && (
+        {selectedType === 'other' && ( // Changed from selectedCategory
           <FormField
             control={form.control}
-            name="otherCategoryDescription"
+            name="otherTypeDescription" // Changed from otherCategoryDescription
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-foreground">Specify Other Category</FormLabel>
+                <FormLabel className="text-foreground">Specify Other Type</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g., Academic Tutoring, Pet Sitting" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
                 </FormControl>

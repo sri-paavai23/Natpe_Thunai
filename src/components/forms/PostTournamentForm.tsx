@@ -10,11 +10,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Loader2, PlusCircle } from "lucide-react";
+import { Loader2, PlusCircle, CalendarIcon } from "lucide-react"; // Added CalendarIcon
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TOURNAMENTS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added Popover
+import { Calendar } from "@/components/ui/calendar"; // Added Calendar
+import { format } from "date-fns"; // Added format from date-fns
+import { cn } from "@/lib/utils"; // Added cn
 
 // Define common game options
 const GAME_OPTIONS = [
@@ -30,7 +34,7 @@ const formSchema = z.object({
   name: z.string().min(3, { message: "Tournament name must be at least 3 characters." }),
   game: z.string().min(1, { message: "Please select a game." }),
   otherGameDescription: z.string().optional(), // For 'other' game type
-  date: z.string().min(1, { message: "Date is required." }),
+  date: z.string().min(1, { message: "Date is required." }), // Changed to string for date picker output
   fee: z.preprocess(
     (val) => Number(val),
     z.number().min(0, { message: "Fee cannot be negative." })
@@ -88,6 +92,7 @@ const PostTournamentForm: React.FC<PostTournamentFormProps> = ({ onTournamentPos
           message: "Please specify the 'Other' game.",
         });
         toast.error("Please specify the 'Other' game.");
+        setIsSubmitting(false); // Reset loading state on validation error
         return;
       }
 
@@ -185,11 +190,36 @@ const PostTournamentForm: React.FC<PostTournamentFormProps> = ({ onTournamentPos
           control={form.control}
           name="date"
           render={({ field }) => (
-            <FormItem>
+            <FormItem className="flex flex-col">
               <FormLabel className="text-foreground">Date</FormLabel>
-              <FormControl>
-                <Input type="text" placeholder="e.g., 2024-12-25" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-              </FormControl>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal bg-input text-foreground border-border focus:ring-ring focus:border-ring",
+                        !field.value && "text-muted-foreground"
+                      )}
+                      disabled={isSubmitting}
+                    >
+                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-popover text-popover-foreground border-border" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value ? new Date(field.value) : undefined}
+                    onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : "")}
+                    disabled={(date) =>
+                      date < new Date() || date < new Date("1900-01-01")
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
               <FormMessage />
             </FormItem>
           )}

@@ -203,7 +203,7 @@ const FoodWellnessPage = () => {
             ) : error ? (
               <p className="text-center text-destructive py-4">Error loading offerings: {error}</p>
             ) : postedOfferings.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4"> {/* Added grid layout */}
                 {postedOfferings.map((offering) => (
                   <FoodOfferingCard key={offering.$id} offering={offering} />
                 ))}

@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 export interface ErrandPost extends Models.Document {
   title: string;
   description: string;
-  type: string; // e.g., 'note-writing', 'instant-help'
+  type: string; // e.g., 'note-writing', 'instant-help' - Changed from category to type
   compensation: string;
   deadline?: string;
   contact: string;

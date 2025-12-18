@@ -33,6 +33,11 @@ const ErrandsPage = () => {
   // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
 
+  // Scroll to top on component mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const handleErrandClick = (errandType: string) => {
     toast.info(`You selected "${errandType}". Post your errand using the button below.`);
   };
@@ -46,6 +51,10 @@ const ErrandsPage = () => {
     try {
       const newErrandData = {
         ...data,
+        // If type is 'other' and otherTypeDescription is empty, use otherTypeDescription as the actual type
+        type: data.type === 'other' && (data as any).otherTypeDescription 
+              ? (data as any).otherTypeDescription 
+              : data.type,
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
@@ -111,7 +120,7 @@ const ErrandsPage = () => {
                 <PostErrandForm 
                   onSubmit={handlePostErrand} 
                   onCancel={() => setIsPostErrandDialogOpen(false)} 
-                  categoryOptions={STANDARD_ERRAND_OPTIONS}
+                  typeOptions={STANDARD_ERRAND_OPTIONS} // Changed to typeOptions
                 />
               </DialogContent>
             </Dialog>
