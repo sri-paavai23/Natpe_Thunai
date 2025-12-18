@@ -15,7 +15,7 @@ import { Link } from "react-router-dom"; // Import Link
 interface RentListingFormProps {
   onSubmit: (product: {
     title: string;
-    rentPrice: string;
+    price: string; // Changed from rentPrice to price
     description: string;
     policies: string;
     imageUrl: string;
@@ -65,7 +65,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
 
     const finalImageUrl = imageUrl.trim() || "/app-logo.png"; // Default to app logo if empty
 
-    onSubmit({ title, rentPrice: `₹${rentPriceValue}/${rentUnit}`, description, policies, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
+    onSubmit({ title, price: `₹${rentPriceValue}/${rentUnit}`, description, policies, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage }); // Changed rentPrice to price
     setTitle("");
     setRentPriceValue("");
     setRentUnit("day");

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import SpaceRunnerGame from "@/components/SpaceRunnerGame";
+import CosmicDashGame from "@/components/CosmicDashGame"; // Updated import
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 
@@ -33,8 +33,8 @@ const OfflinePage = () => {
             <RefreshCw className="mr-2 h-4 w-4" /> Try Reconnecting
           </Button>
           
-          <h2 className="text-xl font-semibold text-secondary-neon">Play Space Runner!</h2>
-          <SpaceRunnerGame />
+          <h2 className="text-xl font-semibold text-secondary-neon">Play Cosmic Dash!</h2>
+          <CosmicDashGame />
           <p className="text-sm text-muted-foreground">
             A mini-game to keep you entertained while you wait for the network to return.
           </p>

@@ -21,16 +21,14 @@ export const useMarketListings = (): MarketListingsState => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async () => {
-    const isDeveloper = userProfile?.role === 'developer';
-    const collegeToFilterBy = userProfile?.collegeName;
-
-    // This check is now handled by the useEffect wrapper, but kept for direct calls if any.
-    if (!userProfile || (!isDeveloper && !collegeToFilterBy)) {
-      setIsLoading(false);
-      setProducts([]);
-      setError("User profile not loaded or missing college information. Cannot fetch market listings.");
+    // If userProfile is not yet loaded or is null, we can't fetch products.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
       return;
     }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = userProfile.collegeName;
 
     setIsLoading(true);
     setError(null);
@@ -40,7 +38,7 @@ export const useMarketListings = (): MarketListingsState => {
         Query.equal('status', 'available'),
       ];
       if (!isDeveloper) {
-        queries.push(Query.equal('collegeName', collegeToFilterBy!));
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
       }
 
       const response = await databases.listDocuments(
@@ -82,6 +80,8 @@ export const useMarketListings = (): MarketListingsState => {
   useEffect(() => {
     if (isAuthLoading) {
       setIsLoading(true);
+      setProducts([]); // Clear products while auth is loading
+      setError(null);
       return;
     }
 
@@ -92,46 +92,29 @@ export const useMarketListings = (): MarketListingsState => {
       return;
     }
 
+    // If auth is done and userProfile is available, fetch products
     fetchProducts();
 
-    // Subscription logic
+    // Setup real-time subscriptions
     const isDeveloper = userProfile.role === 'developer';
     const collegeToFilterBy = userProfile.collegeName;
 
+    // Only subscribe if there's a valid college to filter by, or if it's a developer viewing all
     if (!isDeveloper && !collegeToFilterBy) return;
 
-    const unsubscribe = databases.client.subscribe(
+    const unsubscribeProducts = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_PRODUCTS_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as Product;
 
+        // Filter real-time updates by collegeName if not a developer
         if (!isDeveloper && payload.collegeName !== collegeToFilterBy) {
             return;
         }
 
-        setProducts(prev => {
-          const existingIndex = prev.findIndex(p => p.$id === payload.$id);
-
-          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-            if (existingIndex === -1) {
-              toast.info(`New listing posted: ${payload.title}`);
-              fetchProducts(); // Refetch to get sellerLevel and proper sorting
-              return prev;
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-            if (existingIndex !== -1) {
-              toast.info(`Listing updated: ${payload.title}`);
-              fetchProducts(); // Refetch to get sellerLevel and proper sorting
-              return prev;
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-            if (existingIndex !== -1) {
-              toast.info(`Listing removed: ${payload.title}`);
-              return prev.filter(p => p.$id !== payload.$id);
-            }
-          }
-          return prev;
-        });
+        // For any product update (create, update, delete), refetch to ensure sellerLevel and sorting are correct.
+        // This is simpler than trying to merge/update locally with seller profile data.
+        fetchProducts();
       }
     );
 
@@ -140,6 +123,8 @@ export const useMarketListings = (): MarketListingsState => {
       (response) => {
         const payload = response.payload as any;
         if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+          // If a user profile is updated, and that user is a seller of an existing product, refetch products.
+          // This ensures sellerLevel badges are up-to-date.
           const isSellerOfExistingProduct = products.some(p => p.sellerId === payload.userId);
           if (isSellerOfExistingProduct) {
             fetchProducts();
@@ -149,10 +134,10 @@ export const useMarketListings = (): MarketListingsState => {
     );
 
     return () => {
-      unsubscribe();
+      unsubscribeProducts();
       unsubscribeUserProfiles();
     };
-  }, [fetchProducts, isAuthLoading, userProfile]); // Removed `products` from dependencies to avoid infinite loop on `setProducts`
+  }, [fetchProducts, isAuthLoading, userProfile]);
 
   return { products, isLoading, error, refetch: fetchProducts };
 };

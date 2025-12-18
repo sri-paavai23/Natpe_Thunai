@@ -20,15 +20,14 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalTransactions = useCallback(async () => {
-    const isDeveloper = userProfile?.role === 'developer';
-    const collegeToFilterBy = collegeNameFilter || userProfile?.collegeName;
-
-    if (!userProfile || (!isDeveloper && !collegeToFilterBy)) {
-      setIsLoading(false);
-      setTotalTransactions(0);
-      setError("User profile not loaded or missing college information. Cannot fetch total transactions.");
+    // If userProfile is not yet loaded or is null, we can't fetch.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
       return;
     }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile.collegeName;
 
     setIsLoading(true);
     setError(null);
@@ -56,6 +55,8 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
   useEffect(() => {
     if (isAuthLoading) {
       setIsLoading(true);
+      setTotalTransactions(0); // Clear data while auth is loading
+      setError(null);
       return;
     }
 
@@ -66,6 +67,7 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
       return;
     }
 
+    // If auth is done and userProfile is available, fetch data
     fetchTotalTransactions();
   }, [fetchTotalTransactions, isAuthLoading, userProfile]);
 
