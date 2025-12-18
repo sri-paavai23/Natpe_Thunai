@@ -44,8 +44,7 @@ export const useFoodOrdersAnalytics = (collegeNameFilter?: string): FoodOrdersAn
 
       const queries = [
         Query.greaterThanEqual('$createdAt', isoDate),
-        Query.limit(1)
-      ];
+      ]; // Removed Query.limit(1)
       if (!isDeveloper && collegeToFilterBy) {
         queries.push(Query.equal('collegeName', collegeToFilterBy));
       }

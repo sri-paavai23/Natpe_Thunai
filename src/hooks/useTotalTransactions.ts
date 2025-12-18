@@ -38,7 +38,7 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
     setIsLoading(true);
     setError(null);
     try {
-      const queries = [Query.limit(1)];
+      const queries = []; // Removed Query.limit(1)
       if (!isDeveloper && collegeToFilterBy) {
         queries.push(Query.equal('collegeName', collegeToFilterBy));
       }

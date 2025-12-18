@@ -38,7 +38,7 @@ export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => {
     setIsLoading(true);
     setError(null);
     try {
-      const queries = [Query.limit(1)];
+      const queries = []; // Removed Query.limit(1)
 
       if (!isDeveloper && collegeToFilterBy) {
         queries.push(Query.equal('collegeName', collegeToFilterBy));
