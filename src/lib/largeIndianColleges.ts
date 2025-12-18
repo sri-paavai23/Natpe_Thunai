@@ -185,7 +185,6 @@ export const largeIndianColleges = [
   "Tagore Engineering College",
   "Vel Tech High Tech Dr. Rangarajan Dr. Sakunthala Engineering College",
   "Vels Institute of Science, Technology & Advanced Studies",
-  "Paavai Engineering College",
   "Bharathidasan Institute of Management",
   "National Institute of Fashion Technology, Chennai",
   "School of Architecture and Planning, Anna University",
