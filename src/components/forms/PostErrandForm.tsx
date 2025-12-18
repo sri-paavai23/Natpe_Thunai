@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -12,13 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DialogFooter } from "@/components/ui/dialog";
 import { Loader2, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
+import { ErrandPost } from "@/hooks/useErrandListings"; // Assuming ErrandPost is defined here
 
 // Define the schema for the form
 const formSchema = z.object({
   title: z.string().min(2, { message: "Title must be at least 2 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
   category: z.string().min(1, { message: "Please select a category." }),
-  otherCategoryDescription: z.string().optional(), // New field for 'other' category
+  type: z.string().min(1, { message: "Please select a type." }), // Added type field
   compensation: z.string().min(2, { message: "Compensation details are required." }),
   deadline: z.string().optional(),
   contact: z.string().min(5, { message: "Contact information is required." }),
@@ -26,17 +27,25 @@ const formSchema = z.object({
 
 // Define the props for the component
 interface PostErrandFormProps {
-  onSubmit: (data: z.infer<typeof formSchema>) => void;
+  onSubmit: (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName" | "status">) => void;
   onCancel: () => void;
   categoryOptions: { value: string; label: string }[];
-  initialCategory?: string; // New prop for pre-filling category
+  titlePlaceholder?: string;
+  descriptionPlaceholder?: string;
+  compensationPlaceholder?: string;
+  deadlinePlaceholder?: string;
+  contactPlaceholder?: string;
 }
 
 const PostErrandForm: React.FC<PostErrandFormProps> = ({
   onSubmit,
   onCancel,
   categoryOptions,
-  initialCategory,
+  titlePlaceholder = "e.g., Pick up groceries",
+  descriptionPlaceholder = "Provide details about the errand...",
+  compensationPlaceholder = "e.g., ₹100, Coffee, Negotiable",
+  deadlinePlaceholder = "e.g., ASAP, By 5 PM today",
+  contactPlaceholder = "e.g., WhatsApp number, Room number",
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,33 +54,17 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
     defaultValues: {
       title: "",
       description: "",
-      category: initialCategory || "", // Use initialCategory if provided
-      otherCategoryDescription: "",
+      category: "",
+      type: "", // Default value for type
       compensation: "",
       deadline: "",
       contact: "",
     },
   });
 
-  // Update form's category if initialCategory changes
-  useEffect(() => {
-    if (initialCategory && initialCategory !== form.getValues("category")) {
-      form.setValue("category", initialCategory);
-    }
-  }, [initialCategory, form]);
-
   const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      // If category is 'other' and otherCategoryDescription is empty, show error
-      if (data.category === 'other' && !data.otherCategoryDescription?.trim()) {
-        form.setError("otherCategoryDescription", {
-          type: "manual",
-          message: "Please specify the 'Other' category.",
-        });
-        toast.error("Please specify the 'Other' category.");
-        return;
-      }
       await onSubmit(data);
       form.reset();
     } catch (error: any) {
@@ -80,8 +73,6 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
       setIsSubmitting(false);
     }
   };
-
-  const selectedCategory = form.watch("category");
 
   return (
     <Form {...form}>
@@ -93,7 +84,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Title</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Need help moving books" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input placeholder={titlePlaceholder} {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -106,7 +97,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Description</FormLabel>
               <FormControl>
-                <Textarea placeholder="Provide details about the errand..." {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Textarea placeholder={descriptionPlaceholder} {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -136,21 +127,28 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             </FormItem>
           )}
         />
-        {selectedCategory === 'other' && (
-          <FormField
-            control={form.control}
-            name="otherCategoryDescription"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Specify Other Category</FormLabel>
+        <FormField
+          control={form.control}
+          name="type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Type</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
-                  <Input placeholder="e.g., Academic Tutoring, Pet Sitting" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                  <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
+                    <SelectValue placeholder="Select errand type" />
+                  </SelectTrigger>
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
+                <SelectContent className="bg-popover text-popover-foreground border-border">
+                  <SelectItem value="one-time">One-time</SelectItem>
+                  <SelectItem value="recurring">Recurring</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="compensation"
@@ -158,7 +156,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Compensation</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., ₹200, Coffee, Help with a task" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input placeholder={compensationPlaceholder} {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -171,7 +169,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Deadline (Optional)</FormLabel>
               <FormControl>
-                <Input type="text" placeholder="e.g., Tomorrow 5 PM, End of week" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input type="text" placeholder={deadlinePlaceholder} {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -184,7 +182,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             <FormItem>
               <FormLabel className="text-foreground">Contact Information</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., WhatsApp number, Email" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                <Input placeholder={contactPlaceholder} {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -195,7 +193,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Post Request</>}
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><PlusCircle className="mr-2 h-4 w-4" /> Post Errand</>}
           </Button>
         </DialogFooter>
       </form>

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck, Flag } from "lucide-react"; // NEW: Import Flag icon
+import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
@@ -18,14 +18,14 @@ import { Query, ID } from "appwrite";
 import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation";
 import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages";
 import { calculateCommissionRate } from "@/utils/commission";
-import { useReports, Report } from "@/hooks/useReports"; // NEW IMPORT
+import { useReports, Report } from "@/hooks/useReports";
 
 interface Transaction {
   $id: string;
   productId: string;
   buyerId: string;
   buyerName: string;
-  sellerId: string; // Changed from userId to sellerId
+  sellerId: string;
   sellerName: string;
   sellerUpiId: string;
   amount: number;
@@ -38,13 +38,13 @@ interface Transaction {
   collegeName: string;
   ambassadorDelivery?: boolean;
   ambassadorMessage?: string;
-  utrId?: string; // NEW: Add UTR ID
+  utrId?: string;
 }
 
 const DeveloperDashboardPage = () => {
   const { user, userProfile } = useAuth();
   const { messages, isLoading: isMessagesLoading, error: messagesError, refetch: refetchMessages } = useDeveloperMessages(); 
-  const { reports, isLoading: isReportsLoading, error: reportsError, refetch: refetchReports, updateReportStatus } = useReports(); // NEW: Use reports hook
+  const { reports, isLoading: isReportsLoading, error: reportsError, refetch: refetchReports, updateReportStatus } = useReports();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
   const [blockedWords, setBlockedWords] = useState<string[]>(STATIC_BLOCKED_WORDS); 
@@ -112,7 +112,8 @@ const DeveloperDashboardPage = () => {
     if (word && !blockedWords.includes(word)) {
       setBlockedWords((prev) => [...prev, word]);
       setNewBlockedWord("");
-      toast.success(`Word "${word}" added to blocked list (local simulation).`);
+      toast.success(`Word "${word}" added to blocked list.`);
+      // TODO: Implement persistence to Appwrite database
     } else if (word) {
       toast.warning(`Word "${word}" is already blocked.`);
     }
@@ -120,7 +121,8 @@ const DeveloperDashboardPage = () => {
 
   const handleRemoveBlockedWord = (wordToRemove: string) => {
     setBlockedWords((prev) => prev.filter((word) => word !== wordToRemove));
-    toast.info(`Word "${wordToRemove}" removed from blocked list (local simulation).`);
+    toast.info(`Word "${wordToRemove}" removed from blocked list.`);
+    // TODO: Implement persistence to Appwrite database
   };
 
   // --- User Management Handlers ---
@@ -131,7 +133,8 @@ const DeveloperDashboardPage = () => {
     }
     if (!window.confirm(`Are you sure you want to SUSPEND user ID: ${userId}? This action is reversible.`)) return;
 
-    toast.warning(`Simulated suspension of user ${userId}. Actual suspension must be performed via Appwrite Console or Function.`);
+    // User suspension requires Appwrite Server SDK or Appwrite Function
+    toast.error("User suspension requires an Appwrite Function. Please implement server-side logic.");
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -141,30 +144,8 @@ const DeveloperDashboardPage = () => {
     }
     if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE user ID: ${userId}? This action is irreversible.`)) return;
 
-    try {
-      const profileResponse = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', userId)]
-      );
-
-      if (profileResponse.documents.length > 0) {
-        const profileId = profileResponse.documents[0].$id;
-        await databases.deleteDocument(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_USER_PROFILES_COLLECTION_ID,
-          profileId
-        );
-        toast.info(`User profile ${profileId} deleted.`);
-      }
-
-      toast.warning(`Simulated deletion of user ${userId}. Actual deletion must be performed via Appwrite Console or Function.`);
-      
-      toast.success(`User ${userId} has been deleted (simulated).`);
-    } catch (error: any) {
-      console.error("Error deleting user:", error);
-      toast.error(error.message || "Failed to delete user.");
-    }
+    // User deletion requires Appwrite Server SDK or Appwrite Function
+    toast.error("User deletion requires an Appwrite Function. Please implement server-side logic.");
   };
 
   // --- Transaction Handlers (updated logic) ---
@@ -179,7 +160,7 @@ const DeveloperDashboardPage = () => {
       const sellerProfileResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', transaction.sellerId)] // Changed to transaction.sellerId
+        [Query.equal('userId', transaction.sellerId)]
       );
 
       if (sellerProfileResponse.documents.length === 0) {
@@ -425,7 +406,7 @@ const DeveloperDashboardPage = () => {
                     <TableRow key={report.$id}>
                       <TableCell className="font-medium text-foreground">{report.productTitle}</TableCell>
                       <TableCell className="text-muted-foreground">{report.reporterName}</TableCell>
-                      <TableCell className="text-muted-foreground">{report.sellerId}</TableCell> {/* Display seller ID for now */}
+                      <TableCell className="text-muted-foreground">{report.sellerId}</TableCell>
                       <TableCell className="text-muted-foreground">{report.collegeName}</TableCell>
                       <TableCell className="text-muted-foreground">{report.reason}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[200px] truncate">{report.message || "N/A"}</TableCell>
@@ -530,7 +511,7 @@ const DeveloperDashboardPage = () => {
               </Button>
             </div>
             <p className="text-xs text-destructive-foreground mt-1">
-              Note: Deletion and Suspension are simulated on the client side due to Appwrite SDK limitations.
+              Note: User deletion and suspension require Appwrite Functions (server-side logic).
             </p>
           </CardContent>
         </Card>
@@ -546,7 +527,7 @@ const DeveloperDashboardPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
             <p className="text-sm text-muted-foreground">
-              This list is used to filter inappropriate language in user feedback and reports. (List is static/local for demonstration).
+              This list is used to filter inappropriate language in user feedback and reports. (Currently managed locally).
             </p>
             <div className="flex gap-2">
               <Input

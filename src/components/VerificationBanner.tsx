@@ -2,70 +2,53 @@
 
 import React from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Mail, Loader2, X } from "lucide-react"; // Import X icon for close button
 import { Button } from "@/components/ui/button";
+import { Info, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { account } from "@/lib/appwrite";
-import { APP_HOST_URL } from "@/lib/config"; // Import APP_HOST_URL
+import { account } from "@/lib/appwrite"; // Assuming account is exported from appwrite.ts
 
 const VerificationBanner = () => {
   const { user, isVerified } = useAuth();
   const [loading, setLoading] = React.useState(false);
-  const [isVisible, setIsVisible] = React.useState(true); // State to control banner visibility
-
-  if (isVerified || !isVisible) { // Hide if verified or explicitly dismissed
-    return null;
-  }
 
   const handleResendVerification = async () => {
-    if (!user?.email) {
-      toast.error("User email not found.");
+    if (!user) {
+      toast.error("No user logged in.");
       return;
     }
     setLoading(true);
     try {
-      await account.createVerification(
-        `${APP_HOST_URL}/verify-email` // Use dynamic URL
-      );
-      toast.success("Verification email resent! Please check your inbox.");
+      await account.createVerification("https://your-app-domain.com/verify"); // Replace with your actual verification URL
+      toast.success("Verification email sent! Please check your inbox.");
     } catch (error: any) {
+      console.error("Error resending verification:", error);
       toast.error(error.message || "Failed to resend verification email.");
-      console.error("Resend verification error:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  if (!user || isVerified) {
+    return null; // Don't show if not logged in or already verified
+  }
+
   return (
-    <div className="p-4 bg-background sticky top-16 z-30 border-b border-border">
-      <Alert className="bg-yellow-100 border-yellow-500 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-400 max-w-md mx-auto relative"> {/* Added relative for positioning close button */}
-        <Mail className="h-4 w-4 text-yellow-500" />
-        <AlertTitle className="text-yellow-600 dark:text-yellow-400 font-semibold">Email Verification Required</AlertTitle>
-        <AlertDescription className="text-sm space-y-2">
-          <p>Please check your email ({user?.email}) to verify your account and unlock full app features.</p>
+    <div className="w-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 p-3 text-center">
+      <Alert className="bg-transparent border-none text-yellow-800 dark:text-yellow-200">
+        <Info className="h-4 w-4 text-yellow-800 dark:text-yellow-200" />
+        <AlertTitle className="text-yellow-800 dark:text-yellow-200">Email Verification Required</AlertTitle>
+        <AlertDescription className="flex items-center justify-center space-x-2 text-yellow-800 dark:text-yellow-200">
+          <span>Please verify your email address to unlock all features.</span>
           <Button
+            variant="link"
             onClick={handleResendVerification}
             disabled={loading}
-            className="w-full bg-yellow-500 text-white hover:bg-yellow-600 dark:bg-yellow-700 dark:hover:bg-yellow-600"
+            className="text-yellow-800 dark:text-yellow-200 hover:text-yellow-900 dark:hover:text-yellow-100 p-0 h-auto"
           >
-            {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Mail className="mr-2 h-4 w-4" />
-            )}
-            Resend Verification Link
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Resend Verification"}
           </Button>
         </AlertDescription>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="absolute top-2 right-2 h-6 w-6 text-yellow-800 dark:text-yellow-400 hover:bg-yellow-200/50 dark:hover:bg-yellow-900"
-          onClick={() => setIsVisible(false)} // Dismiss the banner
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Dismiss</span>
-        </Button>
       </Alert>
     </div>
   );

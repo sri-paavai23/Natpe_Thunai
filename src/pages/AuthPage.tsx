@@ -1,482 +1,217 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { account, databases, storage, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_COLLEGE_ID_BUCKET_ID } from "@/lib/appwrite";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Building2, Image } from "lucide-react";
-import { APP_HOST_URL } from "@/lib/config";
-import { largeIndianColleges } from "@/lib/largeIndianColleges";
-import CollegeCombobox from "@/components/CollegeCombobox";
-import { generateAvatarUrl, DICEBEAR_AVATAR_STYLES } from "@/utils/avatarGenerator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import ReportMissingCollegeForm from "@/components/forms/ReportMissingCollegeForm";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useNavigate } from "react-router-dom";
+import CollegeCombobox from "@/components/CollegeCombobox"; // Import CollegeCombobox
 
-// Helper function to generate a random username
-const generateRandomUsername = (): string => {
-  const adjectives = ["swift", "brave", "silent", "golden", "shadow", "mystic", "cosmic", "iron", "ruby", "emerald", "Hidden", "Veiled", "Phantom", "Ghost", "Arcane", "Cryptic", "Shrouded", "Astral"];
-  const nouns = ["wolf", "eagle", "phoenix", "dragon", "tiger", "badger", "viper", "golem", "knight", "wizard", "Lynx", "Panther", "Falcon", "Shark", "Cobra", "Grizzly", "Leopard", "Raptor"];
-  const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
-  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-  const randomNumber = Math.floor(Math.random() * 100);
-  return `${randomAdjective}${randomNoun}${randomNumber}`;
-};
+// Dummy college list for demonstration
+const DUMMY_COLLEGE_LIST = [
+  "Indian Institute of Technology Bombay",
+  "Indian Institute of Technology Delhi",
+  "Indian Institute of Technology Madras",
+  "Indian Institute of Technology Kanpur",
+  "Indian Institute of Technology Kharagpur",
+  "Vellore Institute of Technology",
+  "SRM Institute of Science and Technology",
+  "Manipal Academy of Higher Education",
+  "Birla Institute of Technology and Science, Pilani",
+  "National Institute of Technology, Trichy",
+];
 
-// Helper function to generate multiple unique username options
-const generateUsernameOptions = (count: number = 3): string[] => {
-  const options = new Set<string>();
-  while (options.size < count) {
-    options.add(generateRandomUsername());
-  }
-  return Array.from(options);
-};
+const loginSchema = z.object({
+  email: z.string().email({ message: "Invalid email address." }),
+  password: z.string().min(8, { message: "Password must be at least 8 characters." }),
+});
+
+const registerSchema = z.object({
+  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
+  email: z.string().email({ message: "Invalid email address." }),
+  password: z.string().min(8, { message: "Password must be at least 8 characters." }),
+  collegeName: z.string().min(1, { message: "Please select your college." }),
+});
 
 const AuthPage = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [age, setAge] = useState("");
-  const [mobileNumber, setMobileNumber] = useState("");
-  const [upiId, setUpiId] = useState("");
-  const [collegeIdPhoto, setCollegeIdPhoto] = useState<File | null>(null);
-  const [generatedUsernames, setGeneratedUsernames] = useState<string[]>([]);
-  const [selectedUsername, setSelectedUsername] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [gender, setGender] = useState<"male" | "female" | "prefer-not-to-say">("prefer-not-to-say");
-  const [userType, setUserType] = useState<"student" | "staff">("student");
-  const [collegeName, setCollegeName] = useState("");
-  const [avatarStyle, setAvatarStyle] = useState("lorelei");
-  const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
-
-  const { isAuthenticated, isLoading, login } = useAuth();
+  const { isAuthenticated, isLoading, login, register } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("login");
 
-  // Scroll to top on component mount
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
-  // This useEffect handles redirection for *existing* authenticated users
-  // and also for new signups once AuthContext updates.
-  React.useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate("/home", { replace: true });
+      navigate("/home");
     }
-  }, [isLoading, isAuthenticated, navigate]);
+  }, [isAuthenticated, isLoading, navigate]);
 
-  React.useEffect(() => {
-    if (!isLogin && generatedUsernames.length === 0) {
-      setGeneratedUsernames(generateUsernameOptions());
-    }
-  }, [isLogin, generatedUsernames.length]);
+  const loginForm = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-  const handleCollegeIdPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files ? e.target.files[0] : null;
-    if (file) {
-      const MAX_FILE_SIZE_MB = 1;
-      const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024; // 1MB in bytes
+  const registerForm = useForm<z.infer<typeof registerSchema>>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      collegeName: "",
+    },
+  });
 
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        toast.error(`File size exceeds ${MAX_FILE_SIZE_MB}MB. Please compress your image.`);
-        setCollegeIdPhoto(null); // Clear the selected file
-        e.target.value = ''; // Clear the input field
-        return;
-      }
-    }
-    setCollegeIdPhoto(file);
-  };
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const onLoginSubmit = async (data: z.infer<typeof loginSchema>) => {
     try {
-      if (isLogin) {
-        await account.createEmailPasswordSession(email, password);
-        await login(); // Call login from AuthContext to update global state
-        toast.success("Logged in successfully!");
-        // Navigation is now handled by the useEffect above
-      } else {
-        if (!termsAccepted) {
-          toast.error("You must accept the terms and conditions.");
-          setLoading(false);
-          return;
-        }
-        if (!selectedUsername) {
-          toast.error("Please select a username.");
-          setLoading(false);
-          return;
-        }
-        if (!collegeIdPhoto) {
-          toast.error("Please upload your college ID card photo.");
-          setLoading(false);
-          return;
-        }
-        if (!collegeName) {
-          toast.error("Please select your college.");
-          setLoading(false);
-          return;
-        }
-        if (!avatarStyle) {
-          toast.error("Please select an avatar style.");
-          setLoading(false);
-          return;
-        }
-
-        const user = await account.create("unique()", email, password, selectedUsername);
-        
-        let collegeIdPhotoFileId = null;
-        if (collegeIdPhoto) {
-          try {
-            const uploadedFile = await storage.createFile(
-              APPWRITE_COLLEGE_ID_BUCKET_ID,
-              ID.unique(),
-              collegeIdPhoto
-            );
-            collegeIdPhotoFileId = uploadedFile.$id;
-            toast.info("College ID photo uploaded.");
-          } catch (uploadError: any) {
-            console.error("Error uploading college ID photo:", uploadError);
-            toast.error("Failed to upload college ID photo. Please try again.");
-            setLoading(false);
-            return; 
-          }
-        }
-
-        try {
-          await databases.createDocument(
-            APPWRITE_DATABASE_ID,
-            APPWRITE_USER_PROFILES_COLLECTION_ID,
-            ID.unique(),
-            {
-              userId: user.$id,
-              firstName,
-              lastName,
-              age: parseInt(age),
-              mobileNumber,
-              upiId,
-              collegeIdPhotoId: collegeIdPhotoFileId,
-              role: "user",
-              gender,
-              userType,
-              collegeName,
-              level: 1,
-              currentXp: 0,
-              maxXp: 100,
-              ambassadorDeliveriesCount: 0,
-              lastQuestCompletedDate: null,
-              itemsListedToday: 0,
-              avatarStyle: avatarStyle,
-            }
-          );
-          toast.success("User profile saved.");
-          toast.info("Your Name, Age, Mobile Number, UPI ID, and College ID Photo are collected for developer safety assurance only and will NOT be shared publicly. Only your chosen username will be visible.");
-        } catch (profileError: any) {
-          console.error("Error creating user profile document:", profileError);
-          toast.error(`Failed to create user profile: ${profileError.message}. Please ensure your Appwrite 'user_profiles' collection has 'create' permissions for 'users' and the schema matches the fields being sent.`);
-          setLoading(false);
-          return;
-        }
-        
-        await account.createVerification(
-          `${APP_HOST_URL}/verify-email`
-        );
-        toast.info("Verification email sent! Please check your inbox.");
-
-        // Create session and log in the user immediately after successful signup
-        await account.createEmailPasswordSession(email, password);
-        await login(); // Call login from AuthContext to update global state
-        toast.success("You are now logged in!");
-        
-        // Navigation is now handled by the useEffect above
-
-        // Clear form fields
-        setFirstName("");
-        setLastName("");
-        setAge("");
-        setMobileNumber("");
-        setUpiId("");
-        setCollegeIdPhoto(null);
-        setGeneratedUsernames([]);
-        setSelectedUsername("");
-        setTermsAccepted(false);
-        setGender("prefer-not-to-say");
-        setUserType("student");
-        setCollegeName("");
-        setAvatarStyle("lorelei");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "An error occurred during authentication.");
-      console.error("Authentication error:", error);
-    } finally {
-      setLoading(false);
+      await login(data.email, data.password); // Pass email and password
+    } catch (error) {
+      // Error handled by AuthContext and toast
     }
   };
+
+  const onRegisterSubmit = async (data: z.infer<typeof registerSchema>) => {
+    try {
+      await register(data.email, data.password, data.name, data.collegeName);
+    } catch (error) {
+      // Error handled by AuthContext and toast
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
+        <p className="ml-3 text-lg text-muted-foreground">Loading authentication...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-background-dark p-4">
-      <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-4">
+      <Card className="w-full max-w-md bg-card text-card-foreground shadow-lg border-border">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-foreground">
-            {isLogin ? "Welcome Back!" : "Join the Community"}
-          </CardTitle>
-          <CardDescription className="text-foreground">
-            {isLogin ? "Log in to connect and thrive." : "Sign up and unlock campus potential."}
+          <CardTitle className="text-3xl font-bold text-foreground">Welcome to Dyad</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Login or create an account to get started.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName" className="text-foreground">First Name</Label>
-                    <Input
-                      id="firstName"
-                      type="text"
-                      placeholder="John"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      required
-                      className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName" className="text-foreground">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      type="text"
-                      placeholder="Doe"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      required
-                      className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="age" className="text-foreground">Age</Label>
-                  <Input
-                    id="age"
-                    type="number"
-                    placeholder="18"
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    required
-                    min="16"
-                    className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring"
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 bg-muted text-muted-foreground">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+            <TabsContent value="login" className="mt-4">
+              <Form {...loginForm}>
+                <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                  <FormField
+                    control={loginForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground">Email</FormLabel>
+                        <FormControl>
+                          <Input placeholder="your@email.com" {...field} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="mobileNumber" className="text-foreground">Mobile Number</Label>
-                  <Input
-                    id="mobileNumber"
-                    type="tel"
-                    placeholder="9876543210"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value)}
-                    required
-                    className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring"
+                  <FormField
+                    control={loginForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground">Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="********" {...field} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="upiId" className="text-foreground">UPI ID</Label>
-                  <Input
-                    id="upiId"
-                    type="text"
-                    placeholder="yourname@upi"
-                    value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
-                    required
-                    className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring"
+                  <Button type="submit" className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" disabled={loginForm.formState.isSubmitting}>
+                    {loginForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Login"}
+                  </Button>
+                </form>
+              </Form>
+            </TabsContent>
+            <TabsContent value="register" className="mt-4">
+              <Form {...registerForm}>
+                <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                  <FormField
+                    control={registerForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground">Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John Doe" {...field} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="collegeName" className="text-foreground">Your College</Label>
-                  <CollegeCombobox
-                    collegeList={largeIndianColleges}
-                    value={collegeName}
-                    onValueChange={setCollegeName}
-                    placeholder="Select your college"
-                    disabled={loading}
+                  <FormField
+                    control={registerForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground">Email</FormLabel>
+                        <FormControl>
+                          <Input placeholder="your@email.com" {...field} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {/* NEW: "Cannot Find College" button */}
-                  <Dialog open={isReportMissingCollegeDialogOpen} onOpenChange={setIsReportMissingCollegeDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="link" className="p-0 h-auto text-secondary-neon hover:underline mt-2 flex items-center gap-1">
-                        <Building2 className="h-3 w-3" /> Cannot find my college
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-                      <DialogHeader>
-                        <DialogTitle className="text-foreground">Report Missing College</DialogTitle>
-                      </DialogHeader>
-                      <ReportMissingCollegeForm
-                        onReportSubmitted={() => setIsReportMissingCollegeDialogOpen(false)}
-                        onCancel={() => setIsReportMissingCollegeDialogOpen(false)}
-                      />
-                    </DialogContent>
-                  </Dialog>
-                </div>
-                <div>
-                  <Label htmlFor="collegeIdPhoto" className="text-foreground">College ID Card Photo (Max 1MB)</Label>
-                  <Input
-                    id="collegeIdPhoto"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCollegeIdPhotoChange}
-                    required
-                    className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring file:text-primary-foreground file:bg-primary-blue-light file:border-0 file:mr-4 file:py-2 file:px-4 file:rounded-md"
+                  <FormField
+                    control={registerForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground">Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="********" {...field} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {collegeIdPhoto && <p className="text-xs text-muted-foreground mt-1">File selected: {collegeIdPhoto.name}</p>}
-                  <a href="https://tinypng.com" target="_blank" rel="noopener noreferrer" className="text-xs text-secondary-neon hover:underline flex items-center gap-1 mt-1">
-                    <Image className="h-3 w-3" /> Click here to compress your image
-                  </a>
-                </div>
-
-                <div>
-                  <Label className="mb-2 block text-foreground">Gender</Label>
-                  <RadioGroup value={gender} onValueChange={(value: "male" | "female" | "prefer-not-to-say") => setGender(value)} className="flex flex-wrap gap-4">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="male" id="gender-male" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
-                      <Label htmlFor="gender-male" className="text-foreground">Male</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="female" id="gender-female" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
-                      <Label htmlFor="gender-female" className="text-foreground">Female</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="prefer-not-to-say" id="gender-prefer-not-to-say" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
-                      <Label htmlFor="gender-prefer-not-to-say" className="text-foreground">Prefer not to say</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <div>
-                  <Label className="mb-2 block text-foreground">Are you a?</Label>
-                  <RadioGroup value={userType} onValueChange={(value: "student" | "staff") => setUserType(value)} className="flex flex-wrap gap-4">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="student" id="user-type-student" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
-                      <Label htmlFor="user-type-student" className="text-foreground">Student</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="staff" id="user-type-staff" className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
-                      <Label htmlFor="user-type-staff" className="text-foreground">Staff</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <div>
-                  <Label className="mb-2 block text-foreground">Choose Your Username (Public)</Label>
-                  <RadioGroup value={selectedUsername} onValueChange={setSelectedUsername} className="grid grid-cols-1 gap-2">
-                    {generatedUsernames.map((username) => (
-                      <div key={username} className="flex items-center space-x-2">
-                        <RadioGroupItem value={username} id={username} className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground" />
-                        <Label htmlFor={username} className="text-foreground">{username}</Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    This is the only identifier visible to other users.
-                  </p>
-                </div>
-
-                {/* NEW: Avatar Style Selection */}
-                <div>
-                  <Label htmlFor="avatarStyle" className="text-foreground">Choose Your Avatar Style</Label>
-                  <Select value={avatarStyle} onValueChange={setAvatarStyle} required disabled={loading}>
-                    <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring">
-                      <SelectValue placeholder="Select avatar style" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
-                      {DICEBEAR_AVATAR_STYLES.map((style) => (
-                        <SelectItem key={style} value={style}>{style.replace(/-/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="terms"
-                    checked={termsAccepted}
-                    onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
-                    className="border-border data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground"
+                  <FormField
+                    control={registerForm.control}
+                    name="collegeName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground">College</FormLabel>
+                        <FormControl>
+                          <CollegeCombobox
+                            collegeList={DUMMY_COLLEGE_LIST}
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            placeholder="Select your college..."
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  <Label htmlFor="terms" className="text-sm text-muted-foreground">
-                    I agree to the <Link to="/profile/policies" className="text-secondary-neon hover:underline">terms and conditions</Link>
-                  </Label>
-                </div>
-                <p className="text-xs text-destructive text-center font-medium">
-                  Your Name, Age, Mobile Number, UPI ID, and College ID Photo are collected for developer safety assurance only and will NOT be shared publicly. Only your chosen username will be visible.
-                </p>
-              </>
-            )}
-            <div>
-              <Label htmlFor="email" className="text-foreground">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring"
-              />
-            </div>
-            <div>
-              <Label htmlFor="password" className="text-foreground">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-1 text-muted-foreground hover:bg-transparent"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
-                </Button>
-              </div>
-            </div>
-            {isLogin && (
-              <div className="text-right text-sm">
-                <Link to="/forgot-password" className="text-secondary-neon hover:underline">
-                  Forgot Password?
-                </Link>
-              </div>
-            )}
-            <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-200" disabled={loading}>
-              {loading ? "Processing..." : (isLogin ? "Log In" : "Sign Up")}
-            </Button>
-          </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            {isLogin ? "New here? " : "Already a member? "}
-            <Button variant="link" onClick={() => setIsLogin(!isLogin)} className="p-0 h-auto text-secondary-neon hover:text-secondary-neon/80" disabled={loading}>
-              {isLogin ? "Create an Account" : "Log In"}
-            </Button>
-          </div>
+                  <Button type="submit" className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" disabled={registerForm.formState.isSubmitting}>
+                    {registerForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Register"}
+                  </Button>
+                </form>
+              </Form>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

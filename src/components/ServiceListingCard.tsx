@@ -1,111 +1,70 @@
 "use client";
 
 import React from "react";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquareText, DollarSign, Star } from "lucide-react";
-import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { useServiceReviews } from "@/hooks/useServiceReviews";
 import { ServicePost } from "@/hooks/useServiceListings";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import BargainServiceDialog from "./forms/BargainServiceDialog";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 
 interface ServiceListingCardProps {
   service: ServicePost;
-  onOpenBargainDialog: (service: ServicePost) => void;
-  onOpenReviewDialog: (service: ServicePost) => void;
-  isFoodOrWellnessCategory: boolean;
 }
 
-// Helper function to format category slug into readable title
-const formatCategoryTitle = (categorySlug: string | undefined) => {
-  if (!categorySlug || categorySlug === "all") return "All Service Listings";
-  return categorySlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-};
-
-const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
-  service,
-  onOpenBargainDialog,
-  onOpenReviewDialog,
-  isFoodOrWellnessCategory,
-}) => {
-  const navigate = useNavigate();
+const ServiceListingCard: React.FC<ServiceListingCardProps> = ({ service }) => {
   const { user } = useAuth();
-  const { averageRating, isLoading: isReviewsLoading, error: reviewsError } = useServiceReviews(service.$id);
-  const hasReviewed = false; // Simulate: In a real app, check if user has already reviewed this service
+  const [isBargainDialogOpen, setIsBargainDialogOpen] = React.useState(false);
 
-  const handleContactProvider = (contact: string, title: string) => {
-    toast.info(`Contacting provider for "${title}" at ${contact}.`);
-    // In a real app, this would open a chat or email client.
+  const handleBargainClick = () => {
+    if (!user) {
+      toast.error("You must be logged in to bargain.");
+      return;
+    }
+    if (user.$id === service.providerId) {
+      toast.error("You cannot bargain on your own service.");
+      return;
+    }
+    setIsBargainDialogOpen(true);
   };
 
   return (
-    <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center">
-      <div>
-        <h3 className="font-semibold text-foreground">{service.title}</h3>
+    <Card className="bg-card text-card-foreground shadow-md border-border">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-lg font-semibold text-card-foreground">{service.title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-1">
         <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
         <p className="text-xs text-muted-foreground mt-1">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p>
-        <p className="text-xs text-muted-foreground">Posted by: {service.posterName}</p>
+        <p className="text-xs text-muted-foreground">Posted by: {service.providerName}</p>
         <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
-        
-        <div className="flex items-center gap-2 mt-2">
-          {service.category && (
-            <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-              {formatCategoryTitle(service.category)}
-            </Badge>
-          )}
+        <div className="flex flex-wrap gap-2 mt-2">
+          <Badge variant="secondary" className="bg-muted text-muted-foreground">{service.category}</Badge>
           {service.isCustomOrder && (
             <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
-              Custom Request
+              Custom Order
             </Badge>
           )}
         </div>
-
-        <div className="flex items-center text-sm text-muted-foreground mt-2">
-          {isReviewsLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-1 text-secondary-neon" />
-          ) : reviewsError ? (
-            <span className="text-destructive">Error loading rating</span>
-          ) : (
-            <>
-              <Star className={cn("h-4 w-4 mr-1", averageRating > 0 ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} />
-              <span className="font-medium text-foreground">{averageRating.toFixed(1)}</span>
-              <span className="ml-1">({useServiceReviews(service.$id).reviews.length} reviews)</span>
-            </>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-2 mt-2 sm:mt-0">
-        <Button 
-          size="sm" 
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-          onClick={() => handleContactProvider(service.contact, service.title)}
-        >
-          Contact Provider
-        </Button>
-        {!isFoodOrWellnessCategory && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-            onClick={() => onOpenBargainDialog(service)}
-          >
-            <DollarSign className="mr-2 h-4 w-4" /> Bargain (15% off)
-          </Button>
-        )}
-        {!hasReviewed && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-            onClick={() => onOpenReviewDialog(service)}
-          >
-            <Star className="mr-2 h-4 w-4" /> Leave a Review
-          </Button>
-        )}
-      </div>
-    </div>
+      </CardContent>
+      <CardFooter className="p-4 pt-0">
+        <Dialog open={isBargainDialogOpen} onOpenChange={setIsBargainDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="w-full border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10" onClick={handleBargainClick}>
+              Bargain
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Send Bargain Request</DialogTitle>
+            </DialogHeader>
+            <BargainServiceDialog service={service} onClose={() => setIsBargainDialogOpen(false)} />
+          </DialogContent>
+        </Dialog>
+      </CardFooter>
+    </Card>
   );
 };
 
