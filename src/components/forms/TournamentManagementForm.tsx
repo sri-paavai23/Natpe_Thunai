@@ -1,117 +1,258 @@
 "use client";
 
-import React, { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import React, { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Save, PlusCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useTournamentData, Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData";
+import { Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData";
 
-// Zod schema for a single team standing
-const teamStandingSchema = z.object({
-  rank: z.preprocess(
-    (val) => Number(val),
-    z.number().min(1, "Rank must be at least 1.")
-  ),
-  teamName: z.string().min(1, "Team name is required."),
-  status: z.enum(["1st", "2nd", "Eliminated", "Participating"]),
-  points: z.preprocess(
-    (val) => Number(val),
-    z.number().min(0, "Points cannot be negative.")
-  ),
-});
-
-// Zod schema for a single winner
-const winnerSchema = z.object({
-  tournament: z.string().min(1, "Tournament name is required."),
-  winner: z.string().min(1, "Winner name is required."),
-  prize: z.string().min(1, "Prize details are required."),
-});
-
-// Main form schema for tournament management
 const formSchema = z.object({
-  status: z.enum(["Open", "Ongoing", "Completed", "Closed"]),
-  standings: z.array(teamStandingSchema),
-  winners: z.array(winnerSchema),
+  title: z.string().min(2, { message: "Title must be at least 2 characters." }),
+  description: z.string().min(10, { message: "Description must be at least 10 characters." }),
+  game: z.string().min(2, { message: "Game name is required." }),
+  platform: z.string().min(2, { message: "Platform is required." }),
+  startDate: z.string().min(1, { message: "Start date is required." }),
+  endDate: z.string().min(1, { message: "End date is required." }),
+  registrationLink: z.string().url({ message: "Must be a valid URL." }),
+  prizePool: z.string().optional(),
+  rulesLink: z.string().url({ message: "Must be a valid URL." }).optional().or(z.literal('')),
+  maxParticipants: z.number().min(2, { message: "Minimum 2 participants." }).optional(),
+  status: z.enum(["upcoming", "active", "completed", "cancelled"]),
+  standings: z.array(z.object({
+    teamName: z.string().min(1, "Team name is required"),
+    points: z.number().min(0, "Points must be non-negative"),
+    rank: z.number().min(1, "Rank must be at least 1"),
+  })).optional(),
+  winners: z.array(z.object({
+    position: z.number().min(1, "Position must be at least 1"),
+    name: z.string().min(1, "Winner name is required"),
+    prize: z.string().optional(),
+  })).optional(),
+}).refine(data => new Date(data.endDate) >= new Date(data.startDate), {
+  message: "End date cannot be before start date.",
+  path: ["endDate"],
 });
 
 interface TournamentManagementFormProps {
   tournament: Tournament;
-  onClose: () => void;
+  onSubmit: (data: Partial<Tournament>) => Promise<void>;
+  onCancel: () => void;
 }
 
-const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tournament, onClose }) => {
-  const { updateTournament } = useTournamentData();
-  const [isSaving, setIsSaving] = useState(false);
+const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tournament, onSubmit, onCancel }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      title: tournament.title,
+      description: tournament.description,
+      game: tournament.game,
+      platform: tournament.platform,
+      startDate: tournament.startDate,
+      endDate: tournament.endDate,
+      registrationLink: tournament.registrationLink,
+      prizePool: tournament.prizePool || "",
+      rulesLink: tournament.rulesLink || "",
+      maxParticipants: tournament.maxParticipants || undefined,
       status: tournament.status,
       standings: tournament.standings || [],
       winners: tournament.winners || [],
     },
   });
 
-  const { fields: standingsFields, append: appendStanding, remove: removeStanding } = useFieldArray({
-    control: form.control,
-    name: "standings",
-  });
-
-  const { fields: winnersFields, append: appendWinner, remove: removeWinner } = useFieldArray({
-    control: form.control,
-    name: "winners",
-  });
-
-  const handleSave = async (data: z.infer<typeof formSchema>) => {
-    setIsSaving(true);
+  const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
+    setIsSubmitting(true);
     try {
-      // Explicitly cast standings and winners to their strict types
-      const dataToUpdate: Partial<Tournament> = {
-        status: data.status,
-        standings: data.standings as TeamStanding[],
-        winners: data.winners as Winner[],
-      };
-      await updateTournament(tournament.$id, dataToUpdate);
+      await onSubmit(data);
       toast.success("Tournament updated successfully!");
-      onClose();
     } catch (error: any) {
-      console.error("Error updating tournament:", error);
       toast.error(error.message || "Failed to update tournament.");
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const addStanding = () => {
+    const currentStandings = form.getValues("standings") || [];
+    form.setValue("standings", [...currentStandings, { teamName: "", points: 0, rank: currentStandings.length + 1 }]);
+  };
+
+  const removeStanding = (index: number) => {
+    const currentStandings = form.getValues("standings") || [];
+    form.setValue("standings", currentStandings.filter((_, i) => i !== index));
+  };
+
+  const addWinner = () => {
+    const currentWinners = form.getValues("winners") || [];
+    form.setValue("winners", [...currentWinners, { position: currentWinners.length + 1, name: "", prize: "" }]);
+  };
+
+  const removeWinner = (index: number) => {
+    const currentWinners = form.getValues("winners") || [];
+    form.setValue("winners", currentWinners.filter((_, i) => i !== index));
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSave)} className="space-y-6">
-        {/* Tournament Status */}
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Tournament Title</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Description</FormLabel>
+              <FormControl>
+                <Textarea {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="game"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Game</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="platform"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Platform</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="startDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">Start Date</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="endDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">End Date</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <FormField
+          control={form.control}
+          name="registrationLink"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Registration Link</FormLabel>
+              <FormControl>
+                <Input type="url" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="prizePool"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Prize Pool (Optional)</FormLabel>
+              <FormControl>
+                <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="rulesLink"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Rules Link (Optional)</FormLabel>
+              <FormControl>
+                <Input type="url" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="maxParticipants"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Max Participants (Optional)</FormLabel>
+              <FormControl>
+                <Input type="number" {...field} onChange={e => field.onChange(e.target.value ? Number(e.target.value) : undefined)} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <FormField
           control={form.control}
           name="status"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-foreground">Tournament Status</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSaving}>
+              <FormLabel className="text-foreground">Status</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                 <FormControl>
                   <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent className="bg-popover text-popover-foreground border-border">
-                  <SelectItem value="Open">Open</SelectItem>
-                  <SelectItem value="Ongoing">Ongoing</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
-                  <SelectItem value="Closed">Closed</SelectItem>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -119,56 +260,20 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
           )}
         />
 
-        {/* Team Standings Management */}
-        <div className="space-y-4 border-t border-border pt-4">
-          <h3 className="text-lg font-semibold text-foreground">Team Standings</h3>
-          {standingsFields.map((item, index) => (
-            <div key={item.id} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end p-2 border border-border rounded-md bg-background">
-              <FormField
-                control={form.control}
-                name={`standings.${index}.rank`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Rank</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="1" {...field} onChange={e => field.onChange(parseInt(e.target.value))} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        {/* Team Standings Section */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Team Standings</h3>
+          {form.watch("standings")?.map((standing, index) => (
+            <div key={index} className="flex gap-2 mb-2 items-end">
               <FormField
                 control={form.control}
                 name={`standings.${index}.teamName`}
                 render={({ field }) => (
-                  <FormItem className="col-span-2">
+                  <FormItem className="flex-grow">
                     <FormLabel className="text-foreground">Team Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Team Alpha" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                      <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border" />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`standings.${index}.status`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-foreground">Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSaving}>
-                      <FormControl>
-                        <SelectTrigger className="bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-popover text-popover-foreground border-border">
-                        <SelectItem value="1st">1st</SelectItem>
-                        <SelectItem value="2nd">2nd</SelectItem>
-                        <SelectItem value="Eliminated">Eliminated</SelectItem>
-                        <SelectItem value="Participating">Participating</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -177,44 +282,51 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
                 control={form.control}
                 name={`standings.${index}.points`}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="w-24">
                     <FormLabel className="text-foreground">Points</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="100" {...field} onChange={e => field.onChange(parseInt(e.target.value))} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                      <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} disabled={isSubmitting} className="bg-input text-foreground border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="button" variant="destructive" size="icon" onClick={() => removeStanding(index)} disabled={isSaving} className="mt-auto">
+              <FormField
+                control={form.control}
+                name={`standings.${index}.rank`}
+                render={({ field }) => (
+                  <FormItem className="w-20">
+                    <FormLabel className="text-foreground">Rank</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} disabled={isSubmitting} className="bg-input text-foreground border-border" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="button" variant="destructive" size="icon" onClick={() => removeStanding(index)} disabled={isSubmitting}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => appendStanding({ rank: standingsFields.length + 1, teamName: "", status: "Participating", points: 0 })}
-            disabled={isSaving}
-            className="w-full border-border text-primary-foreground hover:bg-muted"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Team Standing
+          <Button type="button" variant="outline" onClick={addStanding} disabled={isSubmitting} className="mt-2">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add Standing
           </Button>
         </div>
 
-        {/* Winner Announcements Management */}
-        <div className="space-y-4 border-t border-border pt-4">
-          <h3 className="text-lg font-semibold text-foreground">Winner Announcements</h3>
-          {winnersFields.map((item, index) => (
-            <div key={item.id} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end p-2 border border-border rounded-md bg-background">
+        {/* Winners Section */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Winners</h3>
+          {form.watch("winners")?.map((winner, index) => (
+            <div key={index} className="flex gap-2 mb-2 items-end">
               <FormField
                 control={form.control}
-                name={`winners.${index}.tournament`}
+                name={`winners.${index}.position`}
                 render={({ field }) => (
-                  <FormItem className="col-span-1">
-                    <FormLabel className="text-foreground">Tournament Name</FormLabel>
+                  <FormItem className="w-20">
+                    <FormLabel className="text-foreground">Position</FormLabel>
                     <FormControl>
-                      <Input placeholder="Valorant Cup" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                      <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} disabled={isSubmitting} className="bg-input text-foreground border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -222,12 +334,12 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
               />
               <FormField
                 control={form.control}
-                name={`winners.${index}.winner`}
+                name={`winners.${index}.name`}
                 render={({ field }) => (
-                  <FormItem className="col-span-1">
-                    <FormLabel className="text-foreground">Winner</FormLabel>
+                  <FormItem className="flex-grow">
+                    <FormLabel className="text-foreground">Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Team Alpha" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                      <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -237,37 +349,31 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
                 control={form.control}
                 name={`winners.${index}.prize`}
                 render={({ field }) => (
-                  <FormItem className="col-span-1">
-                    <FormLabel className="text-foreground">Prize</FormLabel>
+                  <FormItem className="flex-grow">
+                    <FormLabel className="text-foreground">Prize (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="₹1000" {...field} disabled={isSaving} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                      <Input {...field} disabled={isSubmitting} className="bg-input text-foreground border-border" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="button" variant="destructive" size="icon" onClick={() => removeWinner(index)} disabled={isSaving} className="mt-auto">
+              <Button type="button" variant="destructive" size="icon" onClick={() => removeWinner(index)} disabled={isSubmitting}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => appendWinner({ tournament: tournament.name, winner: "", prize: "" })}
-            disabled={isSaving}
-            className="w-full border-border text-primary-foreground hover:bg-muted"
-          >
+          <Button type="button" variant="outline" onClick={addWinner} disabled={isSubmitting} className="mt-2">
             <PlusCircle className="mr-2 h-4 w-4" /> Add Winner
           </Button>
         </div>
 
         <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
             Cancel
           </Button>
-          <Button type="submit" disabled={isSaving} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><Save className="mr-2 h-4 w-4" /> Save Changes</>}
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><Save className="mr-2 h-4 w-4" /> Save Changes</>}
           </Button>
         </DialogFooter>
       </form>

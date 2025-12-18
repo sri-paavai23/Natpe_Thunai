@@ -1,64 +1,73 @@
 "use client";
 
 import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { DialogFooter } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Product } from "@/lib/mockData";
-import { useAuth } from "@/context/AuthContext";
+import { MarketListing } from "@/hooks/useMarketListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
-import { ID, Query } from 'appwrite';
-import { Loader2, DollarSign, Truck } from "lucide-react";
-import { DEVELOPER_UPI_ID } from "@/lib/config";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { useNavigate } from "react-router-dom";
+import { ID } from 'appwrite';
+import { useAuth } from "@/context/AuthContext";
+
+const formSchema = z.object({
+  quantity: z.number().min(1, { message: "Quantity must be at least 1." }).optional(),
+  message: z.string().optional(),
+  deliveryAddress: z.string().min(5, { message: "Delivery address is required." }),
+  contactNumber: z.string().min(10, { message: "Contact number is required." }),
+  utrId: z.string().optional(),
+});
 
 interface BuyProductDialogProps {
-  product: Product;
-  onPurchaseInitiated: () => void;
-  onCancel: () => void;
+  product: MarketListing;
+  onClose: () => void;
 }
 
-const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchaseInitiated, onCancel }) => {
+const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onClose }) => {
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
-  const navigate = useNavigate();
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
-  const [ambassadorMessage, setAmbassadorMessage] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInitiatePurchasePayment = async () => {
-    if (!user || !userProfile || !product) return;
+  const priceMatch = product.price.match(/₹(\d+(\.\d+)?)/);
+  const unitPrice = priceMatch ? parseFloat(priceMatch[1]) : 0;
 
-    setIsProcessing(true);
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      quantity: product.type === "sell" || product.type === "rent" ? 1 : undefined,
+      message: "",
+      deliveryAddress: userProfile?.hostelRoom || "",
+      contactNumber: userProfile?.phone || "",
+      utrId: "",
+    },
+  });
 
-    const transactionAmount = parseFloat(product.price.replace(/[^0-9.]/g, ''));
-    const transactionNote = `Purchase of Product: ${product.title}`;
+  const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to proceed.");
+      return;
+    }
 
+    setIsSubmitting(true);
     try {
-      // Check for existing initiated transaction for this product by this user
-      const existingTransactions = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_TRANSACTIONS_COLLECTION_ID,
-        [
-          Query.equal('productId', product.$id),
-          Query.equal('buyerId', user.$id),
-          Query.equal('status', 'initiated'), // Check for transactions that are still pending payment
-          Query.limit(1)
-        ]
-      );
+      const transactionAmount = (data.quantity ?? 1) * unitPrice;
 
-      if (existingTransactions.documents.length > 0) {
-        toast.info("You already have an initiated payment for this product. Please complete it or wait for it to expire.");
-        setIsProcessing(false);
-        onPurchaseInitiated(); // Close dialog
-        navigate(`/market/confirm-payment/${existingTransactions.documents[0].$id}`);
-        return;
+      if (product.type !== "gift") {
+        if (!product.contact) {
+          toast.error("Seller contact (UPI ID) is missing.");
+          return;
+        }
+        const upiDeepLink = `upi://pay?pa=${product.contact}&pn=${encodeURIComponent(product.posterName)}&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`${product.type === "sell" ? "Purchase" : "Rent"} for ${product.title}`)}`;
+        window.open(upiDeepLink, "_blank");
+        toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} to ${product.posterName}. Please enter UTR ID below after payment.`);
       }
 
-      // Create Appwrite Transaction Document (Status: initiated)
-      const newTransaction = await databases.createDocument(
+      await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
         ID.unique(),
@@ -67,78 +76,137 @@ const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchase
           productTitle: product.title,
           buyerId: user.$id,
           buyerName: user.name,
-          sellerId: product.sellerId,
-          sellerName: product.sellerName,
-          sellerUpiId: product.sellerUpiId, // This should be the seller's UPI ID
+          sellerId: product.posterId,
+          sellerName: product.posterName,
+          sellerUpiId: product.contact,
           amount: transactionAmount,
-          status: "initiated",
-          type: "product", // Mark as product transaction
+          status: product.type === "gift" ? "completed" : "initiated",
+          type: product.type,
+          quantity: data.quantity,
+          message: data.message,
+          deliveryAddress: data.deliveryAddress,
+          contactNumber: data.contactNumber,
           collegeName: userProfile.collegeName,
-          ambassadorDelivery: ambassadorDelivery,
-          ambassadorMessage: ambassadorMessage || null,
+          ambassadorDelivery: product.ambassadorDelivery,
+          ambassadorMessage: product.ambassadorMessage,
+          utrId: data.utrId,
         }
       );
 
-      const transactionId = newTransaction.$id;
-
-      // Increment ambassador deliveries count if opted
-      if (ambassadorDelivery) {
+      if (product.ambassadorDelivery) {
         await incrementAmbassadorDeliveriesCount();
       }
 
-      // Generate UPI Deep Link (Payment goes to Developer UPI ID)
-      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;
-
-      // Redirect to UPI App
-      window.open(upiDeepLink, "_blank");
-
-      toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} to the developer. Please complete the payment and note the UTR ID.`);
-
-      // Redirect to Confirmation Page (or tracking page)
-      onPurchaseInitiated(); // Close dialog and trigger parent callback
-      navigate(`/market/confirm-payment/${transactionId}`); // Navigate to a generic confirmation/tracking page
-
+      toast.success(`${product.type === "gift" ? "Item claimed" : "Transaction initiated"} successfully!`);
+      onClose();
     } catch (error: any) {
-      console.error("Error initiating purchase transaction:", error);
-      toast.error(error.message || "Failed to initiate purchase transaction.");
+      console.error("Error processing transaction:", error);
+      toast.error(error.message || "Failed to process transaction.");
     } finally {
-      setIsProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
+  const watchQuantity = form.watch("quantity") ?? 1;
+  const calculatedTotalPrice = unitPrice * watchQuantity;
+
   return (
-    <div className="space-y-4 py-4">
-      <div className="space-y-3 py-2">
-        <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
-        <p className="text-sm text-muted-foreground">You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the seller.</p>
-      </div>
-      <div className="space-y-3 py-2">
-        <p className="text-sm text-foreground">Product: <span className="font-semibold">{product.title}</span></p>
-        <p className="text-xl font-bold text-secondary-neon">
-          Price: {product.price}
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          {product.type === "sell" ? "Buying" : product.type === "rent" ? "Renting" : "Getting"}:{" "}
+          <span className="font-semibold text-foreground">{product.title}</span>
         </p>
-        <p className="text-xs text-muted-foreground">Seller: {product.sellerName}</p>
-        <p className="text-xs text-destructive-foreground">
-          Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the seller.
-        </p>
-      </div>
+        {product.type !== "gift" && (
+          <p className="text-xs text-muted-foreground">Price: <span className="font-medium text-secondary-neon">{product.price}</span></p>
+        )}
+        <p className="text-xs text-muted-foreground">Seller: {product.posterName}</p>
 
-      <AmbassadorDeliveryOption
-        ambassadorDelivery={ambassadorDelivery}
-        setAmbassadorDelivery={setAmbassadorDelivery}
-        ambassadorMessage={ambassadorMessage}
-        setAmbassadorMessage={setAmbassadorMessage}
-      />
+        {(product.type === "sell" || product.type === "rent") && (
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">Quantity</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+        {(product.type === "sell" || product.type === "rent") && (
+          <p className="text-sm text-muted-foreground">Total Price: <span className="font-bold text-secondary-neon">₹{calculatedTotalPrice.toFixed(2)}</span></p>
+        )}
 
-      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
-          Cancel
-        </Button>
-        <Button onClick={handleInitiatePurchasePayment} disabled={isProcessing} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-          {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
-        </Button>
-      </DialogFooter>
-    </div>
+        <FormField
+          control={form.control}
+          name="message"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Message to Seller (Optional)</FormLabel>
+              <FormControl>
+                <Textarea placeholder="e.g., 'When can I pick it up?', 'Any specific delivery instructions?'" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="deliveryAddress"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Delivery/Pickup Address</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Hostel Block A, Room 101" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="contactNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Your Contact Number</FormLabel>
+              <FormControl>
+                <Input type="tel" placeholder="e.g., 9876543210" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {product.type !== "gift" && (
+          <FormField
+            control={form.control}
+            name="utrId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-foreground">UPI Transaction ID (UTR) (Required for payment confirmation)</FormLabel>
+                <FormControl>
+                  <Input placeholder="Enter UTR ID after payment" {...field} disabled={isSubmitting} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (product.type === "sell" ? "Confirm Purchase" : product.type === "rent" ? "Confirm Rent" : "Confirm Claim")}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
   );
 };
 
