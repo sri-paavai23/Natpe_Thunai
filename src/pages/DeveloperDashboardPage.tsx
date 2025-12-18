@@ -10,22 +10,22 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck, Flag } from "lucide-react"; // NEW: Import Flag icon
+import { Loader2, DollarSign, Users, Shield, Trash2, Ban, UserCheck, XCircle, MessageSquareText, Clock, Send, Truck, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import ChangeUserRoleForm from "@/components/forms/ChangeUserRoleForm";
 import { Query, ID } from "appwrite";
-import { BLOCKED_WORDS as STATIC_BLOCKED_WORDS } from "@/lib/moderation";
 import { useDeveloperMessages, DeveloperMessage } from "@/hooks/useDeveloperMessages";
 import { calculateCommissionRate } from "@/utils/commission";
-import { useReports, Report } from "@/hooks/useReports"; // NEW IMPORT
+import { useReports, Report } from "@/hooks/useReports";
+import { useBlockedWords } from "@/hooks/useBlockedWords"; // NEW IMPORT
 
 interface Transaction {
   $id: string;
   productId: string;
   buyerId: string;
   buyerName: string;
-  sellerId: string; // Changed from userId to sellerId
+  sellerId: string;
   sellerName: string;
   sellerUpiId: string;
   amount: number;
@@ -38,16 +38,16 @@ interface Transaction {
   collegeName: string;
   ambassadorDelivery?: boolean;
   ambassadorMessage?: string;
-  utrId?: string; // NEW: Add UTR ID
+  utrId?: string;
 }
 
 const DeveloperDashboardPage = () => {
   const { user, userProfile } = useAuth();
   const { messages, isLoading: isMessagesLoading, error: messagesError, refetch: refetchMessages } = useDeveloperMessages(); 
-  const { reports, isLoading: isReportsLoading, error: reportsError, refetch: refetchReports, updateReportStatus } = useReports(); // NEW: Use reports hook
+  const { reports, isLoading: isReportsLoading, error: reportsError, refetch: refetchReports, updateReportStatus } = useReports();
+  const { blockedWords, isLoading: isBlockedWordsLoading, error: blockedWordsError, addBlockedWord, removeBlockedWord } = useBlockedWords(); // NEW: Use blocked words hook
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
-  const [blockedWords, setBlockedWords] = useState<string[]>(STATIC_BLOCKED_WORDS); 
   const [newBlockedWord, setNewBlockedWord] = useState("");
   const [targetUserIdAction, setTargetUserIdAction] = useState("");
   const [developerReply, setDeveloperReply] = useState("");
@@ -93,7 +93,6 @@ const DeveloperDashboardPage = () => {
           );
           const updatedTx = response.payload as unknown as Transaction;
           toast.info(`Transaction "${updatedTx.productTitle}" updated to status: ${updatedTx.status.replace(/_/g, ' ')}`);
-          // NEW: Developer notification for payment confirmation
           if (updatedTx.status === 'payment_confirmed_to_developer' && updatedTx.utrId) {
             toast.success(`New Payment Claim: Order ${updatedTx.$id} by ${updatedTx.buyerName}. TR ID: ${updatedTx.utrId}. Amount: ${updatedTx.amount}. Commission: ${updatedTx.commissionAmount}. Net to Seller: ${updatedTx.netSellerAmount}.`);
           }
@@ -108,19 +107,8 @@ const DeveloperDashboardPage = () => {
 
   // --- Content Moderation Handlers ---
   const handleAddBlockedWord = () => {
-    const word = newBlockedWord.trim().toLowerCase();
-    if (word && !blockedWords.includes(word)) {
-      setBlockedWords((prev) => [...prev, word]);
-      setNewBlockedWord("");
-      toast.success(`Word "${word}" added to blocked list (local simulation).`);
-    } else if (word) {
-      toast.warning(`Word "${word}" is already blocked.`);
-    }
-  };
-
-  const handleRemoveBlockedWord = (wordToRemove: string) => {
-    setBlockedWords((prev) => prev.filter((word) => word !== wordToRemove));
-    toast.info(`Word "${wordToRemove}" removed from blocked list (local simulation).`);
+    addBlockedWord(newBlockedWord);
+    setNewBlockedWord("");
   };
 
   // --- User Management Handlers ---
@@ -179,7 +167,7 @@ const DeveloperDashboardPage = () => {
       const sellerProfileResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', transaction.sellerId)] // Changed to transaction.sellerId
+        [Query.equal('userId', transaction.sellerId)]
       );
 
       if (sellerProfileResponse.documents.length === 0) {
@@ -320,7 +308,7 @@ const DeveloperDashboardPage = () => {
     );
   }
 
-  if (loadingTransactions && isMessagesLoading && isReportsLoading) {
+  if (loadingTransactions && isMessagesLoading && isReportsLoading && isBlockedWordsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <Loader2 className="h-10 w-10 animate-spin text-secondary-neon" />
@@ -425,7 +413,7 @@ const DeveloperDashboardPage = () => {
                     <TableRow key={report.$id}>
                       <TableCell className="font-medium text-foreground">{report.productTitle}</TableCell>
                       <TableCell className="text-muted-foreground">{report.reporterName}</TableCell>
-                      <TableCell className="text-muted-foreground">{report.sellerId}</TableCell> {/* Display seller ID for now */}
+                      <TableCell className="text-muted-foreground">{report.sellerId}</TableCell>
                       <TableCell className="text-muted-foreground">{report.collegeName}</TableCell>
                       <TableCell className="text-muted-foreground">{report.reason}</TableCell>
                       <TableCell className="text-muted-foreground max-w-[200px] truncate">{report.message || "N/A"}</TableCell>
@@ -546,32 +534,44 @@ const DeveloperDashboardPage = () => {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
             <p className="text-sm text-muted-foreground">
-              This list is used to filter inappropriate language in user feedback and reports. (List is static/local for demonstration).
+              This list is used to filter inappropriate language in user feedback and reports.
             </p>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Add new blocked word"
-                value={newBlockedWord}
-                onChange={(e) => setNewBlockedWord(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddBlockedWord()}
-                className="flex-grow bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-              />
-              <Button onClick={handleAddBlockedWord} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Add
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2 p-3 border border-border rounded-md bg-background">
-              {blockedWords.length > 0 ? (
-                blockedWords.map((word) => (
-                  <Badge key={word} variant="destructive" className="cursor-pointer" onClick={() => handleRemoveBlockedWord(word)}>
-                    {word} <XCircle className="ml-1 h-3 w-3" />
-                  </Badge>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">No words currently blocked.</p>
-              )}
-            </div>
+            {isBlockedWordsLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading blocked words...</p>
+              </div>
+            ) : blockedWordsError ? (
+              <p className="text-center text-destructive py-4">Error loading blocked words: {blockedWordsError}</p>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Add new blocked word"
+                    value={newBlockedWord}
+                    onChange={(e) => setNewBlockedWord(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddBlockedWord()}
+                    className="flex-grow bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+                    disabled={isBlockedWordsLoading}
+                  />
+                  <Button onClick={handleAddBlockedWord} className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={isBlockedWordsLoading}>
+                    Add
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2 p-3 border border-border rounded-md bg-background">
+                  {blockedWords.length > 0 ? (
+                    blockedWords.map((blockedWord) => (
+                      <Badge key={blockedWord.$id} variant="destructive" className="cursor-pointer" onClick={() => removeBlockedWord(blockedWord.$id)}>
+                        {blockedWord.word} <XCircle className="ml-1 h-3 w-3" />
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No words currently blocked.</p>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

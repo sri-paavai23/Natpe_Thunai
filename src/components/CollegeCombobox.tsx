@@ -36,6 +36,19 @@ const CollegeCombobox: React.FC<CollegeComboboxProps> = ({
 }) => {
   const [open, setOpen] = React.useState(false);
 
+  // Deduplicate collegeList to handle potential duplicates passed in props
+  const uniqueCollegeList = React.useMemo(() => {
+    const seen = new Set<string>();
+    return collegeList.filter(college => {
+      const lowerCaseCollege = college.toLowerCase();
+      if (seen.has(lowerCaseCollege)) {
+        return false;
+      }
+      seen.add(lowerCaseCollege);
+      return true;
+    });
+  }, [collegeList]);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -47,7 +60,7 @@ const CollegeCombobox: React.FC<CollegeComboboxProps> = ({
           disabled={disabled}
         >
           {value
-            ? collegeList.find((college) => college === value)
+            ? uniqueCollegeList.find((college) => college === value)
             : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -58,9 +71,9 @@ const CollegeCombobox: React.FC<CollegeComboboxProps> = ({
           <CommandList>
             <CommandEmpty>No college found.</CommandEmpty>
             <CommandGroup>
-              {collegeList.map((college) => (
+              {uniqueCollegeList.map((college) => (
                 <CommandItem
-                  key={college}
+                  key={college} // Use college as key, now guaranteed unique
                   value={college}
                   onSelect={(currentValue) => {
                     onValueChange(currentValue === value ? "" : currentValue);
