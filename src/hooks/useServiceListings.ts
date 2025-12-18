@@ -1,97 +1,119 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Query, Models } from "appwrite";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
-import { useAuth } from "@/context/AuthContext";
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
-// Define the structure of a service post document
 export interface ServicePost extends Models.Document {
-  providerId: string;
-  providerName: string;
-  collegeName: string;
   title: string;
   description: string;
   category: string;
-  otherCategoryDescription?: string;
-  compensation: string;
-  deadline?: string;
-  contact: string;
   price: string;
-  isCustomOrder?: boolean;
+  contact: string;
+  datePosted: string;
   customOrderDescription?: string;
-  ambassadorDelivery?: boolean;
-  ambassadorMessage?: string;
+  isCustomOrder?: boolean;
+  posterId: string;
+  posterName: string;
+  collegeName: string; // NEW: Add collegeName
 }
 
-export const useServiceListings = (categories: string[] = []) => {
-  const { userProfile } = useAuth();
+interface ServiceListingsState {
+  services: ServicePost[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export const useServiceListings = (category?: string): ServiceListingsState => {
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   const [services, setServices] = useState<ServicePost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchServices = useCallback(async () => {
-    if (!userProfile?.collegeName) {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
       setIsLoading(false);
-      setError("User college information not available.");
+      setServices([]); // Clear services if no college is set
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    
+    const queries = [
+      Query.orderDesc('$createdAt'),
+      Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+    ];
+    if (category) {
+      queries.push(Query.equal('category', category));
+    }
+
     try {
-      const queries = [
-        Query.equal("collegeName", userProfile.collegeName),
-        Query.orderDesc("$createdAt"),
-      ];
-
-      if (categories.length > 0) {
-        queries.push(Query.or(categories.map(cat => Query.equal("category", cat))));
-      }
-
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_SERVICES_COLLECTION_ID,
         queries
       );
-      setServices(response.documents as unknown as ServicePost[]); // Explicit cast to unknown first
+      setServices(response.documents as unknown as ServicePost[]);
     } catch (err: any) {
-      console.error("Error fetching services:", err);
-      setError(err.message || "Failed to fetch service listings.");
+      console.error(`Error fetching service listings for category ${category}:`, err);
+      setError(err.message || "Failed to load service listings.");
+      toast.error("Failed to load service listings.");
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName, categories]);
+  }, [category, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchServices();
 
-    // Realtime updates
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
+
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICES_COLLECTION_ID}.documents`,
       (response) => {
-        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          setServices((prev) => [response.payload as unknown as ServicePost, ...prev]);
-        } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          setServices((prev) =>
-            prev.map((service) =>
-              service.$id === (response.payload as ServicePost).$id
-                ? (response.payload as unknown as ServicePost)
-                : service
-            )
-          );
-        } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          setServices((prev) =>
-            prev.filter((service) => service.$id !== (response.payload as ServicePost).$id)
-          );
-        }
+        const payload = response.payload as unknown as ServicePost;
+
+        // Filter real-time updates based on the current category filter AND collegeName
+        const matchesCategory = !category || payload.category === category;
+        const matchesCollege = payload.collegeName === userProfile.collegeName; // NEW: Check collegeName
+
+        if (!matchesCollege) return; // NEW: Skip if not from current college
+
+        setServices(prev => {
+          const existingIndex = prev.findIndex(s => s.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1 && matchesCategory) {
+              toast.info(`New service posted: ${payload.title}`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Service updated: ${payload.title}`);
+              return prev.map(s => s.$id === payload.$id ? payload : s);
+            } else if (matchesCategory) {
+                // Handle case where a service is updated and now matches the filter
+                return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Service removed: ${payload.title}`);
+              return prev.filter(s => s.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [fetchServices]);
+  }, [fetchServices, category, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
-  return { services, isLoading, error, refetchServices: fetchServices };
+  return { services, isLoading, error, refetch: fetchServices };
 };

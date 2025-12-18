@@ -1,50 +1,76 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlusCircle, Search } from "lucide-react";
+import { Clock, Zap, PlusCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import PostErrandForm from "@/components/forms/PostErrandForm"; // Assuming this component exists
+import PostErrandForm from "@/components/forms/PostErrandForm";
 import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import * as z from "zod";
 
-const SHORT_TERM_NEED_CATEGORIES = ["delivery", "academic", "personal", "other"];
+// Errand types specific to this page (Urgent/Short-Term)
+const URGENT_TYPES = ["instant-help", "emergency-delivery", "other"]; // Include 'other' for filtering
 
-const SHORT_TERM_NEED_FORM_OPTIONS = [
-  { value: "delivery", label: "Delivery" },
-  { value: "academic", label: "Academic Help" },
-  { value: "personal", label: "Personal Task" },
+const URGENT_ERRAND_OPTIONS = [
+  { value: "instant-help", label: "Instant Help" },
+  { value: "emergency-delivery", label: "Emergency Deliveries" },
   { value: "other", label: "Other" },
 ];
 
+// Define the Zod schema for the PostErrandForm data
+const ErrandFormSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  category: z.string(),
+  otherCategoryDescription: z.string().optional(),
+  compensation: z.string(),
+  deadline: z.string().optional(),
+  contact: z.string(),
+});
+
 const ShortTermNeedsPage = () => {
   const { user, userProfile } = useAuth();
-  const [isPostRequestDialogOpen, setIsPostRequestDialogOpen] = useState(false);
+  const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
+  const [initialCategoryForForm, setInitialCategoryForForm] = useState<string | undefined>(undefined);
   
-  const { errands: postedRequests, isLoading, error } = useErrandListings(SHORT_TERM_NEED_CATEGORIES);
+  // Fetch only urgent requests for the user's college
+  const { errands: postedUrgentRequests, isLoading, error } = useErrandListings(URGENT_TYPES);
 
+  // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
 
-  const handlePostRequest = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName" | "status">) => {
+  // Scroll to top on component mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  const handleNeedClick = (needType: string) => {
+    setInitialCategoryForForm(needType);
+    setIsPostErrandDialogOpen(true);
+  };
+
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => {
     if (!user || !userProfile) {
-      toast.error("You must be logged in to post a request.");
+      toast.error("You must be logged in to post an urgent request.");
       return;
     }
 
     try {
       const newRequestData = {
         ...data,
+        // If category is 'other', use otherCategoryDescription as the actual category
+        category: data.category === 'other' && data.otherCategoryDescription 
+                  ? data.otherCategoryDescription 
+                  : data.category,
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName,
-        status: "open", // Default status
       };
 
       await databases.createDocument(
@@ -54,26 +80,12 @@ const ShortTermNeedsPage = () => {
         newRequestData
       );
       
-      toast.success(`Your request "${data.title}" has been posted!`);
-      setIsPostRequestDialogOpen(false);
+      toast.success(`Your urgent request "${data.title}" has been posted!`);
+      setIsPostErrandDialogOpen(false);
+      setInitialCategoryForForm(undefined); // Reset initial category
     } catch (e: any) {
-      console.error("Error posting request:", e);
-      toast.error(e.message || "Failed to post request.");
-    }
-  };
-
-  const getStatusBadgeClass = (status: ErrandPost["status"]) => {
-    switch (status) {
-      case "open":
-        return "bg-green-500 text-white";
-      case "assigned":
-        return "bg-blue-500 text-white";
-      case "completed":
-        return "bg-gray-500 text-white";
-      case "cancelled":
-        return "bg-destructive text-destructive-foreground";
-      default:
-        return "bg-muted text-muted-foreground";
+      console.error("Error posting urgent request:", e);
+      toast.error(e.message || "Failed to post urgent request listing.");
     }
   };
 
@@ -84,32 +96,40 @@ const ShortTermNeedsPage = () => {
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <PlusCircle className="h-5 w-5 text-secondary-neon" /> Post a New Request
+              <Clock className="h-5 w-5 text-secondary-neon" /> Urgent Requests
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Need something done quickly? Post a short-term request and get help from peers.
+              For urgent tasks with extra charges. Get help when you need it most from your college peers!
             </p>
-            <Dialog open={isPostRequestDialogOpen} onOpenChange={setIsPostRequestDialogOpen}>
+            <Button
+              className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => handleNeedClick("instant-help")}
+            >
+              <Zap className="mr-2 h-4 w-4" /> Instant Help
+            </Button>
+            <Button
+              className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => handleNeedClick("emergency-delivery")}
+            >
+              <Zap className="mr-2 h-4 w-4" /> Emergency Deliveries
+            </Button>
+            <Dialog open={isPostErrandDialogOpen} onOpenChange={setIsPostErrandDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4" disabled={isAgeGated}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Post Request
+                  <PlusCircle className="mr-2 h-4 w-4" /> Post Urgent Request
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="text-foreground">Post New Short-Term Need</DialogTitle>
+                  <DialogTitle className="text-foreground">Post New Urgent Request</DialogTitle>
                 </DialogHeader>
                 <PostErrandForm 
-                  onSubmit={handlePostRequest} 
-                  onCancel={() => setIsPostRequestDialogOpen(false)} 
-                  categoryOptions={SHORT_TERM_NEED_FORM_OPTIONS}
-                  titlePlaceholder="e.g., Help moving boxes, Need notes for class"
-                  descriptionPlaceholder="Provide details about your request, urgency, etc."
-                  compensationPlaceholder="e.g., ₹50, A favor, Negotiable"
-                  deadlinePlaceholder="e.g., This evening, Before exam"
-                  contactPlaceholder="e.g., WhatsApp, Room number"
+                  onSubmit={handlePostErrand} 
+                  onCancel={() => { setIsPostErrandDialogOpen(false); setInitialCategoryForForm(undefined); }} 
+                  categoryOptions={URGENT_ERRAND_OPTIONS}
+                  initialCategory={initialCategoryForForm}
                 />
               </DialogContent>
             </Dialog>
@@ -121,40 +141,30 @@ const ShortTermNeedsPage = () => {
 
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Available Requests</CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground">Recently Posted Urgent Requests</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
-                <p className="ml-3 text-muted-foreground">Loading requests...</p>
+                <p className="ml-3 text-muted-foreground">Loading urgent requests...</p>
               </div>
             ) : error ? (
               <p className="text-center text-destructive py-4">Error loading requests: {error}</p>
-            ) : postedRequests.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {postedRequests.map((request) => (
-                  <div key={request.$id} className="p-3 border border-border rounded-md bg-background">
-                    <h3 className="font-semibold text-foreground">{request.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
-                    <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
-                    {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{request.deadline}</span></p>}
-                    <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
-                    <p className="text-xs text-muted-foreground">Posted by: {request.posterName}</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <Badge className={cn("px-2 py-1 text-xs font-semibold", getStatusBadgeClass(request.status))}>
-                        {request.status}
-                      </Badge>
-                      <Button variant="secondary" size="sm" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            ) : postedUrgentRequests.length > 0 ? (
+              postedUrgentRequests.map((request) => (
+                <div key={request.$id} className="p-3 border border-border rounded-md bg-background">
+                  <h3 className="font-semibold text-foreground">{request.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
+                  <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
+                  {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{request.deadline}</span></p>}
+                  <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
+                  <p className="text-xs text-muted-foreground">Posted: {new Date(request.$createdAt).toLocaleDateString()}</p>
+                </div>
+              ))
             ) : (
-              <p className="text-center text-muted-foreground py-4">No short-term needs posted yet for your college. Be the first!</p>
+              <p className="text-center text-muted-foreground py-4">No urgent requests posted yet for your college. Be the first!</p>
             )}
           </CardContent>
         </Card>

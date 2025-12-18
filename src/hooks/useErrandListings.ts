@@ -1,91 +1,119 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Query, Models } from "appwrite";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from "@/lib/appwrite";
-import { useAuth } from "@/context/AuthContext";
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
 export interface ErrandPost extends Models.Document {
-  posterId: string;
-  posterName: string;
-  collegeName: string;
   title: string;
   description: string;
-  category: string;
-  type: string; // Added type property
+  type: string; // e.g., 'note-writing', 'instant-help'
   compensation: string;
   deadline?: string;
   contact: string;
-  status: "open" | "assigned" | "completed" | "cancelled";
+  posterId: string;
+  posterName: string;
+  collegeName: string; // NEW: Add collegeName
 }
 
-export const useErrandListings = (categories: string[] = []) => {
-  const { userProfile } = useAuth();
+interface ErrandListingsState {
+  errands: ErrandPost[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export const useErrandListings = (filterTypes: string[] = []): ErrandListingsState => {
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   const [errands, setErrands] = useState<ErrandPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchErrands = useCallback(async () => {
-    if (!userProfile?.collegeName) {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
       setIsLoading(false);
-      setError("User college information not available.");
+      setErrands([]); // Clear errands if no college is set
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    
+    const queries = [
+      Query.orderDesc('$createdAt'),
+      Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+    ];
+    
+    if (filterTypes.length > 0) {
+      // Appwrite only supports 10 queries, so we use a single 'or' query if possible
+      queries.push(Query.or(filterTypes.map(type => Query.equal('type', type))));
+    }
+
     try {
-      const queries = [
-        Query.equal("collegeName", userProfile.collegeName),
-        Query.orderDesc("$createdAt"),
-      ];
-
-      if (categories.length > 0) {
-        queries.push(Query.or(categories.map(cat => Query.equal("category", cat))));
-      }
-
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_ERRANDS_COLLECTION_ID,
         queries
       );
-      setErrands(response.documents as unknown as ErrandPost[]); // Explicit cast to unknown first
+      setErrands(response.documents as unknown as ErrandPost[]);
     } catch (err: any) {
-      console.error("Error fetching errands:", err);
-      setError(err.message || "Failed to fetch errand listings.");
+      console.error("Error fetching errand listings:", err);
+      setError(err.message || "Failed to load errand listings.");
+      toast.error("Failed to load errand listings.");
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName, categories]);
+  }, [filterTypes, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchErrands();
 
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
+
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_ERRANDS_COLLECTION_ID}.documents`,
       (response) => {
-        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          setErrands((prev) => [response.payload as unknown as ErrandPost, ...prev]);
-        } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          setErrands((prev) =>
-            prev.map((errand) =>
-              errand.$id === (response.payload as ErrandPost).$id
-                ? (response.payload as unknown as ErrandPost)
-                : errand
-            )
-          );
-        } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-          setErrands((prev) =>
-            prev.filter((errand) => errand.$id !== (response.payload as ErrandPost).$id)
-          );
-        }
+        const payload = response.payload as unknown as ErrandPost;
+        
+        // Check if the payload matches the current filter AND collegeName
+        const matchesFilter = filterTypes.length === 0 || filterTypes.includes(payload.type);
+        const matchesCollege = payload.collegeName === userProfile.collegeName; // NEW: Check collegeName
+
+        if (!matchesCollege) return; // NEW: Skip if not from current college
+
+        setErrands(prev => {
+          const existingIndex = prev.findIndex(e => e.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1 && matchesFilter) {
+              toast.info(`New errand posted: ${payload.title}`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Errand updated: ${payload.title}`);
+              return prev.map(e => e.$id === payload.$id ? payload : e);
+            } else if (matchesFilter) {
+                // If updated document now matches filter, add it
+                return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Errand removed: ${payload.title}`);
+              return prev.filter(e => e.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [fetchErrands]);
+  }, [fetchErrands, filterTypes, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
-  return { errands, isLoading, error, refetchErrands: fetchErrands };
+  return { errands, isLoading, error, refetch: fetchErrands };
 };

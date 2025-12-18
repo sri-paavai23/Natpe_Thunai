@@ -1,51 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Flame, Loader2 } from "lucide-react";
+import { Flame } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
 
 const LoginStreakCard = () => {
-  const [isClaiming, setIsClaiming] = useState(false);
   const currentStreak = 3; // Placeholder for user's login streak
   const { addXp } = useAuth(); // Use addXp
 
-  const handleClaimStreak = async () => {
-    setIsClaiming(true);
-    try {
-      await addXp(10 * currentStreak); // Example: 10 XP per streak day
-      toast.success(`Claimed ${10 * currentStreak} XP for your ${currentStreak}-day streak!`);
-      // In a real app, you'd also update the user's last login date and reset/increment streak
-    } catch (error) {
-      console.error("Error claiming streak XP:", error);
-      toast.error("Failed to claim streak XP.");
-    } finally {
-      setIsClaiming(false);
-    }
+  const handleClaimReward = () => {
+    addXp(10 * currentStreak); // Reward XP based on streak length
+    toast.success(`You claimed your ${currentStreak}-day streak reward! +${10 * currentStreak} XP earned.`);
+    // In a real app, trigger a reward claim process and update streak/rewards
+  };
+
+  const handleCardClick = () => {
+    toast.info(`You are currently on a ${currentStreak}-day login streak! Keep it up for more rewards.`);
   };
 
   return (
-    <Card className="bg-card text-card-foreground shadow-lg border-border">
+    <Card className="bg-card text-card-foreground shadow-lg border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={handleCardClick}>
       <CardHeader className="p-4 pb-2">
         <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-          <Flame className="h-5 w-5 text-orange-500" /> Login Streak
+          <Flame className="h-5 w-5 text-secondary-neon" /> Login Streak
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-3">
-        <p className="text-sm text-muted-foreground">
-          You've logged in for <span className="font-semibold text-foreground">{currentStreak} consecutive days!</span>
-        </p>
-        <p className="text-sm text-foreground">
-          Claim <span className="font-semibold text-secondary-neon">{10 * currentStreak} XP</span> for your streak.
-        </p>
-        <Button
-          onClick={handleClaimStreak}
-          disabled={isClaiming}
-          className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-        >
-          {isClaiming ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Claim Streak XP"}
+      <CardContent className="p-4 pt-0 flex flex-col items-start">
+        <p className="text-sm text-muted-foreground mb-3">You're on a <span className="font-bold text-secondary-neon">{currentStreak}-day</span> streak!</p>
+        <Button onClick={handleClaimReward} className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          Claim Reward
         </Button>
       </CardContent>
     </Card>

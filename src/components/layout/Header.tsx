@@ -1,98 +1,94 @@
 "use client";
 
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { useLocation, Link } from "react-router-dom"; // Import Link
+import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useAuth } from "@/context/AuthContext";
-import { LogOut, User, Settings, Home, MessageSquareText, LayoutDashboard } from "lucide-react";
-import { toast } from "sonner";
-import { generateAvatarUrl } from "@/utils/avatar";
+import { User } from "lucide-react";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { generateAvatarUrl } from "@/utils/avatarGenerator"; // Import new avatar generator
+
+const getPageTitle = (pathname: string) => {
+  switch (pathname) {
+    case "/home":
+      return "The Hub";
+    case "/market":
+      return "The Exchange";
+    case "/services":
+      return "The Grind";
+    case "/activity":
+      return "The Buzz";
+    case "/profile":
+      return "My Zone";
+    case "/tournaments":
+      return "Esports Arena";
+    case "/activity/tracking":
+      return "Tracking";
+    case "/activity/cash-exchange":
+      return "Cash Exchange";
+    case "/profile/details":
+      return "User Profile";
+    case "/profile/wallet":
+      return "Wallet & Payments";
+    case "/profile/policies":
+      return "Policies";
+    case "/services/freelance":
+      return "Freelance Section";
+    case "/services/errands":
+      return "Errands";
+    case "/services/short-term":
+      return "Short-Term Needs";
+    case "/services/food-wellness":
+      return "Food & Wellness";
+    case "/services/ticket-booking":
+      return "Ticket Booking";
+    case "/services/collaborators":
+      return "Project Collaborator Tab";
+    case "/services/post-job":
+      return "Post a Job/Service";
+    case "/services/ambassador-program":
+      return "Ambassador Program"; // NEW TITLE
+    default:
+      return "Natpe Thunai"; // Default title if no specific route matches
+  }
+};
 
 const Header = () => {
-  const { user, userProfile, isLoading, logout } = useAuth();
-  const navigate = useNavigate();
+  const location = useLocation();
+  const title = getPageTitle(location.pathname);
+  const { user, userProfile } = useAuth();
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/auth");
-  };
-
-  const displayName = userProfile?.name || user?.name || "Guest";
+  // Use the public username (user.name) for display
+  const displayName = user?.name || "Guest";
+  
   const avatarUrl = generateAvatarUrl(
     displayName,
     userProfile?.gender || "prefer-not-to-say",
     userProfile?.userType || "student",
-    userProfile?.avatarStyle || "lorelei"
+    userProfile?.avatarStyle || "lorelei" // NEW: Pass avatarStyle
   );
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center justify-between">
-        <Link to="/home" className="flex items-center space-x-2">
-          <img src="/logo.png" alt="Dyad Logo" className="h-8 w-auto" />
-          <span className="font-bold text-xl text-foreground">Dyad</span>
+    <header className="sticky top-0 z-40 w-full bg-primary text-primary-foreground border-b border-border-dark p-4 flex items-center justify-between md:px-6 lg:px-8">
+      <div className="flex items-center gap-4">
+        <Link to="/home" className="flex items-center gap-2 text-primary-foreground hover:text-secondary-neon transition-colors">
+          <img src="/app-logo.png" alt="Logo" className="h-7 w-7 rounded-full object-cover" />
+          <span className="font-bold text-xl">Natpe Thunai</span>
         </Link>
-
-        <nav className="flex items-center space-x-4">
-          {isLoading ? (
-            <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
-          ) : user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8 border-2 border-secondary-neon">
-                    <AvatarImage src={avatarUrl} alt={displayName} />
-                    <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-popover text-popover-foreground border-border" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{displayName}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {userProfile?.email || user?.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem onClick={() => navigate("/home")} className="cursor-pointer">
-                  <Home className="mr-2 h-4 w-4" />
-                  Home
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/messages")} className="cursor-pointer">
-                  <MessageSquareText className="mr-2 h-4 w-4" />
-                  Messages
-                </DropdownMenuItem>
-                {userProfile?.role === "developer" && (
-                  <DropdownMenuItem onClick={() => navigate("/developer-dashboard")} className="cursor-pointer">
-                    <LayoutDashboard className="mr-2 h-4 w-4" />
-                    Developer Dashboard
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button onClick={() => navigate("/auth")} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-              Login
-            </Button>
-          )}
-        </nav>
+        {/* Only show the dynamic page title if it's not the home page */}
+        {location.pathname !== "/home" && (
+          <h2 className="text-2xl font-bold ml-4 hidden sm:block text-foreground">{title}</h2>
+        )}
+      </div>
+      <div className="flex items-center space-x-4">
+        <Link to="/profile" className="cursor-pointer"> {/* Added Link for redirection */}
+          <Avatar className="h-9 w-9 border-2 border-secondary-neon">
+            <AvatarImage src={avatarUrl} alt={displayName} />
+            <AvatarFallback className="bg-primary-blue-light text-primary-foreground">
+              <User className="h-5 w-5" />
+            </AvatarFallback>
+          </Avatar>
+        </Link>
       </div>
     </header>
   );
