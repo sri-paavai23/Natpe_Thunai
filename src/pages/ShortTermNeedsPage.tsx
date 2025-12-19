@@ -23,15 +23,15 @@ const URGENT_ERRAND_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
-// Define the Zod schema for the PostErrandForm data
+// Define the Zod schema for the PostErrandForm data (copied from PostErrandForm.tsx)
 const ErrandFormSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  type: z.string(), // Changed from category to type
-  otherTypeDescription: z.string().optional(), // Changed from otherCategoryDescription
-  compensation: z.string(),
-  deadline: z.string().optional(),
-  contact: z.string(),
+  title: z.string().min(2, { message: "Title must be at least 2 characters." }),
+  description: z.string().min(10, { message: "Description must be at least 10 characters." }),
+  type: z.string().min(1, { message: "Please select an errand type." }),
+  otherTypeDescription: z.string().optional(), // For 'other' type
+  compensation: z.string().min(2, { message: "Compensation details are required." }),
+  deadline: z.date().optional(),
+  contact: z.string().min(5, { message: "Contact information is required." }),
 });
 
 const ShortTermNeedsPage = () => {
@@ -55,7 +55,7 @@ const ShortTermNeedsPage = () => {
     setIsPostErrandDialogOpen(true);
   };
 
-  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => {
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an urgent request.");
       return;
@@ -68,6 +68,7 @@ const ShortTermNeedsPage = () => {
         type: data.type === 'other' && data.otherTypeDescription 
                   ? data.otherTypeDescription 
                   : data.type,
+        deadline: data.deadline ? data.deadline.toISOString() : null, // Convert Date to ISO string
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName,
@@ -158,7 +159,7 @@ const ShortTermNeedsPage = () => {
                   <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
                   <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
                   <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
-                  {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{request.deadline}</span></p>}
+                  {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(request.deadline).toLocaleDateString()}</span></p>}
                   <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
                   <p className="text-xs text-muted-foreground">Posted: {new Date(request.$createdAt).toLocaleDateString()}</p>
                 </div>

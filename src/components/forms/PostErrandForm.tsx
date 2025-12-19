@@ -27,7 +27,7 @@ const formSchema = z.object({
 });
 
 interface PostErrandFormProps {
-  onSubmit: (data: z.infer<typeof formSchema>) => void;
+  onSubmit: (data: z.infer<typeof formSchema>) => Promise<void>; // Changed to Promise<void>
   onCancel: () => void;
   typeOptions: { value: string; label: string }[];
   initialType?: string; // New prop
@@ -65,8 +65,8 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, typ
     }
   }, [initialType, typeOptions, form]);
 
-  const handleSubmit = (data: z.infer<typeof formSchema>) => {
-    onSubmit(data);
+  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    await onSubmit(data);
   };
 
   const selectedType = form.watch("type");

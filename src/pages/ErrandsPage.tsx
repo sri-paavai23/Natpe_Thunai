@@ -12,6 +12,7 @@ import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
+import * as z from "zod"; // Import z for zod schema inference
 
 // Errand types specific to this page
 const ERRAND_TYPES = ["note-writing", "small-job", "delivery"];
@@ -22,6 +23,18 @@ const STANDARD_ERRAND_OPTIONS = [
   { value: "delivery", label: "Delivery Services (within campus)" },
   { value: "other", label: "Other" },
 ];
+
+// Define the Zod schema for the PostErrandForm data (copied from PostErrandForm.tsx)
+const ErrandFormSchema = z.object({
+  title: z.string().min(2, { message: "Title must be at least 2 characters." }),
+  description: z.string().min(10, { message: "Description must be at least 10 characters." }),
+  type: z.string().min(1, { message: "Please select an errand type." }),
+  otherTypeDescription: z.string().optional(), // For 'other' type
+  compensation: z.string().min(2, { message: "Compensation details are required." }),
+  deadline: z.date().optional(),
+  contact: z.string().min(5, { message: "Contact information is required." }),
+});
+
 
 const ErrandsPage = () => {
   const { user, userProfile } = useAuth();
@@ -44,7 +57,7 @@ const ErrandsPage = () => {
     setIsPostErrandDialogOpen(true); // Open the dialog
   };
 
-  const handlePostErrand = async (data: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$permissions" | "$collectionId" | "$databaseId" | "posterId" | "posterName" | "collegeName">) => {
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an errand.");
       return;
@@ -54,9 +67,10 @@ const ErrandsPage = () => {
       const newErrandData = {
         ...data,
         // If type is 'other' and otherTypeDescription is empty, use otherTypeDescription as the actual type
-        type: data.type === 'other' && (data as any).otherTypeDescription 
-              ? (data as any).otherTypeDescription 
+        type: data.type === 'other' && data.otherTypeDescription 
+              ? data.otherTypeDescription 
               : data.type,
+        deadline: data.deadline ? data.deadline.toISOString() : null, // Convert Date to ISO string
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
