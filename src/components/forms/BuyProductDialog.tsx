@@ -1,159 +1,144 @@
 "use client";
 
-import React from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Product } from "@/lib/mockData";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID, Query } from 'appwrite';
-import { ExchangeListing } from "@/pages/ExchangePage"; // Assuming ExchangeListing is defined here
-
-const buyProductSchema = z.object({
-  quantity: z.preprocess(
-    (val) => Number(val),
-    z.number().min(1, { message: "Quantity must be at least 1." })
-  ),
-  message: z.string().optional(),
-  contactInfo: z.string().min(5, { message: "Contact information is required." }),
-});
+import { Loader2, DollarSign, Truck } from "lucide-react";
+import { DEVELOPER_UPI_ID } from "@/lib/config";
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+import { useNavigate } from "react-router-dom";
 
 interface BuyProductDialogProps {
-  product: ExchangeListing;
-  onPurchaseSubmitted: () => void;
+  product: Product;
+  onPurchaseInitiated: () => void;
   onCancel: () => void;
 }
 
-const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchaseSubmitted, onCancel }) => {
-  const { user, userProfile } = useAuth();
-  const form = useForm<z.infer<typeof buyProductSchema>>({
-    resolver: zodResolver(buyProductSchema),
-    defaultValues: {
-      quantity: 1,
-      message: "",
-      contactInfo: user?.email || "", // Pre-fill with user email if available
-    },
-  });
+const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchaseInitiated, onCancel }) => {
+  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
+  const navigate = useNavigate();
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
+  const [ambassadorMessage, setAmbassadorMessage] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const onSubmit = async (data: z.infer<typeof buyProductSchema>) => {
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to purchase an item.");
-      return;
-    }
+  const handleInitiatePurchasePayment = async () => {
+    if (!user || !userProfile || !product) return;
 
-    if (user.$id === product.posterId) {
-      toast.error("You cannot purchase your own listing.");
-      return;
-    }
+    setIsProcessing(true);
+
+    const transactionAmount = parseFloat(product.price.replace(/[^0-9.]/g, ''));
+    const transactionNote = `Purchase of Product: ${product.title}`;
 
     try {
-      // In a real app, this would create a 'Transaction' document
-      // For now, we'll simulate and log
-      console.log("Purchase submitted:", {
-        productId: product.$id,
-        productTitle: product.title,
-        buyerId: user.$id,
-        buyerName: user.name,
-        sellerId: product.posterId,
-        sellerName: product.posterName,
-        quantity: data.quantity,
-        totalPrice: (product.price * data.quantity).toFixed(2),
-        message: data.message,
-        contactInfo: data.contactInfo,
-        collegeName: userProfile.collegeName,
-      });
+      // Check for existing initiated transaction for this product by this user
+      const existingTransactions = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        [
+          Query.equal('productId', product.$id),
+          Query.equal('buyerId', user.$id),
+          Query.equal('status', 'initiated'), // Check for transactions that are still pending payment
+          Query.limit(1)
+        ]
+      );
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (existingTransactions.documents.length > 0) {
+        toast.info("You already have an initiated payment for this product. Please complete it or wait for it to expire.");
+        setIsProcessing(false);
+        onPurchaseInitiated(); // Close dialog
+        navigate(`/market/confirm-payment/${existingTransactions.documents[0].$id}`);
+        return;
+      }
 
-      toast.success(`Purchase request for ${data.quantity}x "${product.title}" submitted!`);
-      onPurchaseSubmitted();
-    } catch (e: any) {
-      console.error("Error submitting purchase:", e);
-      toast.error(e.message || "Failed to submit purchase.");
+      // Create Appwrite Transaction Document (Status: initiated)
+      const newTransaction = await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        ID.unique(),
+        {
+          productId: product.$id,
+          productTitle: product.title,
+          buyerId: user.$id,
+          buyerName: user.name,
+          sellerId: product.sellerId,
+          sellerName: product.sellerName,
+          sellerUpiId: product.sellerUpiId, // This should be the seller's UPI ID
+          amount: transactionAmount,
+          status: "initiated",
+          type: "product", // Mark as product transaction
+          collegeName: userProfile.collegeName,
+          ambassadorDelivery: ambassadorDelivery,
+          ambassadorMessage: ambassadorMessage || null,
+        }
+      );
+
+      const transactionId = newTransaction.$id;
+
+      // Increment ambassador deliveries count if opted
+      if (ambassadorDelivery) {
+        await incrementAmbassadorDeliveriesCount();
+      }
+
+      // Generate UPI Deep Link (Payment goes to Developer UPI ID)
+      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;
+
+      // Redirect to UPI App
+      window.open(upiDeepLink, "_blank");
+
+      toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} to the developer. Please complete the payment and note the UTR ID.`);
+
+      // Redirect to Confirmation Page (or tracking page)
+      onPurchaseInitiated(); // Close dialog and trigger parent callback
+      navigate(`/market/confirm-payment/${transactionId}`); // Navigate to a generic confirmation/tracking page
+
+    } catch (error: any) {
+      console.error("Error initiating purchase transaction:", error);
+      toast.error(error.message || "Failed to initiate purchase transaction.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const totalPrice = (product.price * form.watch("quantity")).toFixed(2);
-
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Item: <span className="font-semibold text-foreground">{product.title}</span>
+    <div className="space-y-4 py-4">
+      <div className="space-y-3 py-2">
+        <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
+        <p className="text-sm text-muted-foreground">You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the seller.</p>
+      </div>
+      <div className="space-y-3 py-2">
+        <p className="text-sm text-foreground">Product: <span className="font-semibold">{product.title}</span></p>
+        <p className="text-xl font-bold text-secondary-neon">
+          Price: {product.price}
         </p>
-        <p className="text-sm text-muted-foreground">
-          Price per item: <span className="font-semibold text-foreground">${product.price.toFixed(2)}</span>
+        <p className="text-xs text-muted-foreground">Seller: {product.sellerName}</p>
+        <p className="text-xs text-destructive-foreground">
+          Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the seller.
         </p>
+      </div>
 
-        <FormField
-          control={form.control}
-          name="quantity"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Quantity</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="1"
-                  {...field}
-                  onChange={e => field.onChange(e.target.valueAsNumber)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <AmbassadorDeliveryOption
+        ambassadorDelivery={ambassadorDelivery}
+        setAmbassadorDelivery={setAmbassadorDelivery}
+        ambassadorMessage={ambassadorMessage}
+        setAmbassadorMessage={setAmbassadorMessage}
+      />
 
-        <FormField
-          control={form.control}
-          name="message"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Message to Seller (Optional)</FormLabel>
-              <FormControl>
-                <Textarea placeholder="e.g., When can I pick this up?" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="contactInfo"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Your Contact Info</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., your email or phone" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="text-lg font-bold text-foreground mt-4">
-          Total: ${totalPrice}
-        </div>
-
-        <DialogFooter className="pt-4">
-          <DialogClose asChild>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button type="submit">Request Purchase</Button>
-        </DialogFooter>
-      </form>
-    </Form>
+      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+          Cancel
+        </Button>
+        <Button onClick={handleInitiatePurchasePayment} disabled={isProcessing} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
+        </Button>
+      </DialogFooter>
+    </div>
   );
 };
 

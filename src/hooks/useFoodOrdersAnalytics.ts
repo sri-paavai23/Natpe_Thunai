@@ -3,79 +3,79 @@
 import { useState, useEffect, useCallback } from 'react';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from '@/lib/appwrite';
 import { Query } from 'appwrite';
+import { toast } from 'sonner';
+import { subDays, formatISO } from 'date-fns';
+import { useAuth } from '@/context/AuthContext';
 
-export interface FoodOrder {
-  $id: string;
-  $createdAt: string;
-  offeringId: string;
-  offeringTitle: string;
-  quantity: number;
-  totalPrice: number;
-  buyerId: string;
-  buyerName: string;
-  sellerId: string;
-  sellerName: string;
-  status: 'pending' | 'accepted' | 'rejected' | 'completed';
-  collegeName: string;
+interface FoodOrdersAnalyticsState {
+  foodOrdersLastWeek: number;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
 }
 
-export const useFoodOrdersAnalytics = (collegeName?: string) => {
-  const [totalOrders, setTotalOrders] = useState(0);
-  const [pendingOrders, setPendingOrders] = useState(0);
-  const [completedOrders, setCompletedOrders] = useState(0);
-  const [totalRevenue, setTotalRevenue] = useState(0);
+export const useFoodOrdersAnalytics = (collegeNameFilter?: string): FoodOrdersAnalyticsState => {
+  const { userProfile, isLoading: isAuthLoading } = useAuth();
+  const [foodOrdersLastWeek, setFoodOrdersLastWeek] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFoodOrdersAnalytics = useCallback(async () => {
-    if (!collegeName) {
-      setIsLoading(false);
+  const fetchFoodOrdersLastWeek = useCallback(async () => {
+    // If userProfile is not yet loaded or is null, we can't fetch.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
       return;
     }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile.collegeName;
 
     setIsLoading(true);
     setError(null);
     try {
-      const queries = [Query.equal('collegeName', collegeName)];
+      const sevenDaysAgo = subDays(new Date(), 7);
+      const isoDate = formatISO(sevenDaysAgo);
+
+      const queries = [
+        Query.greaterThanEqual('$createdAt', isoDate),
+      ]; 
+      if (!isDeveloper && collegeToFilterBy) {
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
+      }
+
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
         queries
       );
-
-      const orders = response.documents as unknown as FoodOrder[];
-
-      let total = 0;
-      let pending = 0;
-      let completed = 0;
-      let revenue = 0;
-
-      orders.forEach(order => {
-        total++;
-        if (order.status === 'pending') {
-          pending++;
-        } else if (order.status === 'completed') {
-          completed++;
-          revenue += order.totalPrice;
-        }
-      });
-
-      setTotalOrders(total);
-      setPendingOrders(pending);
-      setCompletedOrders(completed);
-      setTotalRevenue(revenue);
-
-    } catch (e: any) {
-      console.error("Error fetching food orders analytics:", e);
-      setError(e.message || "Failed to load food orders analytics.");
+      setFoodOrdersLastWeek(response.total);
+    } catch (err: any) {
+      console.error("Error fetching food orders last week:", err);
+      setError(err.message || "Failed to load food orders analytics.");
+      toast.error("Failed to load food orders analytics.");
     } finally {
       setIsLoading(false);
     }
-  }, [collegeName]);
+  }, [collegeNameFilter, userProfile]);
 
   useEffect(() => {
-    fetchFoodOrdersAnalytics();
-  }, [fetchFoodOrdersAnalytics]);
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setFoodOrdersLastWeek(0); // Clear data while auth is loading
+      setError(null);
+      return;
+    }
 
-  return { totalOrders, pendingOrders, completedOrders, totalRevenue, isLoading, error, refetch: fetchFoodOrdersAnalytics };
+    if (userProfile === null) {
+      setIsLoading(false);
+      setFoodOrdersLastWeek(0);
+      setError("User profile not loaded. Cannot fetch food orders analytics.");
+      return;
+    }
+
+    // If auth is done and userProfile is available, fetch data
+    fetchFoodOrdersLastWeek();
+  }, [fetchFoodOrdersLastWeek, isAuthLoading, userProfile]);
+
+  return { foodOrdersLastWeek, isLoading, error, refetch: fetchFoodOrdersLastWeek };
 };

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Utensils, HeartPulse, PlusCircle } from "lucide-react";
 import { ServicePost } from "@/hooks/useServiceListings";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"; // Import DialogClose
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PlaceFoodOrderForm from "./forms/PlaceFoodOrderForm";
 
 interface FoodOfferingCardProps {
@@ -48,14 +48,6 @@ const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
               onOrderPlaced={() => setIsOrderDialogOpen(false)}
               onCancel={() => setIsOrderDialogOpen(false)}
             />
-            {/* DialogClose is typically included by default in shadcn/ui DialogContent,
-                but explicitly adding it here for clarity if needed. */}
-            {/* <DialogClose asChild>
-              <Button variant="ghost" className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </Button>
-            </DialogClose> */}
           </DialogContent>
         </Dialog>
       </CardFooter>

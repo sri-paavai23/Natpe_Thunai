@@ -1,124 +1,99 @@
 "use client";
 
 import React, { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
+import { Loader2, Star } from "lucide-react";
 import { useServiceReviews } from "@/hooks/useServiceReviews"; // Import the hook
-import { Star } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-const reviewSchema = z.object({
-  comment: z.string().min(10, { message: "Comment must be at least 10 characters." }),
-  rating: z.number().min(1, { message: "Please provide a rating." }).max(5, { message: "Rating must be between 1 and 5." }),
-});
 
 interface SubmitServiceReviewFormProps {
   serviceId: string;
+  serviceTitle: string;
   onReviewSubmitted: () => void;
   onCancel: () => void;
 }
 
-const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({ serviceId, onReviewSubmitted, onCancel }) => {
-  const { user, userProfile } = useAuth();
-  const { addReview } = useServiceReviews(serviceId, userProfile?.collegeName); // Updated destructuring
+const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({
+  serviceId,
+  serviceTitle,
+  onReviewSubmitted,
+  onCancel,
+}) => {
+  const { submitReview } = useServiceReviews(serviceId); // Use the hook to submit
   const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<z.infer<typeof reviewSchema>>({
-    resolver: zodResolver(reviewSchema),
-    defaultValues: {
-      comment: "",
-      rating: 0,
-    },
-  });
+  const handleStarClick = (starValue: number) => {
+    setRating(starValue);
+  };
 
-  const onSubmit = async (data: z.infer<typeof reviewSchema>) => {
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to submit a review.");
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (rating === 0) {
       toast.error("Please select a star rating.");
       return;
     }
+    if (!comment.trim()) {
+      toast.error("Please provide a comment for your review.");
+      return;
+    }
 
+    setIsSubmitting(true);
     try {
-      const success = await addReview({
-        serviceId: serviceId,
-        reviewerId: user.$id,
-        reviewerName: user.name,
+      await submitReview({ // NEW: The submitReview function now correctly expects only rating and comment
         rating: rating,
-        comment: data.comment,
-        collegeName: userProfile.collegeName,
+        comment: comment.trim(),
       });
-
-      if (success) {
-        toast.success("Your review has been submitted!");
-        onReviewSubmitted();
-      } else {
-        toast.error("Failed to submit review.");
-      }
-    } catch (e: any) {
-      console.error("Error submitting review:", e);
-      toast.error(e.message || "Failed to submit review.");
+      onReviewSubmitted();
+    } catch (error) {
+      // Error handled in hook
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormItem>
-          <FormLabel>Rating</FormLabel>
-          <FormControl>
-            <div className="flex space-x-1">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={cn(
-                    "h-6 w-6 cursor-pointer",
-                    star <= rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
-                  )}
-                  onClick={() => {
-                    setRating(star);
-                    form.setValue("rating", star);
-                  }}
-                />
-              ))}
-            </div>
-          </FormControl>
-          <FormMessage>{form.formState.errors.rating?.message}</FormMessage>
-        </FormItem>
-
-        <FormField
-          control={form.control}
-          name="comment"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Your Review</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Share your experience with this service..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+      <div className="space-y-2">
+        <Label className="text-foreground">Your Rating for "{serviceTitle}"</Label>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((starValue) => (
+            <Star
+              key={starValue}
+              className={`h-6 w-6 cursor-pointer ${
+                starValue <= rating ? "fill-secondary-neon text-secondary-neon" : "text-muted-foreground"
+              }`}
+              onClick={() => handleStarClick(starValue)}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="comment" className="text-foreground">Your Comment</Label>
+        <Textarea
+          id="comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Share your experience with this service..."
+          className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+          required
+          disabled={isSubmitting}
         />
-
-        <DialogFooter className="pt-4">
-          <DialogClose asChild>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button type="submit">Submit Review</Button>
-        </DialogFooter>
-      </form>
-    </Form>
+      </div>
+      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Submit Review"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 };
 
