@@ -7,10 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react"; // Import HelpCircle
+import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react";
 import { usePriceAnalysis } from "@/hooks/usePriceAnalysis";
-import { Link } from "react-router-dom"; // Import Link
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import { Link } from "react-router-dom";
 
 interface GiftCraftListingFormProps {
   onSubmit: (product: {
@@ -28,7 +27,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
   const [title, setTitle] = useState("");
   const [priceValue, setPriceValue] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // Initialize as empty string
+  const [imageUrl, setImageUrl] = useState("");
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
@@ -42,7 +41,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
   } = usePriceAnalysis();
 
   const handleAnalyzePriceClick = () => {
-    analyzePrice(title, priceValue); // No category/condition for this form
+    analyzePrice(title, priceValue);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -60,7 +59,7 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
       return;
     }
 
-    const finalImageUrl = imageUrl.trim() || "/app-logo.png"; // Default to app logo if empty
+    const finalImageUrl = imageUrl.trim() || "/app-logo.png";
 
     onSubmit({ title, price: `₹${priceValue}`, description, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
     setTitle("");
@@ -74,7 +73,6 @@ const GiftCraftListingForm: React.FC<GiftCraftListingFormProps> = ({ onSubmit, o
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
       <div>
         <Label htmlFor="title" className="text-foreground">Title</Label>
         <Input

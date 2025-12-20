@@ -12,7 +12,7 @@
     import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from "@/lib/appwrite";
     import { ID } from 'appwrite';
     import { cn } from '@/lib/utils';
-    import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+    import DeletionInfoMessage from "@/components/DeletionInfoMessage";
 
     interface MarketListingFormWrapperProps {
       onClose: () => void;
@@ -43,7 +43,7 @@
           type: productType,
           
           // Seller Info (from Auth Context)
-          userId: user.$id, // Changed to userId
+          userId: user.$id,
           sellerName: user.name,
           sellerUpiId: userProfile.upiId,
           collegeName: userProfile.collegeName,
@@ -86,7 +86,7 @@
           <DialogHeader>
             <DialogTitle className="text-foreground">Create New Listing</DialogTitle>
           </DialogHeader>
-          <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
+          <DeletionInfoMessage />
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "sell" | "rent" | "gift" | "sports")}>
             <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-muted p-1 text-muted-foreground rounded-md shadow-sm scrollbar-hide">
               <TabsTrigger value="sell" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sell</TabsTrigger>

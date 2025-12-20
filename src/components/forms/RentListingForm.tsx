@@ -8,15 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react"; // Import HelpCircle
+import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react";
 import { usePriceAnalysis } from "@/hooks/usePriceAnalysis";
-import { Link } from "react-router-dom"; // Import Link
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import { Link } from "react-router-dom";
 
 interface RentListingFormProps {
   onSubmit: (product: {
     title: string;
-    price: string; // Changed from rentPrice to price
+    price: string;
     description: string;
     policies: string;
     imageUrl: string;
@@ -32,7 +31,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
   const [rentUnit, setRentUnit] = useState<"day" | "hour">("day");
   const [description, setDescription] = useState("");
   const [policies, setPolicies] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // Initialize as empty string
+  const [imageUrl, setImageUrl] = useState("");
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
@@ -46,7 +45,7 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
   } = usePriceAnalysis();
 
   const handleAnalyzePriceClick = () => {
-    analyzePrice(title, rentPriceValue, undefined, rentUnit); // Pass rentUnit
+    analyzePrice(title, rentPriceValue, undefined, rentUnit);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -64,9 +63,9 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
       return;
     }
 
-    const finalImageUrl = imageUrl.trim() || "/app-logo.png"; // Default to app logo if empty
+    const finalImageUrl = imageUrl.trim() || "/app-logo.png";
 
-    onSubmit({ title, price: `₹${rentPriceValue}/${rentUnit}`, description, policies, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage }); // Changed rentPrice to price
+    onSubmit({ title, price: `₹${rentPriceValue}/${rentUnit}`, description, policies, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
     setTitle("");
     setRentPriceValue("");
     setRentUnit("day");
@@ -80,7 +79,6 @@ const RentListingForm: React.FC<RentListingFormProps> = ({ onSubmit, onCancel })
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
       <div>
         <Label htmlFor="title" className="text-foreground">Title</Label>
         <Input

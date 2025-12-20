@@ -8,10 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react"; // Import HelpCircle
+import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react";
 import { usePriceAnalysis } from "@/hooks/usePriceAnalysis";
-import { Link } from "react-router-dom"; // Import Link
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import { Link } from "react-router-dom";
 
 interface SellListingFormProps {
   onSubmit: (product: {
@@ -33,7 +32,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [damages, setDamages] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // Initialize as empty string
+  const [imageUrl, setImageUrl] = useState("");
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
@@ -65,7 +64,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
       return;
     }
 
-    const finalImageUrl = imageUrl.trim() || "/app-logo.png"; // Default to app logo if empty
+    const finalImageUrl = imageUrl.trim() || "/app-logo.png";
 
     onSubmit({ title, price: `₹${priceValue}`, description, category, damages, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
     setTitle("");
@@ -81,7 +80,6 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
       <div>
         <Label htmlFor="title" className="text-foreground">Title</Label>
         <Input
