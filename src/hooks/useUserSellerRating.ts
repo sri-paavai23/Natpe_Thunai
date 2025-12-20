@@ -1,112 +1,82 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from '@/lib/appwrite';
-import { Query } from 'appwrite';
-import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
-import { ServiceReview } from './useServiceReviews'; // Import the updated ServiceReview interface
+import { useState, useEffect } from 'react';
+// In a real application, you would import your backend client (e.g., Appwrite) here
+// import { databases, Query, APPWRITE_DATABASE_ID, APPWRITE_REVIEWS_COLLECTION_ID } from '@/lib/appwrite';
 
-interface UserSellerRatingState {
-  averageRating: number;
-  totalReviews: number;
-  isLoading: boolean;
-  error: string | null;
-  refetch: () => void;
-}
-
-export const useUserSellerRating = (userId?: string): UserSellerRatingState => {
-  const { userProfile, isLoading: isAuthLoading } = useAuth();
-  const [averageRating, setAverageRating] = useState(0);
+/**
+ * Custom hook to fetch a user's seller rating and total reviews.
+ * Defaults to 1.0 rating and 0 reviews if no data is found or on error.
+ *
+ * @param userId The ID of the user whose seller rating is to be fetched.
+ */
+export const useUserSellerRating = (userId: string | undefined) => {
+  const [averageRating, setAverageRating] = useState(1.0); // Default to 1.0
   const [totalReviews, setTotalReviews] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSellerRating = useCallback(async () => {
-    // Check for environment variable configuration
-    if (APPWRITE_SERVICE_REVIEWS_COLLECTION_ID === 'YOUR_SERVICE_REVIEWS_COLLECTION_ID' || !APPWRITE_SERVICE_REVIEWS_COLLECTION_ID) {
-      const msg = "APPWRITE_SERVICE_REVIEWS_COLLECTION_ID is not configured. Please set it in your .env file.";
-      console.error(msg);
-      setError(msg);
-      setIsLoading(false);
-      return;
-    }
-
-    if (isAuthLoading) {
-      setIsLoading(true);
-      setAverageRating(0);
-      setTotalReviews(0);
-      setError(null);
-      return;
-    }
-
-    if (!userId) {
-      setIsLoading(false);
-      setAverageRating(0);
-      setTotalReviews(0);
-      setError("User ID is missing. Cannot fetch seller rating.");
-      return;
-    }
-    if (!userProfile?.collegeName) {
-      setIsLoading(false);
-      setAverageRating(0);
-      setTotalReviews(0);
-      setError("User college information is missing. Cannot fetch seller rating.");
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
-        [
-          Query.equal('sellerId', userId), // Query by the new sellerId attribute
-          Query.equal('collegeName', userProfile.collegeName),
-          Query.limit(100) // Limit to a reasonable number of reviews
-        ]
-      );
-      const reviews = response.documents as unknown as ServiceReview[];
-      
-      if (reviews.length > 0) {
-        const total = reviews.reduce((sum, review) => sum + review.rating, 0);
-        setAverageRating(total / reviews.length);
-        setTotalReviews(reviews.length);
-      } else {
-        setAverageRating(0);
-        setTotalReviews(0);
-      }
-    } catch (err: any) {
-      console.error(`Error fetching seller rating for user ${userId}:`, err);
-      setError(`Failed to load seller rating: ${err.message}. Please check Appwrite collection ID, permissions, and schema.`);
-      toast.error(`Failed to load seller rating: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userId, userProfile?.collegeName, isAuthLoading]);
-
   useEffect(() => {
-    fetchSellerRating();
-
-    if (!userId || !userProfile?.collegeName) return;
-
-    // Subscribe to real-time updates for reviews related to this seller
-    const unsubscribe = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICE_REVIEWS_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as ServiceReview;
-        if (payload.sellerId === userId && payload.collegeName === userProfile.collegeName) {
-          // If a review for this seller is created, updated, or deleted, refetch the rating
-          fetchSellerRating();
-        }
+    const fetchRating = async () => {
+      if (!userId) {
+        // If no user ID, set default values and stop loading
+        setAverageRating(1.0);
+        setTotalReviews(0);
+        setIsLoading(false);
+        return;
       }
-    );
 
-    return () => {
-      unsubscribe();
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // --- MOCK DATA FETCHING ---
+        // In a real application, you would fetch actual reviews from your database.
+        // For example, using Appwrite:
+        /*
+        const response = await databases.listDocuments(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_REVIEWS_COLLECTION_ID,
+          [Query.equal('sellerId', userId)] // Assuming reviews are linked to a sellerId
+        );
+        const reviews = response.documents;
+        */
+
+        // For demonstration, let's simulate some data:
+        // 50% chance of having reviews, otherwise it will default to 1.0 (0 reviews)
+        const hasReviews = Math.random() > 0.5; 
+        let fetchedReviewsCount = 0;
+        let sumRatings = 0;
+
+        if (hasReviews) {
+          fetchedReviewsCount = Math.floor(Math.random() * 10) + 1; // Simulate 1 to 10 reviews
+          for (let i = 0; i < fetchedReviewsCount; i++) {
+            sumRatings += Math.random() * 4 + 1; // Simulate random rating between 1 and 5
+          }
+        }
+
+        if (fetchedReviewsCount > 0) {
+          setAverageRating(sumRatings / fetchedReviewsCount);
+          setTotalReviews(fetchedReviewsCount);
+        } else {
+          // If no reviews are found, explicitly set to default
+          setAverageRating(1.0);
+          setTotalReviews(0);
+        }
+
+      } catch (err) {
+        console.error("Failed to fetch seller rating:", err);
+        setError("Failed to load rating");
+        // On error, also default to 1.0 rating and 0 reviews
+        setAverageRating(1.0);
+        setTotalReviews(0);
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [fetchSellerRating, userId, userProfile?.collegeName]);
 
-  return { averageRating, totalReviews, isLoading, error, refetch: fetchSellerRating };
+    fetchRating();
+  }, [userId]); // Re-run effect if userId changes
+
+  return { averageRating, totalReviews, isLoading, error };
 };
