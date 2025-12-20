@@ -67,7 +67,7 @@ const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchase
           productTitle: product.title,
           buyerId: user.$id,
           buyerName: user.name,
-          sellerId: product.sellerId,
+          sellerId: product.userId, // Corrected from product.sellerId to product.userId
           sellerName: product.sellerName,
           sellerUpiId: product.sellerUpiId, // This should be the seller's UPI ID
           amount: transactionAmount,
