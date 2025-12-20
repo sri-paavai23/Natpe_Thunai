@@ -376,7 +376,7 @@ const CosmicDashGame: React.FC = () => {
   // --- CONTROLS ---
   useEffect(() => {
     const handleInput = (e: TouchEvent | KeyboardEvent | MouseEvent) => {
-      // e.preventDefault();
+      e.preventDefault(); // Uncommented this line for better mobile interactivity
       if (gameState === 'GAME_OVER') {
         resetGame();
       } else if (gameState === 'IDLE') {
