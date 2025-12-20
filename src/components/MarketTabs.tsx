@@ -47,7 +47,7 @@ const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
         {items.map((product) => (
-          <ProductListingCard key={product.$id} product={product} onDelete={deleteProduct} /> {/* NEW: Pass onDelete */}
+          <ProductListingCard key={product.$id} product={product} onDelete={deleteProduct} /> 
         ))}
       </div>
     );

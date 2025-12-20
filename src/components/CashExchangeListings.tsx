@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_CASH_EXCHANGE_COLLECTION_ID } from "@/lib/appwrite";
 import { Models } from "appwrite";
-import { CashExchangeRequest } from "@/hooks/useCashExchangeListings"; // NEW: Import from new hook
+import { CashExchangeRequest, Contribution } from "@/hooks/useCashExchangeListings"; // NEW: Import from new hook
 
 // Removed Contribution interface as it's now in the hook
 // Removed serializeContributions and deserializeContributions as they are now in the hook

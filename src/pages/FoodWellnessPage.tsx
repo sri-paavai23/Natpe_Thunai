@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostServiceForm from "@/components/forms/PostServiceForm";
 import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import FoodOfferingCard from "@/components/FoodOfferingCard";
@@ -70,7 +70,7 @@ const FoodWellnessPage = () => {
 
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID, // Changed to SERVICES_COLLECTION_ID
+        APPWRITE_SERVICES_COLLECTION_ID, 
         ID.unique(),
         newPostData
       );
@@ -109,7 +109,7 @@ const FoodWellnessPage = () => {
 
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID, // Changed to SERVICES_COLLECTION_ID
+        APPWRITE_SERVICES_COLLECTION_ID, 
         ID.unique(),
         newRequest
       );
@@ -205,7 +205,7 @@ const FoodWellnessPage = () => {
             ) : postedOfferings.length > 0 ? (
               <div className="grid grid-cols-1 gap-4">
                 {postedOfferings.map((offering) => (
-                  <FoodOfferingCard key={offering.$id} offering={offering} onDelete={deleteService} /> {/* NEW: Pass onDelete */}
+                  <FoodOfferingCard key={offering.$id} offering={offering} onDelete={deleteService} /> 
                 ))}
               </div>
             ) : (
@@ -221,7 +221,7 @@ const FoodWellnessPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
-            <FoodCustomRequestsList requests={postedCustomRequests} isLoading={isLoading} error={error} onDelete={deleteService} /> {/* NEW: Pass onDelete */}
+            <FoodCustomRequestsList requests={postedCustomRequests} isLoading={isLoading} error={error} onDelete={deleteService} /> 
           </CardContent>
         </Card>
       </div>
