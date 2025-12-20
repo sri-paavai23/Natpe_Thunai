@@ -148,6 +148,10 @@ export const useBargainRequests = (): UseBargainRequestsState => {
       toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
+    if (!product.userId) {
+      toast.error("Seller information is missing. Cannot send bargain request.");
+      return;
+    }
 
     try {
       await databases.createDocument(

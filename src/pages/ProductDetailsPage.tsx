@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2, Flag, Award } from 'lucide-react'; // Added Flag and Award icon
+import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Truck, Loader2, Flag, Award, X } from 'lucide-react'; // Added Flag, Award, and X icon
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
@@ -80,6 +80,11 @@ export default function ProductDetailsPage() {
       return;
     }
     if (!product) return;
+
+    if (!product.userId) {
+      toast.error("Seller information is missing. Cannot proceed with transaction.");
+      return;
+    }
 
     if (user.$id === product.userId) { // Changed to product.userId
       toast.error("You cannot buy/rent your own listing.");
@@ -178,6 +183,13 @@ export default function ProductDetailsPage() {
       navigate("/auth");
       return;
     }
+    if (!product) return;
+
+    if (!product.userId) {
+      toast.error("Seller information is missing. Cannot send bargain request.");
+      return;
+    }
+
     if (user.$id === product.userId) { // Changed to product.userId
       toast.error("You cannot bargain on your own listing.");
       return;

@@ -30,7 +30,7 @@ interface ServiceReviewsState {
 }
 
 export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, isLoading: isAuthLoading } = useAuth(); // NEW: Get isAuthLoading
   const [reviews, setReviews] = useState<ServiceReview[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,10 +43,27 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
   }, []);
 
   const fetchReviews = useCallback(async () => {
-    if (!serviceId || !userProfile?.collegeName) {
+    // Wait for auth to load and userProfile to be available
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setReviews([]);
+      setAverageRating(0);
+      setError(null);
+      return;
+    }
+
+    if (!serviceId) {
       setIsLoading(false);
       setReviews([]);
       setAverageRating(0);
+      setError("Service ID is missing. Cannot fetch reviews.");
+      return;
+    }
+    if (!userProfile?.collegeName) {
+      setIsLoading(false);
+      setReviews([]);
+      setAverageRating(0);
+      setError("User college information is missing. Cannot fetch reviews.");
       return;
     }
 
@@ -67,12 +84,13 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
       setAverageRating(calculateAverageRating(fetchedReviews));
     } catch (err: any) {
       console.error("Error fetching service reviews:", err);
-      setError(err.message || "Failed to load service reviews.");
-      toast.error("Failed to load service reviews.");
+      // NEW: More detailed error logging
+      setError(`Failed to load service reviews: ${err.message}. Please check Appwrite collection ID, permissions, and schema.`);
+      toast.error(`Failed to load service reviews: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
-  }, [serviceId, userProfile?.collegeName, calculateAverageRating]);
+  }, [serviceId, userProfile?.collegeName, calculateAverageRating, isAuthLoading]);
 
   const submitReview = useCallback(async (reviewData: SubmitReviewData) => { // NEW: Use SubmitReviewData
     if (!user || !userProfile || !serviceId) {

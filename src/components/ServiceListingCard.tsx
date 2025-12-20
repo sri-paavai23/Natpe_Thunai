@@ -3,7 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquareText, DollarSign, Star } from "lucide-react";
+import { Loader2, MessageSquareText, DollarSign, Star, X } from "lucide-react"; // Added X icon
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -32,7 +32,11 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { averageRating, isLoading: isReviewsLoading, error: reviewsError } = useServiceReviews(service.$id);
+  
+  // Only call useServiceReviews if service.$id is valid
+  const { averageRating, isLoading: isReviewsLoading, error: reviewsError, reviews: serviceReviews } = 
+    service.$id ? useServiceReviews(service.$id) : { averageRating: 0, isLoading: false, error: null, reviews: [] };
+  
   const hasReviewed = false; // Simulate: In a real app, check if user has already reviewed this service
 
   const handleContactProvider = (contact: string, title: string) => {
@@ -66,12 +70,12 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
           {isReviewsLoading ? (
             <Loader2 className="h-4 w-4 animate-spin mr-1 text-secondary-neon" />
           ) : reviewsError ? (
-            <span className="text-destructive">Error loading rating</span>
+            <span className="text-destructive flex items-center gap-1"><X className="h-4 w-4" /> Error loading rating</span>
           ) : (
             <>
               <Star className={cn("h-4 w-4 mr-1", averageRating > 0 ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} />
               <span className="font-medium text-foreground">{averageRating.toFixed(1)}</span>
-              <span className="ml-1">({useServiceReviews(service.$id).reviews.length} reviews)</span>
+              <span className="ml-1">({serviceReviews.length} reviews)</span>
             </>
           )}
         </div>

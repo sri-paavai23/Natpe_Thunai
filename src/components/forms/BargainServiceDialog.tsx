@@ -39,6 +39,11 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
   const handleInitiateBargainPayment = async () => {
     if (!user || !userProfile || !service) return;
 
+    if (!service.posterId) {
+      toast.error("Service provider information is missing. Cannot proceed with bargain.");
+      return;
+    }
+
     setIsProcessing(true);
 
     const transactionAmount = parseFloat(bargainedPrice.toFixed(2));

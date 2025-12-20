@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Zap, PlusCircle, Loader2 } from "lucide-react";
+import { Clock, Zap, PlusCircle, Loader2, X } from "lucide-react"; // Added X icon
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostErrandForm from "@/components/forms/PostErrandForm";
@@ -123,9 +123,18 @@ const ShortTermNeedsPage = () => {
                   <PlusCircle className="mr-2 h-4 w-4" /> Post Urgent Request
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+                <DialogHeader className="relative"> {/* Added relative for close button positioning */}
                   <DialogTitle className="text-foreground">Post New Urgent Request</DialogTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
+                    onClick={() => setIsPostErrandDialogOpen(false)} // Dismiss the dialog
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Close</span>
+                  </Button>
                 </DialogHeader>
                 <PostErrandForm 
                   onSubmit={handlePostErrand} 

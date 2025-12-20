@@ -31,6 +31,11 @@ const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchase
   const handleInitiatePurchasePayment = async () => {
     if (!user || !userProfile || !product) return;
 
+    if (!product.userId) {
+      toast.error("Seller information is missing. Cannot proceed with purchase.");
+      return;
+    }
+
     setIsProcessing(true);
 
     const transactionAmount = parseFloat(product.price.replace(/[^0-9.]/g, ''));
@@ -67,9 +72,9 @@ const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchase
           productTitle: product.title,
           buyerId: user.$id,
           buyerName: user.name,
-          sellerId: product.userId, // Corrected from product.sellerId to product.userId
+          sellerId: product.userId,
           sellerName: product.sellerName,
-          sellerUpiId: product.sellerUpiId, // This should be the seller's UPI ID
+          sellerUpiId: product.sellerUpiId,
           amount: transactionAmount,
           status: "initiated",
           type: "product", // Mark as product transaction
