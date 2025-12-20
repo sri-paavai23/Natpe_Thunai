@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Package, Truck, XCircle, MessageSquareText, DollarSign, Loader2, Utensils, CheckCircle, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Models, Query } from "appwrite";
