@@ -5,6 +5,7 @@ import { MarketWarningBanner } from "@/components/MarketWarningBanner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import MarketTabs from "@/components/MarketTabs";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from "@/lib/appwrite";
 import MarketListingFormWrapper from "@/components/forms/MarketListingFormWrapper";
 import { PlusCircle } from "lucide-react";
 
