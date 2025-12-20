@@ -5,7 +5,7 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign, Building2 } from "lucide-react";
+import { Star, UserCheck, Award, TrendingUp, Edit, User, Briefcase, DollarSign, Building2, Loader2 } from "lucide-react"; // NEW: Import Loader2
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -16,11 +16,15 @@ import { calculateCommissionRate, formatCommissionRate } from "@/utils/commissio
 import { getLevelBadge } from "@/utils/badges";
 import ReportMissingCollegeForm from "@/components/forms/ReportMissingCollegeForm";
 import { getGraduationData } from "@/utils/time";
+import { useUserSellerRating } from "@/hooks/useUserSellerRating";
 
 const ProfileDetailsPage = () => {
   const { user, userProfile, updateUserProfile } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
+
+  // NEW: Fetch seller rating for the current user
+  const { averageRating: sellerRating, totalReviews, isLoading: isRatingLoading, error: ratingError } = useUserSellerRating(user?.$id);
 
   // Scroll to top on component mount
   useEffect(() => {
@@ -38,7 +42,6 @@ const ProfileDetailsPage = () => {
   const commissionRate = calculateCommissionRate(userLevel);
   const userBadge = getLevelBadge(userLevel);
 
-  const sellerRating = 4.7; // Placeholder
   const isVerified = true; // Placeholder for verification status
 
   const avatarUrl = generateAvatarUrl(
@@ -170,7 +173,18 @@ const ProfileDetailsPage = () => {
 
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <Star className="h-4 w-4 text-secondary-neon" /> Seller Rating: <span className="font-semibold text-foreground">{sellerRating.toFixed(1)}</span>
+                <Star className="h-4 w-4 text-secondary-neon" /> Seller Rating: 
+                {isRatingLoading ? (
+                  <span className="font-semibold text-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+                  </span>
+                ) : ratingError ? (
+                  <span className="font-semibold text-destructive">Error</span>
+                ) : (
+                  <span className="font-semibold text-foreground">
+                    {sellerRating.toFixed(1)} ({totalReviews} reviews)
+                  </span>
+                )}
               </p>
             </div>
 

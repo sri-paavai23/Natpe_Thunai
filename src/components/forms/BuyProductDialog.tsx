@@ -31,8 +31,9 @@ const BuyProductDialog: React.FC<BuyProductDialogProps> = ({ product, onPurchase
   const handleInitiatePurchasePayment = async () => {
     if (!user || !userProfile || !product) return;
 
-    if (!product.userId) {
-      toast.error("Seller information is missing. Cannot proceed with purchase.");
+    if (!product.userId || product.userId.trim() === "") {
+      toast.error("Seller information is missing or invalid. Cannot proceed with purchase.");
+      console.error("Seller ID is missing or empty for product:", product);
       return;
     }
 

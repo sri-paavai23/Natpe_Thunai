@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 interface ServiceListingCardProps {
   service: ServicePost;
   onOpenBargainDialog: (service: ServicePost) => void;
-  onOpenReviewDialog: (service: ServicePost) => void;
+  onOpenReviewDialog: (serviceId: string, sellerId: string, serviceTitle: string) => void; // NEW: Updated signature
   isFoodOrWellnessCategory: boolean;
 }
 
@@ -27,7 +27,7 @@ const formatCategoryTitle = (categorySlug: string | undefined) => {
 const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   service,
   onOpenBargainDialog,
-  onOpenReviewDialog,
+  onOpenReviewDialog, // NEW: Updated prop
   isFoodOrWellnessCategory,
 }) => {
   const navigate = useNavigate();
@@ -103,7 +103,7 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
             size="sm"
             variant="outline"
             className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-            onClick={() => onOpenReviewDialog(service)}
+            onClick={() => onOpenReviewDialog(service.$id, service.posterId, service.title)}
           >
             <Star className="mr-2 h-4 w-4" /> Leave a Review
           </Button>

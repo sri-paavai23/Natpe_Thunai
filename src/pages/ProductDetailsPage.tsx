@@ -81,8 +81,9 @@ export default function ProductDetailsPage() {
     }
     if (!product) return;
 
-    if (!product.userId) {
-      toast.error("Seller information is missing. Cannot proceed with transaction.");
+    if (!product.userId || product.userId.trim() === "") {
+      toast.error("Seller information is missing or invalid. Cannot proceed with transaction.");
+      console.error("Seller ID is missing or empty for product:", product);
       return;
     }
 
@@ -185,8 +186,9 @@ export default function ProductDetailsPage() {
     }
     if (!product) return;
 
-    if (!product.userId) {
-      toast.error("Seller information is missing. Cannot send bargain request.");
+    if (!product.userId || product.userId.trim() === "") {
+      toast.error("Seller information is missing or invalid. Cannot send bargain request.");
+      console.error("Seller ID is missing or empty for product:", product);
       return;
     }
 

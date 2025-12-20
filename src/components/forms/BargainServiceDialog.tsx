@@ -39,8 +39,9 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
   const handleInitiateBargainPayment = async () => {
     if (!user || !userProfile || !service) return;
 
-    if (!service.posterId) {
-      toast.error("Service provider information is missing. Cannot proceed with bargain.");
+    if (!service.posterId || service.posterId.trim() === "") {
+      toast.error("Service provider information is missing or invalid. Cannot proceed with bargain.");
+      console.error("Service poster ID is missing or empty for service:", service);
       return;
     }
 

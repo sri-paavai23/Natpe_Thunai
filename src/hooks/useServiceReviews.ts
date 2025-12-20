@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query, ID } from 'appwrite'; // NEW: Import ID
+import { Models, Query, ID } from 'appwrite';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 
 export interface ServiceReview extends Models.Document {
   serviceId: string;
+  sellerId: string; // NEW: Added sellerId
   reviewerId: string;
   reviewerName: string;
   rating: number; // 1-5 stars
@@ -15,7 +16,7 @@ export interface ServiceReview extends Models.Document {
   collegeName: string;
 }
 
-interface SubmitReviewData { // NEW: Define a specific interface for submitReview payload
+interface SubmitReviewData {
   rating: number;
   comment: string;
 }
@@ -26,11 +27,11 @@ interface ServiceReviewsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
-  submitReview: (reviewData: SubmitReviewData) => Promise<void>; // NEW: Use SubmitReviewData
+  submitReview: (serviceId: string, sellerId: string, reviewData: SubmitReviewData) => Promise<void>; // NEW: Added sellerId to submitReview
 }
 
 export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
-  const { user, userProfile, isLoading: isAuthLoading } = useAuth(); // NEW: Get isAuthLoading
+  const { user, userProfile, isLoading: isAuthLoading } = useAuth();
   const [reviews, setReviews] = useState<ServiceReview[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +44,15 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
   }, []);
 
   const fetchReviews = useCallback(async () => {
+    // Check for environment variable configuration
+    if (APPWRITE_SERVICE_REVIEWS_COLLECTION_ID === 'YOUR_SERVICE_REVIEWS_COLLECTION_ID' || !APPWRITE_SERVICE_REVIEWS_COLLECTION_ID) {
+      const msg = "APPWRITE_SERVICE_REVIEWS_COLLECTION_ID is not configured. Please set it in your .env file.";
+      console.error(msg);
+      setError(msg);
+      setIsLoading(false);
+      return;
+    }
+
     // Wait for auth to load and userProfile to be available
     if (isAuthLoading) {
       setIsLoading(true);
@@ -84,7 +94,6 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
       setAverageRating(calculateAverageRating(fetchedReviews));
     } catch (err: any) {
       console.error("Error fetching service reviews:", err);
-      // NEW: More detailed error logging
       setError(`Failed to load service reviews: ${err.message}. Please check Appwrite collection ID, permissions, and schema.`);
       toast.error(`Failed to load service reviews: ${err.message}`);
     } finally {
@@ -92,9 +101,9 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
     }
   }, [serviceId, userProfile?.collegeName, calculateAverageRating, isAuthLoading]);
 
-  const submitReview = useCallback(async (reviewData: SubmitReviewData) => { // NEW: Use SubmitReviewData
-    if (!user || !userProfile || !serviceId) {
-      toast.error("You must be logged in and select a service to submit a review.");
+  const submitReview = useCallback(async (serviceId: string, sellerId: string, reviewData: SubmitReviewData) => { // NEW: Added sellerId
+    if (!user || !userProfile || !serviceId || !sellerId) { // NEW: Check sellerId
+      toast.error("You must be logged in, select a service, and have seller info to submit a review.");
       return;
     }
     if (!userProfile.collegeName) {
@@ -110,6 +119,7 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
         {
           ...reviewData,
           serviceId: serviceId,
+          sellerId: sellerId, // NEW: Include sellerId
           reviewerId: user.$id,
           reviewerName: user.name,
           collegeName: userProfile.collegeName,
@@ -122,7 +132,7 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
       toast.error(err.message || "Failed to submit review.");
       throw err;
     }
-  }, [user, userProfile, serviceId, fetchReviews]);
+  }, [user, userProfile, fetchReviews]);
 
   useEffect(() => {
     fetchReviews();

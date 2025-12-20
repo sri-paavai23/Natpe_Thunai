@@ -10,22 +10,22 @@ import { Star, Loader2 } from "lucide-react";
 import { useServiceReviews } from "@/hooks/useServiceReviews";
 import { cn } from "@/lib/utils";
 
-interface SubmitServiceReviewFormProps {
+interface ReviewServiceDialogProps {
   serviceId: string;
-  sellerId: string;
+  sellerId: string; // NEW: Accept sellerId
   serviceTitle: string;
   onReviewSubmitted: () => void;
   onCancel: () => void;
 }
 
-const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({
+const ReviewServiceDialog: React.FC<ReviewServiceDialogProps> = ({
   serviceId,
-  sellerId,
+  sellerId, // NEW: Destructure sellerId
   serviceTitle,
   onReviewSubmitted,
   onCancel,
 }) => {
-  const { submitReview } = useServiceReviews();
+  const { submitReview } = useServiceReviews(); // Use the hook to get submitReview
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +42,7 @@ const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({
 
     setIsSubmitting(true);
     try {
-      await submitReview(serviceId, sellerId, { rating, comment });
+      await submitReview(serviceId, sellerId, { rating, comment }); // Pass sellerId
       onReviewSubmitted();
     } catch (error) {
       // Error handled by useServiceReviews hook
@@ -91,4 +91,4 @@ const SubmitServiceReviewForm: React.FC<SubmitServiceReviewFormProps> = ({
   );
 };
 
-export default SubmitServiceReviewForm;
+export default ReviewServiceDialog;
