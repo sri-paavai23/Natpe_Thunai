@@ -8,7 +8,7 @@ import { Users, HeartHandshake, Mail, ArrowLeft, DollarSign, FileText } from "lu
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import JoinAmbassadorForm from "@/components/forms/JoinAmbassadorForm";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE__COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_AMBASSADOR_APPLICATION_COLLECTION_ID } from "@/lib/appwrite";
 import { useNavigate, Link } from "react-router-dom"; // Added Link
 
 const AmbassadorProgramPage = () => {
