@@ -10,16 +10,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Loader2, PlusCircle, CalendarIcon } from "lucide-react";
+import { Loader2, PlusCircle, CalendarIcon } from "lucide-react"; // Added CalendarIcon
 import { toast } from "sonner";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TOURNAMENTS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
-import { useAuth } from "@/context/AuthContext"; // Corrected import path
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-
+import { useAuth } from "@/context/AuthContext";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Added Popover
+import { Calendar } from "@/components/ui/calendar"; // Added Calendar
+import { format } from "date-fns"; // Added format from date-fns
+import { cn } from "@/lib/utils"; // Added cn
+import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
 
 // Define common game options
 const GAME_OPTIONS = [
@@ -135,6 +135,7 @@ const PostTournamentForm: React.FC<PostTournamentFormProps> = ({ onTournamentPos
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
+        <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
         <FormField
           control={form.control}
           name="name"
