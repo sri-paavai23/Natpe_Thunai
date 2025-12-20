@@ -19,6 +19,20 @@ export interface FeedItem {
   status?: string; // Optional status for errands/tournaments
 }
 
+// Helper function to parse price values from various formats
+const parsePriceValue = (value: any): number | undefined => {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    // Remove currency symbols, commas, and any text after a slash (like "/day")
+    const cleanedValue = value.replace(/[₹$,]/g, '').split('/')[0].trim();
+    const parsed = parseFloat(cleanedValue);
+    return isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+};
+
 // Helper to fetch and normalize items from a collection
 const fetchAndNormalize = async (
   collectionId: string,
@@ -46,7 +60,7 @@ const fetchAndNormalize = async (
       collegeName: doc.collegeName,
       $createdAt: doc.$createdAt,
       imageUrl: doc.imageUrl || doc.image || undefined,
-      price: doc.price || doc.amount || undefined,
+      price: parsePriceValue(doc.price || doc.amount), // Use the new parsePriceValue helper
       status: doc.status || undefined,
     }));
   } catch (error) {
