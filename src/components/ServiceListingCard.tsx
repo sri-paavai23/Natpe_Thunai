@@ -3,7 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquareText, DollarSign, Star, X, Trash2 } from "lucide-react"; // NEW: Import Trash2
+import { Loader2, MessageSquareText, DollarSign, Star, X } from "lucide-react"; // Added X icon
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -14,9 +14,8 @@ import { cn } from "@/lib/utils";
 interface ServiceListingCardProps {
   service: ServicePost;
   onOpenBargainDialog: (service: ServicePost) => void;
-  onOpenReviewDialog: (serviceId: string, sellerId: string, serviceTitle: string) => void;
+  onOpenReviewDialog: (serviceId: string, sellerId: string, serviceTitle: string) => void; // NEW: Updated signature
   isFoodOrWellnessCategory: boolean;
-  onDelete?: (serviceId: string) => void; // NEW: Add onDelete prop
 }
 
 // Helper function to format category slug into readable title
@@ -28,18 +27,17 @@ const formatCategoryTitle = (categorySlug: string | undefined) => {
 const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   service,
   onOpenBargainDialog,
-  onOpenReviewDialog,
+  onOpenReviewDialog, // NEW: Updated prop
   isFoodOrWellnessCategory,
-  onDelete, // NEW: Destructure onDelete
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
+  // Only call useServiceReviews if service.$id is valid
   const { averageRating, isLoading: isReviewsLoading, error: reviewsError, reviews: serviceReviews } = 
     service.$id ? useServiceReviews(service.$id) : { averageRating: 0, isLoading: false, error: null, reviews: [] };
   
   const hasReviewed = false; // Simulate: In a real app, check if user has already reviewed this service
-  const isCreator = user?.$id === service.posterId; // NEW: Check if current user is the creator
 
   const handleContactProvider = (contact: string, title: string) => {
     toast.info(`Contacting provider for "${title}" at ${contact}.`);
@@ -47,23 +45,12 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   };
 
   return (
-    <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center relative"> {/* Added relative */}
-      {isCreator && onDelete && ( // NEW: Conditionally render delete button
-        <Button
-          variant="destructive"
-          size="icon"
-          className="absolute top-2 right-2 z-10 h-7 w-7 opacity-70 hover:opacity-100"
-          onClick={() => onDelete(service.$id)}
-        >
-          <Trash2 className="h-4 w-4" />
-          <span className="sr-only">Delete Service</span>
-        </Button>
-      )}
+    <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center">
       <div>
         <h3 className="font-semibold text-foreground">{service.title}</h3>
         <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
         <p className="text-xs text-muted-foreground mt-1">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p>
-        <p className="text-xs text-muted-foreground">Posted by: {isCreator ? "You" : service.posterName}</p> {/* NEW: Display "You" if creator */}
+        <p className="text-xs text-muted-foreground">Posted by: {service.posterName}</p>
         <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
         
         <div className="flex items-center gap-2 mt-2">

@@ -4,18 +4,19 @@ import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Zap, PlusCircle, Loader2, X, Trash2 } from "lucide-react"; // Added Trash2 icon
+import { Clock, Zap, PlusCircle, Loader2, X } from "lucide-react"; // Added X icon
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostErrandForm from "@/components/forms/PostErrandForm";
 import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID,
+APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import * as z from "zod";
 
 // Errand types specific to this page (Urgent/Short-Term)
-const URGENT_TYPES = ["instant-help", "emergency-delivery", "other"];
+const URGENT_TYPES = ["instant-help", "emergency-delivery", "other"]; // Include 'other' for filtering
 
 const URGENT_ERRAND_OPTIONS = [
   { value: "instant-help", label: "Instant Help" },
@@ -37,22 +38,25 @@ const ErrandFormSchema = z.object({
 const ShortTermNeedsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
-  const [initialTypeForForm, setInitialTypeForForm] = useState<string | undefined>(undefined);
+  const [initialTypeForForm, setInitialTypeForForm] = useState<string | undefined>(undefined); // Changed from initialCategoryForForm
   
-  const { errands: postedUrgentRequests, isLoading, error, deleteErrand } = useErrandListings(URGENT_TYPES); // NEW: Get deleteErrand
+  // Fetch only urgent requests for the user's college
+  const { errands: postedUrgentRequests, isLoading, error } = useErrandListings(URGENT_TYPES);
 
+  // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
 
+  // Scroll to top on component mount
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   const handleNeedClick = (needType: string) => {
-    setInitialTypeForForm(needType);
+    setInitialTypeForForm(needType); // Changed from setInitialCategoryForForm
     setIsPostErrandDialogOpen(true);
   };
 
-  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => {
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an urgent request.");
       return;
@@ -61,10 +65,11 @@ const ShortTermNeedsPage = () => {
     try {
       const newRequestData = {
         ...data,
+        // If type is 'other', use otherTypeDescription as the actual type
         type: data.type === 'other' && data.otherTypeDescription 
                   ? data.otherTypeDescription 
                   : data.type,
-        deadline: data.deadline ? data.deadline.toISOString() : null,
+        deadline: data.deadline ? data.deadline.toISOString() : null, // Convert Date to ISO string
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName,
@@ -79,7 +84,7 @@ const ShortTermNeedsPage = () => {
       
       toast.success(`Your urgent request "${data.title}" has been posted!`);
       setIsPostErrandDialogOpen(false);
-      setInitialTypeForForm(undefined);
+      setInitialTypeForForm(undefined); // Reset initial type
     } catch (e: any) {
       console.error("Error posting urgent request:", e);
       toast.error(e.message || "Failed to post urgent request listing.");
@@ -119,13 +124,13 @@ const ShortTermNeedsPage = () => {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-                <DialogHeader className="relative">
+                <DialogHeader className="relative"> {/* Added relative for close button positioning */}
                   <DialogTitle className="text-foreground">Post New Urgent Request</DialogTitle>
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
-                    onClick={() => setIsPostErrandDialogOpen(false)}
+                    onClick={() => setIsPostErrandDialogOpen(false)} // Dismiss the dialog
                   >
                     <X className="h-4 w-4" />
                     <span className="sr-only">Close</span>
@@ -133,9 +138,9 @@ const ShortTermNeedsPage = () => {
                 </DialogHeader>
                 <PostErrandForm 
                   onSubmit={handlePostErrand} 
-                  onCancel={() => { setIsPostErrandDialogOpen(false); setInitialTypeForForm(undefined); }}
-                  typeOptions={URGENT_ERRAND_OPTIONS}
-                  initialType={initialTypeForForm}
+                  onCancel={() => { setIsPostErrandDialogOpen(false); setInitialTypeForForm(undefined); }} // Changed to setInitialTypeForForm
+                  typeOptions={URGENT_ERRAND_OPTIONS} // Changed to typeOptions
+                  initialType={initialTypeForForm} // Changed to initialType
                 />
               </DialogContent>
             </Dialog>
@@ -158,31 +163,17 @@ const ShortTermNeedsPage = () => {
             ) : error ? (
               <p className="text-center text-destructive py-4">Error loading requests: {error}</p>
             ) : postedUrgentRequests.length > 0 ? (
-              postedUrgentRequests.map((request) => {
-                const isCreator = user?.$id === request.posterId; // NEW: Check if current user is the creator
-                return (
-                  <div key={request.$id} className="p-3 border border-border rounded-md bg-background relative"> {/* Added relative */}
-                    {isCreator && ( // NEW: Conditionally render delete button
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-2 right-2 z-10 h-7 w-7 opacity-70 hover:opacity-100"
-                        onClick={() => deleteErrand(request.$id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete Request</span>
-                      </Button>
-                    )}
-                    <h3 className="font-semibold text-foreground">{request.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
-                    <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
-                    {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(request.deadline).toLocaleDateString()}</span></p>}
-                    <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
-                    <p className="text-xs text-muted-foreground">Posted by: {isCreator ? "You" : request.posterName}</p> {/* NEW: Display "You" if creator */}
-                  </div>
-                );
-              })
+              postedUrgentRequests.map((request) => (
+                <div key={request.$id} className="p-3 border border-border rounded-md bg-background">
+                  <h3 className="font-semibold text-foreground">{request.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
+                  <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
+                  {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(request.deadline).toLocaleDateString()}</span></p>}
+                  <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
+                  <p className="text-xs text-muted-foreground">Posted: {new Date(request.$createdAt).toLocaleDateString()}</p>
+                </div>
+              ))
             ) : (
               <p className="text-center text-muted-foreground py-4">No urgent requests posted yet for your college. Be the first!</p>
             )}

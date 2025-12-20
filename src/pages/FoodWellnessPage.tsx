@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostServiceForm from "@/components/forms/PostServiceForm";
 import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import FoodOfferingCard from "@/components/FoodOfferingCard";
@@ -39,7 +39,7 @@ const FoodWellnessPage = () => {
   const [isPostCustomOrderDialogOpen, setIsPostCustomOrderDialogOpen] = useState(false);
   
   // Fetch all food/wellness related posts for the user's college
-  const { services: allPosts, isLoading, error, deleteService } = useServiceListings(undefined); // NEW: Get deleteService
+  const { services: allPosts, isLoading, error } = useServiceListings(undefined); 
 
   const postedOfferings = allPosts.filter(p => !p.isCustomOrder && OFFERING_CATEGORIES.includes(p.category));
   const postedCustomRequests = allPosts.filter(p => p.isCustomOrder);
@@ -70,7 +70,7 @@ const FoodWellnessPage = () => {
 
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID, 
+        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
         ID.unique(),
         newPostData
       );
@@ -109,7 +109,7 @@ const FoodWellnessPage = () => {
 
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID, 
+        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
         ID.unique(),
         newRequest
       );
@@ -203,9 +203,9 @@ const FoodWellnessPage = () => {
             ) : error ? (
               <p className="text-center text-destructive py-4">Error loading offerings: {error}</p>
             ) : postedOfferings.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4"> {/* Added grid layout */}
                 {postedOfferings.map((offering) => (
-                  <FoodOfferingCard key={offering.$id} offering={offering} onDelete={deleteService} /> 
+                  <FoodOfferingCard key={offering.$id} offering={offering} />
                 ))}
               </div>
             ) : (
@@ -221,7 +221,7 @@ const FoodWellnessPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
-            <FoodCustomRequestsList requests={postedCustomRequests} isLoading={isLoading} error={error} onDelete={deleteService} /> 
+            <FoodCustomRequestsList requests={postedCustomRequests} isLoading={isLoading} error={error} />
           </CardContent>
         </Card>
       </div>

@@ -16,7 +16,7 @@ export interface ServicePost extends Models.Document {
   posterName: string;
   collegeName: string;
   isCustomOrder: boolean;
-  customOrderDescription?: string;
+  customOrderDescription?: string; // NEW: Added customOrderDescription
 }
 
 interface UseServiceListingsState {
@@ -24,10 +24,9 @@ interface UseServiceListingsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
-  deleteService: (serviceId: string) => Promise<void>; // NEW: Add deleteService
 }
 
-export const useServiceListings = (categories?: string | string[]): UseServiceListingsState => {
+export const useServiceListings = (categories?: string | string[]): UseServiceListingsState => { // NEW: Accept string or string[]
   const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [services, setServices] = useState<ServicePost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,10 +58,12 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
 
       if (categories) {
         if (Array.isArray(categories)) {
+          // If categories is an array, use Query.or for multiple category filters
           if (categories.length > 0) {
             queries.push(Query.or(categories.map(cat => Query.equal('category', cat))));
           }
         } else {
+          // If it's a single string, use Query.equal
           queries.push(Query.equal('category', categories));
         }
       }
@@ -80,26 +81,7 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName, categories, isAuthLoading]);
-
-  const deleteService = useCallback(async (serviceId: string) => {
-    if (!window.confirm("Are you sure you want to delete this service listing?")) {
-      return;
-    }
-    try {
-      await databases.deleteDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID,
-        serviceId
-      );
-      toast.success("Service listing deleted successfully!");
-      // The real-time subscription will handle updating the state
-    } catch (err: any) {
-      console.error("Error deleting service listing:", err);
-      toast.error(err.message || "Failed to delete service listing.");
-      throw err;
-    }
-  }, []);
+  }, [userProfile?.collegeName, categories, isAuthLoading]); // NEW: Add categories to dependency array
 
   useEffect(() => {
     fetchServices();
@@ -115,6 +97,7 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
           return;
         }
 
+        // Check if the payload's category matches the filtered categories
         const matchesCategory = !categories || 
                                 (Array.isArray(categories) && categories.includes(payload.category)) ||
                                 (!Array.isArray(categories) && categories === payload.category);
@@ -138,7 +121,6 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
             }
           } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
             if (existingIndex !== -1) {
-              toast.info(`Service removed: "${payload.title}"`);
               updatedServices = prev.filter(s => s.$id !== payload.$id);
             }
           }
@@ -150,7 +132,7 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
     return () => {
       unsubscribe();
     };
-  }, [fetchServices, userProfile?.collegeName, categories]);
+  }, [fetchServices, userProfile?.collegeName, categories]); // NEW: Add categories to dependency array
 
-  return { services, isLoading, error, refetch: fetchServices, deleteService };
+  return { services, isLoading, error, refetch: fetchServices };
 };

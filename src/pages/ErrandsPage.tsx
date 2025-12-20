@@ -4,15 +4,15 @@ import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingBag, NotebookPen, Bike, PlusCircle, Loader2, X, Trash2 } from "lucide-react"; // Added Trash2 icon
+import { ShoppingBag, NotebookPen, Bike, PlusCircle, Loader2, X } from "lucide-react"; // Added X icon
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostErrandForm from "@/components/forms/PostErrandForm";
 import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
-import * as z from "zod";
+import * as z from "zod"; // Import z for zod schema inference
 
 // Errand types specific to this page
 const ERRAND_TYPES = ["note-writing", "small-job", "delivery"];
@@ -41,20 +41,23 @@ const ErrandsPage = () => {
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
   const [preselectedErrandType, setPreselectedErrandType] = useState<string | undefined>(undefined);
   
-  const { errands: postedErrands, isLoading, error, deleteErrand } = useErrandListings(ERRAND_TYPES); // NEW: Get deleteErrand
+  // Fetch only standard errands for the user's college
+  const { errands: postedErrands, isLoading, error } = useErrandListings(ERRAND_TYPES);
 
+  // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
 
+  // Scroll to top on component mount
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
   const handleErrandClick = (errandType: string) => {
     setPreselectedErrandType(errandType);
-    setIsPostErrandDialogOpen(true);
+    setIsPostErrandDialogOpen(true); // Open the dialog
   };
 
-  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => {
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an errand.");
       return;
@@ -63,13 +66,14 @@ const ErrandsPage = () => {
     try {
       const newErrandData = {
         ...data,
+        // If type is 'other' and otherTypeDescription is empty, use otherTypeDescription as the actual type
         type: data.type === 'other' && data.otherTypeDescription 
               ? data.otherTypeDescription 
               : data.type,
-        deadline: data.deadline ? data.deadline.toISOString() : null,
+        deadline: data.deadline ? data.deadline.toISOString() : null, // Convert Date to ISO string
         posterId: user.$id,
         posterName: user.name,
-        collegeName: userProfile.collegeName,
+        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
       };
 
       await databases.createDocument(
@@ -81,7 +85,7 @@ const ErrandsPage = () => {
       
       toast.success(`Your errand "${data.title}" has been posted!`);
       setIsPostErrandDialogOpen(false);
-      setPreselectedErrandType(undefined);
+      setPreselectedErrandType(undefined); // Clear preselected type after posting
     } catch (e: any) {
       console.error("Error posting errand:", e);
       toast.error(e.message || "Failed to post errand listing.");
@@ -127,13 +131,13 @@ const ErrandsPage = () => {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-                <DialogHeader className="relative">
+                <DialogHeader className="relative"> {/* Added relative for close button positioning */}
                   <DialogTitle className="text-foreground">Post New Campus Errand</DialogTitle>
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
-                    onClick={() => setIsPostErrandDialogOpen(false)}
+                    onClick={() => setIsPostErrandDialogOpen(false)} // Dismiss the dialog
                   >
                     <X className="h-4 w-4" />
                     <span className="sr-only">Close</span>
@@ -143,10 +147,10 @@ const ErrandsPage = () => {
                   onSubmit={handlePostErrand} 
                   onCancel={() => {
                     setIsPostErrandDialogOpen(false);
-                    setPreselectedErrandType(undefined);
+                    setPreselectedErrandType(undefined); // Clear preselected type on cancel
                   }} 
                   typeOptions={STANDARD_ERRAND_OPTIONS}
-                  initialType={preselectedErrandType}
+                  initialType={preselectedErrandType} // Pass the preselected type
                 />
               </DialogContent>
             </Dialog>
@@ -171,32 +175,17 @@ const ErrandsPage = () => {
             ) : error ? (
               <p className="text-center text-destructive py-4">Error loading errands: {error}</p>
             ) : postedErrands.length > 0 ? (
-              postedErrands.map((errand) => {
-                const isCreator = user?.$id === errand.posterId; // NEW: Check if current user is the creator
-                return (
-                  <div key={errand.$id} className="p-3 border border-border rounded-md bg-background relative"> {/* Added relative */}
-                    {isCreator && ( // NEW: Conditionally render delete button
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-2 right-2 z-10 h-7 w-7 opacity-70 hover:opacity-100"
-                        onClick={() => deleteErrand(errand.$id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete Errand</span>
-                      </Button>
-                    )}
-                    <h3 className="font-semibold text-foreground">{errand.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{errand.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{errand.type}</span></p>
-                    <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{errand.compensation}</span></p>
-                    {errand.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(errand.deadline).toLocaleDateString()}</span></p>}
-                    <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{errand.contact}</span></p>
-                    <p className="text-xs text-muted-foreground">Posted by: {isCreator ? "You" : errand.posterName}</p> {/* NEW: Display "You" if creator */}
-                    <p className="text-xs text-muted-foreground">Posted: {new Date(errand.$createdAt).toLocaleDateString()}</p>
-                  </div>
-                );
-              })
+              postedErrands.map((errand) => (
+                <div key={errand.$id} className="p-3 border border-border rounded-md bg-background">
+                  <h3 className="font-semibold text-foreground">{errand.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">{errand.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{errand.type}</span></p>
+                  <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{errand.compensation}</span></p>
+                  {errand.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(errand.deadline).toLocaleDateString()}</span></p>}
+                  <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{errand.contact}</span></p>
+                  <p className="text-xs text-muted-foreground">Posted: {new Date(errand.$createdAt).toLocaleDateString()}</p>
+                </div>
+              ))
             ) : (
               <p className="text-center text-muted-foreground py-4">No errands posted yet for your college. Be the first!</p>
             )}

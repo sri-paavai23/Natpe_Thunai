@@ -17,15 +17,46 @@ import { ID, Models, Query } from "appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { calculateCommissionRate, formatCommissionRate } from "@/utils/commission"; // Import dynamic commission
-import CashExchangeListings from "@/components/CashExchangeListings";
-import { useCashExchangeListings, CashExchangeRequest } from "@/hooks/useCashExchangeListings"; // NEW: Import the new hook
+import CashExchangeListings from "@/components/CashExchangeListings"; // NEW IMPORT
 
-// Helper functions for serialization/deserialization (moved to hook)
-// Removed from here
+interface Contribution {
+  userId: string;
+  amount: number;
+}
+
+interface CashExchangeRequest extends Models.Document {
+  type: "request" | "offer" | "group-contribution";
+  amount: number;
+  commission: number;
+  notes: string;
+  status: "Open" | "Accepted" | "Completed" | "Group Contribution";
+  meetingLocation: string;
+  meetingTime: string;
+  contributions?: Contribution[]; // This is the deserialized type for the component's state
+  posterId: string; // ID of the user who posted the request/offer
+  posterName: string; // Name of the user who posted
+  collegeName: string; // NEW: Add collegeName
+}
+
+// Helper functions for serialization/deserialization
+const serializeContributions = (contributions: Contribution[]): string[] => {
+  return contributions.map(c => JSON.stringify(c));
+};
+
+const deserializeContributions = (contributions: string[] | undefined): Contribution[] => {
+  if (!contributions || !Array.isArray(contributions)) return [];
+  return contributions.map(c => {
+    try {
+      return JSON.parse(c);
+    } catch (e) {
+      console.error("Failed to parse contribution item:", c, e);
+      return { userId: "unknown", amount: 0 };
+    }
+  });
+};
 
 const CashExchangePage = () => {
   const { user, userProfile } = useAuth();
-  const { requests: allExchangeRequests, isLoading, error, deleteRequest } = useCashExchangeListings(); // NEW: Use the new hook
   const [activeTab, setActiveTab] = useState<"requests" | "offers" | "group-contributions">("requests");
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
   const [postType, setPostType] = useState<"request" | "offer" | "group-contribution">("request");
@@ -33,6 +64,8 @@ const CashExchangePage = () => {
   const [notes, setNotes] = useState("");
   const [meetingLocation, setMeetingLocation] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
   // Scroll to top on component mount
@@ -40,7 +73,87 @@ const CashExchangePage = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  // Removed fetchRequests and its useEffect, now handled by useCashExchangeListings hook
+  const fetchRequests = useCallback(async () => {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+      setLoading(false);
+      setExchangeRequests([]); // Clear requests if no college is set
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
+        [
+          Query.orderDesc('$createdAt'),
+          Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+        ]
+      );
+      // Deserialize contributions when fetching
+      const deserializedRequests = (response.documents as any[]).map(doc => ({
+        ...doc,
+        contributions: deserializeContributions(doc.contributions || []), // Ensure array is passed
+      })) as unknown as CashExchangeRequest[];
+      setExchangeRequests(deserializedRequests);
+    } catch (error) {
+      console.error("Error fetching cash exchange data:", error);
+      toast.error("Failed to load cash exchange listings.");
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+
+  useEffect(() => {
+    fetchRequests();
+
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
+
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CASH_EXCHANGE_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as any; // Use 'any' for raw payload to handle mixed types
+        
+        // NEW: Filter real-time updates by collegeName
+        if (payload.collegeName !== userProfile.collegeName) {
+            return;
+        }
+
+        setExchangeRequests(prev => {
+          const existingIndex = prev.findIndex(r => r.$id === payload.$id);
+          
+          // Deserialize contributions from the payload, explicitly casting to string[]
+          const deserializedPayload: CashExchangeRequest = {
+            ...payload,
+            contributions: deserializeContributions(payload.contributions as string[] || []), // Explicitly cast here
+          };
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New cash exchange post: ${deserializedPayload.type} for ₹${deserializedPayload.amount}`);
+              return [deserializedPayload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Cash exchange updated: ${deserializedPayload.type} status is now ${deserializedPayload.status}`);
+              return prev.map(r => r.$id === deserializedPayload.$id ? deserializedPayload : r);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Cash exchange post removed.`);
+              return prev.filter(r => r.$id !== deserializedPayload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchRequests, userProfile?.collegeName]);
+
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +186,7 @@ const CashExchangePage = () => {
         meetingLocation: meetingLocation.trim(),
         meetingTime: meetingTime.trim(),
         // Serialize contributions array before sending to Appwrite
-        contributions: postType === "group-contribution" ? [] : undefined, // Empty array for Appwrite
+        contributions: postType === "group-contribution" ? serializeContributions([]) : undefined,
         posterId: user.$id,
         posterName: user.name,
         collegeName: userProfile.collegeName, // NEW: Add collegeName
@@ -102,7 +215,7 @@ const CashExchangePage = () => {
   };
 
   const filteredRequests = (type: "request" | "offer" | "group-contribution") => {
-    return allExchangeRequests.filter(r => r.type === type);
+    return exchangeRequests.filter(r => r.type === type);
   };
 
   return (
@@ -138,21 +251,21 @@ const CashExchangePage = () => {
             <TabsContent value="requests">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 space-y-3">
-                  <CashExchangeListings listings={filteredRequests("request")} isLoading={isLoading} type="request" onDelete={deleteRequest} /> {/* NEW: Pass onDelete */}
+                  <CashExchangeListings listings={filteredRequests("request")} isLoading={loading} type="request" />
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="offers">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 space-y-3">
-                  <CashExchangeListings listings={filteredRequests("offer")} isLoading={isLoading} type="offer" onDelete={deleteRequest} /> {/* NEW: Pass onDelete */}
+                  <CashExchangeListings listings={filteredRequests("offer")} isLoading={loading} type="offer" />
                 </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="group-contributions">
               <Card className="bg-card border-border">
                 <CardContent className="p-4 space-y-3">
-                  <CashExchangeListings listings={filteredRequests("group-contribution")} isLoading={isLoading} type="group-contribution" onDelete={deleteRequest} /> {/* NEW: Pass onDelete */}
+                  <CashExchangeListings listings={filteredRequests("group-contribution")} isLoading={loading} type="group-contribution" />
                 </CardContent>
               </Card>
             </TabsContent>

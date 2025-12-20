@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import PostServiceForm from "@/components/forms/PostServiceForm";
 import ServiceListingCard from "@/components/ServiceListingCard";
 import BargainServiceDialog from "@/components/forms/BargainServiceDialog";
-import SubmitServiceReviewForm from "@/components/forms/SubmitServiceReviewForm";
+import SubmitServiceReviewForm from "@/components/forms/SubmitServiceReviewForm"; // NEW: Import SubmitServiceReviewForm
 import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
@@ -26,9 +26,6 @@ const ServiceFormSchema = z.object({
   price: z.string().min(1, { message: "Price is required." }),
   contact: z.string().min(5, { message: "Contact information is required." }),
   isCustomOrder: z.boolean().default(false),
-  customOrderDescription: z.string().optional(),
-  ambassadorDelivery: z.boolean().default(false),
-  ambassadorMessage: z.string().optional(),
 });
 
 const FREELANCE_CATEGORIES = [
@@ -52,11 +49,11 @@ const FreelancePage = () => {
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isBargainDialogOpen, setIsBargainDialogOpen] = useState(false);
   const [selectedServiceForBargain, setSelectedServiceForBargain] = useState<ServicePost | null>(null);
-  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
-  const [selectedServiceForReview, setSelectedServiceForReview] = useState<{ serviceId: string; sellerId: string; serviceTitle: string } | null>(null);
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false); // NEW: State for review dialog
+  const [selectedServiceForReview, setSelectedServiceForReview] = useState<{ serviceId: string; sellerId: string; serviceTitle: string } | null>(null); // NEW: State for review dialog
   const [initialCategoryForForm, setInitialCategoryForForm] = useState<string | undefined>(undefined);
 
-  const { services: freelanceListings, isLoading, error, deleteService } = useServiceListings(FREELANCE_CATEGORIES); // NEW: Get deleteService
+  const { services: freelanceListings, isLoading, error } = useServiceListings(FREELANCE_CATEGORIES);
 
   // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
@@ -80,6 +77,7 @@ const FreelancePage = () => {
     try {
       const newServiceData = {
         ...data,
+        // If category is 'other' and otherCategoryDescription is empty, use otherCategoryDescription as the actual category
         category: data.category === 'other' && data.otherCategoryDescription 
                   ? data.otherCategoryDescription 
                   : data.category,
@@ -97,7 +95,7 @@ const FreelancePage = () => {
       
       toast.success(`Your service "${data.title}" has been posted!`);
       setIsPostServiceDialogOpen(false);
-      setInitialCategoryForForm(undefined);
+      setInitialCategoryForForm(undefined); // Clear preselected category
     } catch (e: any) {
       console.error("Error posting service:", e);
       toast.error(e.message || "Failed to post service listing.");
@@ -117,6 +115,7 @@ const FreelancePage = () => {
     setIsBargainDialogOpen(true);
   };
 
+  // NEW: Updated handleOpenReviewDialog to match ServiceListingCard's new prop signature
   const handleOpenReviewDialog = (serviceId: string, sellerId: string, serviceTitle: string) => {
     if (!user || !userProfile) {
       toast.error("Please log in to leave a review.");
@@ -210,8 +209,7 @@ const FreelancePage = () => {
                   service={service}
                   onOpenBargainDialog={handleOpenBargainDialog}
                   onOpenReviewDialog={handleOpenReviewDialog}
-                  isFoodOrWellnessCategory={false}
-                  onDelete={deleteService} // NEW: Pass deleteService
+                  isFoodOrWellnessCategory={false} // These are freelance, not food/wellness
                 />
               ))
             ) : (

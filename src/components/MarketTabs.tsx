@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ProductListingCard from "@/components/ProductListingCard";
-import { Product } from "@/lib/mockData";
+import { Product } from "@/lib/mockData"; // Import Product interface
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMarketListings } from '@/hooks/useMarketListings';
-import { cn } from '@/lib/utils';
+import { useMarketListings } from '@/hooks/useMarketListings'; // Import the new hook
+import { cn } from '@/lib/utils'; // Import cn for utility classes
 
 // Helper function to filter products by type
 const filterProducts = (products: Product[], type: Product['type'] | 'all'): Product[] => {
   if (type === 'all') return products;
+  // Handle both 'gift' and 'gift-request' under the 'gift' tab for now, 
+  // but the tab value remains 'gift' for filtering simplicity.
   if (type === 'gift') {
     return products.filter(p => p.type === 'gift' || p.type === 'gift-request');
   }
@@ -21,7 +23,7 @@ interface MarketTabsProps {
 
 const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
   const [activeTab, setActiveTab] = useState<Product['type'] | 'all'>(initialTab);
-  const { products, isLoading, error, deleteProduct } = useMarketListings(); // NEW: Get deleteProduct
+  const { products, isLoading, error } = useMarketListings(); // useMarketListings already filters by collegeName internally
 
   const items = filterProducts(products, activeTab);
 
@@ -47,7 +49,7 @@ const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
         {items.map((product) => (
-          <ProductListingCard key={product.$id} product={product} onDelete={deleteProduct} /> 
+          <ProductListingCard key={product.$id} product={product} />
         ))}
       </div>
     );
