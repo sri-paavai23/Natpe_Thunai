@@ -35,7 +35,7 @@ const DailyQuestCard = () => {
       return;
     }
     if (!canClaimReward) {
-      toast.error("Quest not completed or already claimed today.");
+      toast.info("You've already claimed your daily quest reward! Come back tomorrow."); // Polite message
       return;
     }
 
