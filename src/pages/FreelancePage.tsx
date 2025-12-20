@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import PostServiceForm from "@/components/forms/PostServiceForm";
 import { Link, useNavigate } from "react-router-dom";
 import { useServiceListings, ServicePost } from "@/hooks/useServiceListings"; // Import useServiceListings
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import BargainServiceDialog from "@/components/forms/BargainServiceDialog";
