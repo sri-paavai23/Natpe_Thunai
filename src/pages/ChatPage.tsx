@@ -45,7 +45,8 @@ const ChatPage = () => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [ablyClient, setAblyClient] = useState<Ably.Realtime | null>(null);
   const [chatClient, setChatClient] = useState<ChatClient | null>(null);
-  const [ablyRoom, setAblyRoom] = useState<Ably.Types.RealtimeChannelCallbacks | null>(null);
+ // Use 'Ably.RealtimeChannel' directly
+const [ablyRoom, setAblyRoom] = useState<Ably.RealtimeChannel | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const fetchAblyToken = useCallback(async (userId: string, channelName: string) => {
