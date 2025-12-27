@@ -1,241 +1,143 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
+import { ID } from 'appwrite';
+import { ServicePost } from "@/hooks/useServiceListings";
 
-// Define the Zod schema for the form
-const ServiceFormSchema = z.object({
-  title: z.string().min(2, { message: "Title must be at least 2 characters." }),
-  description: z.string().min(10, { message: "Description must be at least 10 characters." }),
-  category: z.string().min(1, { message: "Please select a category." }),
-  otherCategoryDescription: z.string().optional(), // For 'other' category
-  price: z.string().min(1, { message: "Price is required." }),
-  contact: z.string().min(5, { message: "Contact information is required." }),
-  isCustomOrder: z.boolean().default(false),
-  customOrderDescription: z.string().optional(), // NEW: Added customOrderDescription to schema
-  ambassadorDelivery: z.boolean().default(false), // NEW: Added ambassadorDelivery to schema
-  ambassadorMessage: z.string().optional(), // NEW: Added ambassadorMessage to schema
-});
-
-interface PostServiceFormProps {
-  onSubmit: (data: z.infer<typeof ServiceFormSchema>) => Promise<void>;
-  onCancel: () => void;
-  categoryOptions: { value: string; label: string }[];
-  initialCategory?: string;
-  isCustomOrder?: boolean; // NEW: Add isCustomOrder prop
-  titlePlaceholder?: string; // NEW: Add titlePlaceholder prop
-  descriptionPlaceholder?: string; // NEW: Add descriptionPlaceholder prop
-  customOrderDescriptionPlaceholder?: string; // NEW: Add customOrderDescriptionPlaceholder prop
-  pricePlaceholder?: string; // NEW: Add pricePlaceholder prop
-  contactPlaceholder?: string; // NEW: Add contactPlaceholder prop
-  ambassadorMessagePlaceholder?: string; // NEW: Add ambassadorMessagePlaceholder prop
+interface SubmitReviewData {
+  rating: number;
+  comment: string;
 }
 
-const PostServiceForm: React.FC<PostServiceFormProps> = ({
-  onSubmit,
-  onCancel,
-  categoryOptions,
-  initialCategory,
-  isCustomOrder = false, // NEW: Default to false
-  titlePlaceholder = "e.g., Math Tutoring, Graphic Design", // NEW: Default placeholder
-  descriptionPlaceholder = "Describe your service in detail...", // NEW: Default placeholder
-  customOrderDescriptionPlaceholder = "Specify details like ingredients, dietary restrictions, quantity, preferred time.", // NEW: Default placeholder
-  pricePlaceholder = "e.g., ₹500/hour, Negotiable", // NEW: Default placeholder
-  contactPlaceholder = "e.g., WhatsApp number, Email", // NEW: Default placeholder
-  ambassadorMessagePlaceholder = "e.g., Deliver to Block A, Room 101 by 7 PM", // NEW: Default placeholder
-}) => {
-  const form = useForm<z.infer<typeof ServiceFormSchema>>({
-    resolver: zodResolver(ServiceFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      category: initialCategory || "",
-      otherCategoryDescription: "",
-      price: "",
-      contact: "",
-      isCustomOrder: isCustomOrder, // NEW: Use prop for default value
-      customOrderDescription: "", // Initialize
-      ambassadorDelivery: false, // Initialize
-      ambassadorMessage: "", // Initialize
-    },
+interface ServiceReviewsState {
+  reviews: ChatMessage[];
+  averageRating: number;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+  submitReview: (serviceId: string, sellerId: string, reviewData: SubmitReviewData) => Promise<void>;
+}
+
+export const useServiceReviews = (serviceId?: string) => {
+  const { user, userProfile, isLoading: isAuthLoading } = useAuth();
+  const [reviews, setReviews] = useState<ChatMessage[]>([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const calculateAverageRating = useCallback((reviewList: ChatMessage[]) => {
+    if (reviewList.length === 0) return 0;
+    const totalRating = reviewList.reduce((sum, review) => sum + review.content.length;
+      return totalRating / reviewList.length;
   });
 
-  useEffect(() => {
-    if (initialCategory) {
-      form.reset({ ...form.getValues(), category: initialCategory });
+  const fetchReviews = useCallback(async () => {
+    // Check for environment variable configuration
+    if (APPWRITE_SERVICE_REVIEWS_COLLECTION_ID === 'YOUR_SERVICE_REVIEWS_COLLECTION_ID' || !APPWRITE_SERVICE_REVIEWS_COLLECTION_ID) {
+      const msg = "APPWRITE_SERVICE_REVIEWS_COLLECTION_ID is not configured. Please set it in your .env file.";
+      console.error(msg);
+      setError(msg);
+      setIsLoading(false);
+      return;
     }
-    // Also update isCustomOrder if the prop changes
-    form.setValue("isCustomOrder", isCustomOrder);
-  }, [initialCategory, isCustomOrder, form]);
 
-  const { isSubmitting } = form.formState;
-
-  const handleFormSubmit = async (data: z.infer<typeof ServiceFormSchema>) => {
-    try {
-      await onSubmit(data);
-      form.reset();
-    } catch (error) {
-      // Error handling is done in the parent component's onSubmit
+    // Wait for auth to load and userProfile to be available
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setReviews([]);
+      setError(null);
+      return;
     }
-  };
 
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 p-4">
-        <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
-        <FormField
-          control={form.control}
-          name="title"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Service Title</FormLabel>
-              <FormControl>
-                <Input placeholder={titlePlaceholder} {...field} className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Description</FormLabel>
-              <FormControl>
-                <Textarea placeholder={descriptionPlaceholder} {...field} rows={4} className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="category"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Category</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon">
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent className="bg-card text-card-foreground border-border">
-                  {categoryOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {form.watch("category") === "other" && (
-          <FormField
-            control={form.control}
-            name="otherCategoryDescription"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Specify Other Category</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., Language Translation" {...field} className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-        {isCustomOrder && ( // Only show custom order description if it's a custom order form
-          <FormField
-            control={form.control}
-            name="customOrderDescription"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">Custom Order Details</FormLabel>
-                <FormControl>
-                  <Textarea placeholder={customOrderDescriptionPlaceholder} {...field} rows={3} className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-        <FormField
-          control={form.control}
-          name="price"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Price/Compensation</FormLabel>
-              <FormControl>
-                <Input placeholder={pricePlaceholder} {...field} className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="contact"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Contact Information</FormLabel>
-              <FormControl>
-                <Input placeholder={contactPlaceholder} {...field} className="bg-input text-input-foreground border-border focus-visible:ring-secondary-neon" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {!isCustomOrder && ( // Only show this checkbox if it's not a custom order form
-          <FormField
-            control={form.control}
-            name="isCustomOrder"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-card text-card-foreground border-border">
-                <FormControl>
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    className="border-secondary-neon data-[state=checked]:bg-secondary-neon data-[state=checked]:text-primary-foreground"
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel className="text-foreground">
-                    Offer Custom Orders
-                  </FormLabel>
-                  <p className="text-sm text-muted-foreground">
-                    Allow users to request custom services based on your skills.
-                  </p>
-                </div>
-              </FormItem>
-            )}
-          />
-        )}
-        <div className="flex justify-end space-x-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="border-border text-primary-foreground hover:bg-muted">
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Post Service"}
-          </Button>
-        </div>
-      </form>
-    </Form>
-  );
-};
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = userProfile.collegeName;
 
-export default PostServiceForm;
+    setIsLoading(true);
+    setError(null);
+    
+    const queries = [
+      Query.equal('collegeName', collegeToFilterBy),
+      Query.orderDesc('$createdAt')
+    };
+
+    if (serviceId) {
+      queries.push(Query.equal('serviceId', serviceId);
+    }
+
+    const response = await databases.listDocuments(
+      APPWRITE_DATABASE_ID,
+      APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+      queries
+    );
+    const fetchedReviews = response.documents as unknown as ChatMessage[];
+    setReviews(fetchedReviews);
+    setAverageRating(calculateAverageRating(fetchedReviews));
+    setIsLoading(false);
+    setError("Failed to load service reviews.");
+    toast.error("Failed to load service reviews.");
+    return;
+    }
+
+    useEffect(() {
+    fetchReviews();
+
+    if (!userProfile?.collegeName) return;
+
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICE_REVIEWS_COLLECTION_ID}.documents",
+      (response) => {
+        const payload = response.payload as unknown as ChatMessage;
+        if (payload.collegeName !== userProfile.collegeName) {
+            return;
+        }
+
+        setReviews(prev => {
+          const existingIndex = prev.findIndex(r => r.$id === payload.$id);
+          if (response.events.includes("databases.*.collections.*.documents.*.create") {
+            if (existingIndex === -1) {
+              toast.info(`New review for ${serviceId} from ${payload.senderUsername}.`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            toast.info(`Review for ${serviceId} updated to status: {payload.status}.`);
+          </div>
+        });
+      }
+    );
+
+    return {
+      reviews,
+      averageRating,
+      isLoading,
+      error,
+      refetch: fetchReviews,
+      submitReview: (serviceId, sellerId, reviewData) => {
+        const newReviewData = {
+          serviceId: serviceId,
+          sellerId: sellerId,
+          rating: reviewData.rating,
+          comment: reviewData.comment,
+          reviewerId: user.$id,
+          reviewerName: user.name,
+          collegeName: userProfile.collegeName,
+        };
+
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+        ID.unique(),
+        newReviewData
+      );
+
+      toast.success(`Review submitted successfully!`);
+      fetchReviews(); // Refetch to update the list and average rating
+    };
+}
