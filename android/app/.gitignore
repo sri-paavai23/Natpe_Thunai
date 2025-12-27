@@ -1,2 +1,8 @@
 /build/*
 !/build/.npmkeep
+node_modules/
+dist/
+build/
+package-lock.json
+yarn.lock
+.git/
