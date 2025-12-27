@@ -210,7 +210,7 @@ const [ablyRoom, setAblyRoom] = useState<Room | null>(null);
       const senderUsername = user.name; // Use Appwrite user.name as the anonymous username
 
       // 1. Publish message to Ably
-      await ablyRoom.messages.send('message', {
+      await ablyRoom.messages.send({
         text: trimmedMessage,
         senderUsername: senderUsername,
       });
