@@ -213,8 +213,6 @@ const [ablyRoom, setAblyRoom] = useState<Room | null>(null);
       await ablyRoom.messages.send({
         text: trimmedMessage,
         senderUsername: senderUsername,
-        // Wrap the cast in parentheses
-senderUsername: (message.message.metadata as any).senderUsername || 'Anonymous',
       });
 
       // 2. Store message in Appwrite for history
