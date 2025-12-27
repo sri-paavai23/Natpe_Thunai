@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Zap, PlusCircle, Loader2, X } from "lucide-react"; // Added X icon
+import { Clock, Zap, PlusCircle, Loader2, X, Package, Handshake, ShoppingCart } from "lucide-react"; // Added new icons
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostErrandForm from "@/components/forms/PostErrandForm";
@@ -14,37 +14,38 @@ APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import * as z from "zod";
-import { Alert, AlertDescription } from "@/components/ui/alert"; // NEW: Import Alert components
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import DeletionInfoMessage from "@/components/DeletionInfoMessage";
 
-// Errand types specific to this page (Urgent/Short-Term)
-const URGENT_TYPES = ["instant-help", "emergency-delivery", "other"]; // Include 'other' for filtering
+// Need types specific to this page (Products, Services, Errands, Other)
+const NEED_TYPES = ["product-need", "service-need", "errand-need", "other"];
 
-const URGENT_ERRAND_OPTIONS = [
-  { value: "instant-help", label: "Instant Help" },
-  { value: "emergency-delivery", label: "Emergency Deliveries" },
-  { value: "other", label: "Other" },
+const NEED_OPTIONS = [
+  { value: "product-need", label: "Product Need" },
+  { value: "service-need", label: "Service Need" },
+  { value: "errand-need", label: "Errand Need" },
+  { value: "other", label: "Other Need" },
 ];
 
 // Define the Zod schema for the PostErrandForm data (copied from PostErrandForm.tsx)
 const ErrandFormSchema = z.object({
   title: z.string().min(2, { message: "Title must be at least 2 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
-  type: z.string().min(1, { message: "Please select an errand type." }),
+  type: z.string().min(1, { message: "Please select a need type." }),
   otherTypeDescription: z.string().optional(), // For 'other' type
   compensation: z.string().min(2, { message: "Compensation details are required." }),
   deadline: z.date().optional(),
   contact: z.string().min(5, { message: "Contact information is required." }),
 });
 
-const ShortTermNeedsPage = () => {
+const ShortTermNeedsPage = () => { // Renamed to PostANeedPage in summary, but keeping file name for now
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
-  const [initialTypeForForm, setInitialTypeForForm] = useState<string | undefined>(undefined); // Changed from initialCategoryForForm
-  const [showUrgentFormInfoAlert, setShowUrgentFormInfoAlert] = useState(true); // NEW: State for dismissible alert
+  const [initialTypeForForm, setInitialTypeForForm] = useState<string | undefined>(undefined);
+  const [showNeedFormInfoAlert, setShowNeedFormInfoAlert] = useState(true); // Renamed state for dismissible alert
   
-  // Fetch only urgent requests for the user's college
-  const { errands: postedUrgentRequests, isLoading, error } = useErrandListings(URGENT_TYPES);
+  // Fetch only needs for the user's college
+  const { errands: postedNeeds, isLoading, error } = useErrandListings(NEED_TYPES); // Changed variable name
 
   // Content is age-gated if user is 25 or older
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
@@ -55,14 +56,14 @@ const ShortTermNeedsPage = () => {
   }, []);
 
   const handleNeedClick = (needType: string) => {
-    setInitialTypeForForm(needType); // Changed from setInitialCategoryForForm
+    setInitialTypeForForm(needType);
     setIsPostErrandDialogOpen(true);
-    setShowUrgentFormInfoAlert(true); // Reset alert visibility when dialog opens
+    setShowNeedFormInfoAlert(true); // Reset alert visibility when dialog opens
   };
 
-  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => {
     if (!user || !userProfile) {
-      toast.error("You must be logged in to post an urgent request.");
+      toast.error("You must be logged in to post a need.");
       return;
     }
 
@@ -86,80 +87,85 @@ const ShortTermNeedsPage = () => {
         newRequestData
       );
       
-      toast.success(`Your urgent request "${data.title}" has been posted!`);
+      toast.success(`Your need "${data.title}" has been posted!`);
       setIsPostErrandDialogOpen(false);
       setInitialTypeForForm(undefined); // Reset initial type
     } catch (e: any) {
-      console.error("Error posting urgent request:", e);
-      toast.error(e.message || "Failed to post urgent request listing.");
+      console.error("Error posting need:", e);
+      toast.error(e.message || "Failed to post need listing.");
     }
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Short-Term Needs</h1>
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Post a Need</h1> {/* Changed page title */}
       <div className="max-w-md mx-auto space-y-6">
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <Clock className="h-5 w-5 text-secondary-neon" /> Urgent Requests
-            </CardTitle>
+              <Clock className="h-5 w-5 text-secondary-neon" /> Post a Need
+            </CardTitle> {/* Changed card title */}
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <p className="text-sm text-muted-foreground">
-              For urgent tasks with extra charges. Get help when you need it most from your college peers!
-            </p>
+              Request products, services, errands, or any other help you need from your college peers!
+            </p> {/* Changed card description */}
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleNeedClick("instant-help")}
+              onClick={() => handleNeedClick("product-need")}
             >
-              <Zap className="mr-2 h-4 w-4" /> Instant Help
+              <Package className="mr-2 h-4 w-4" /> Post a Product Need
             </Button>
             <Button
               className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => handleNeedClick("emergency-delivery")}
+              onClick={() => handleNeedClick("service-need")}
             >
-              <Zap className="mr-2 h-4 w-4" /> Emergency Deliveries
+              <Handshake className="mr-2 h-4 w-4" /> Post a Service Need
+            </Button>
+            <Button
+              className="w-full justify-start bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => handleNeedClick("errand-need")}
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" /> Post an Errand Need
             </Button>
             <Dialog open={isPostErrandDialogOpen} onOpenChange={setIsPostErrandDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 mt-4" disabled={isAgeGated}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Post Urgent Request
+                  <PlusCircle className="mr-2 h-4 w-4" /> Post Any Other Need
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-                <DialogHeader className="relative"> {/* Added relative for close button positioning */}
-                  <DialogTitle className="text-foreground">Post New Urgent Request</DialogTitle>
+                <DialogHeader className="relative">
+                  <DialogTitle className="text-foreground">Post New Need</DialogTitle> {/* Changed dialog title */}
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
-                    onClick={() => setIsPostErrandDialogOpen(false)} // Dismiss the dialog
+                    onClick={() => setIsPostErrandDialogOpen(false)}
                   >
                     <X className="h-4 w-4" />
                     <span className="sr-only">Close</span>
                   </Button>
                 </DialogHeader>
-                {/* NEW: Scroll pane for dialog content */}
-                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
-                  {showUrgentFormInfoAlert && ( // NEW: Conditionally render dismissible alert
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                  {showNeedFormInfoAlert && ( // Using the renamed state
                     <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-center justify-between mb-4">
                       <AlertDescription>
-                        Fill out the details to post your urgent request for college peers.
-                      </AlertDescription>
-                      <Button variant="ghost" size="icon" onClick={() => setShowUrgentFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100">
+                        Fill out the details to post your need for college peers.
+                      </AlertDescription> {/* Changed alert description */}
+                      <Button variant="ghost" size="icon" onClick={() => setShowNeedFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100">
                         <X className="h-4 w-4" />
                       </Button>
                     </Alert>
                   )}
-                  <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
+                  <DeletionInfoMessage />
                   <PostErrandForm 
                     onSubmit={handlePostErrand} 
-                    onCancel={() => { setIsPostErrandDialogOpen(false); setInitialTypeForForm(undefined); }} // Changed to setInitialTypeForForm
-                    typeOptions={URGENT_ERRAND_OPTIONS} // Changed to typeOptions
-                    initialType={initialTypeForForm} // Changed to initialType
+                    onCancel={() => { setIsPostErrandDialogOpen(false); setInitialTypeForForm(undefined); }}
+                    typeOptions={NEED_OPTIONS} // Using the new options
+                    initialType={initialTypeForForm}
                   />
-                </div> {/* END: Scroll pane */}
+                </div>
               </DialogContent>
             </Dialog>
             <p className="text-xs text-destructive-foreground mt-4">
@@ -170,30 +176,34 @@ const ShortTermNeedsPage = () => {
 
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Recently Posted Urgent Requests</CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground">Recently Posted Needs</CardTitle> {/* Changed card title */}
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
-                <p className="ml-3 text-muted-foreground">Loading urgent requests...</p>
+                <p className="ml-3 text-muted-foreground">Loading needs...</p> {/* Changed loading text */}
               </div>
-            ) : error ? (
-              <p className="text-center text-destructive py-4">Error loading requests: {error}</p>
-            ) : postedUrgentRequests.length > 0 ? (
-              postedUrgentRequests.map((request) => (
-                <div key={request.$id} className="p-3 border border-border rounded-md bg-background">
-                  <h3 className="font-semibold text-foreground">{request.title}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
-                  <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
-                  {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(request.deadline).toLocaleDateString()}</span></p>}
-                  <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
-                  <p className="text-xs text-muted-foreground">Posted: {new Date(request.$createdAt).toLocaleDateString()}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-muted-foreground py-4">No urgent requests posted yet for your college. Be the first!</p>
+            ) : ( // Explicitly close isLoading's true branch, start its false branch
+              error ? (
+                <p className="text-center text-destructive py-4">Error loading requests: {error}</p>
+              ) : ( // Explicitly close error's true branch, start its false branch
+                postedNeeds.length > 0 ? (
+                  postedNeeds.map((request) => (
+                    <div key={request.$id} className="p-3 border border-border rounded-md bg-background">
+                      <h3 className="font-semibold text-foreground">{request.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Type: <span className="font-medium text-foreground">{request.type}</span></p>
+                      <p className="text-xs text-muted-foreground">Compensation: <span className="font-medium text-foreground">{request.compensation}</span></p>
+                      {request.deadline && <p className="text-xs text-muted-foreground">Deadline: <span className="font-medium text-foreground">{new Date(request.deadline).toLocaleDateString()}</span></p>}
+                      <p className="text-xs text-muted-foreground">Contact: <span className="font-medium text-foreground">{request.contact}</span></p>
+                      <p className="text-xs text-muted-foreground">Posted: {new Date(request.$createdAt).toLocaleDateString()}</p>
+                    </div>
+                  ))
+                ) : ( // Explicitly close postedNeeds.length > 0's true branch, start its false branch
+                  <p className="text-center text-muted-foreground py-4">No needs posted yet for your college. Be the first!</p>
+                )
+              )
             )}
           </CardContent>
         </Card>
