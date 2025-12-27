@@ -52,11 +52,11 @@ function ScrollToTop() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isLoading, userProfile } = useAuth();
+  const { isAuthenticated, isLoading, user, userProfile } = useAuth(); // Added 'user' from useAuth
   const isDeveloper = userProfile?.role === "developer";
 
   // Determine if VerificationBanner should be shown
-  const showVerificationBanner = isAuthenticated && !isLoading && !userProfile?.emailVerification;
+  const showVerificationBanner = isAuthenticated && !isLoading && !user?.emailVerification; // Fixed: Use user?.emailVerification
 
   return (
     <>
