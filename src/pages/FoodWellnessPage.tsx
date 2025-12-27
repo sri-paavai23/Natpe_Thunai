@@ -14,7 +14,8 @@ import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import FoodOfferingCard from "@/components/FoodOfferingCard";
 import FoodCustomRequestsList from "@/components/FoodCustomRequestsList";
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import DeletionInfoMessage from "@/components/DeletionInfoMessage";
+import { Alert, AlertDescription } from "@/components/ui/alert"; // NEW: Import Alert components
 
 // Service categories specific to this page
 const OFFERING_CATEGORIES = ["homemade-meals", "wellness-remedies"];
@@ -38,6 +39,8 @@ const FoodWellnessPage = () => {
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isPostCustomOrderDialogOpen, setIsPostCustomOrderDialogOpen] = useState(false);
+  const [showOfferingFormInfoAlert, setShowOfferingFormInfoAlert] = useState(true); // NEW: State for dismissible alert
+  const [showCustomOrderFormInfoAlert, setShowCustomOrderFormInfoAlert] = useState(true); // NEW: State for dismissible alert
   
   // Fetch all food/wellness related posts for the user's college
   const { services: allPosts, isLoading, error } = useServiceListings(undefined); 
@@ -137,7 +140,10 @@ const FoodWellnessPage = () => {
             <p className="text-sm text-muted-foreground">
               Post your homemade food or wellness remedies for your college peers to order.
             </p>
-            <Dialog open={isPostServiceDialogOpen} onOpenChange={setIsPostServiceDialogOpen}>
+            <Dialog open={isPostServiceDialogOpen} onOpenChange={(open) => {
+              setIsPostServiceDialogOpen(open);
+              if (open) setShowOfferingFormInfoAlert(true); // Reset alert visibility when dialog opens
+            }}>
               <DialogTrigger asChild>
                 <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
                   <PlusCircle className="mr-2 h-4 w-4" /> Post New Offering
@@ -146,31 +152,39 @@ const FoodWellnessPage = () => {
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
                 <DialogHeader className="relative">
                   <DialogTitle className="text-foreground">Post New Food/Wellness Offering</DialogTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
-                    onClick={() => setIsPostServiceDialogOpen(false)} // Dismiss the dialog
-                  >
-                    <X className="h-4 w-4" />
-                    <span className="sr-only">Close</span>
-                  </Button>
+                  {/* Removed the explicit close button here as requested */}
                 </DialogHeader>
-                <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
-                <PostServiceForm 
-                  onSubmit={handlePostService} 
-                  onCancel={() => setIsPostServiceDialogOpen(false)} 
-                  categoryOptions={OFFERING_OPTIONS}
-                  titlePlaceholder="e.g., Delicious Homemade Biryani"
-                  descriptionPlaceholder="Describe your food or remedy, ingredients, benefits, etc."
-                  pricePlaceholder="e.g., 150 INR per plate or 200 INR for a wellness drink"
-                  contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
-                  ambassadorMessagePlaceholder="e.g., Deliver to Block A, Room 101 by 7 PM"
-                />
+                {/* NEW: Scroll pane for dialog content */}
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
+                  {showOfferingFormInfoAlert && ( // NEW: Conditionally render dismissible alert
+                    <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-center justify-between mb-4">
+                      <AlertDescription>
+                        Fill out the details to post your food or wellness offering.
+                      </AlertDescription>
+                      <Button variant="ghost" size="icon" onClick={() => setShowOfferingFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </Alert>
+                  )}
+                  <DeletionInfoMessage />
+                  <PostServiceForm 
+                    onSubmit={handlePostService} 
+                    onCancel={() => setIsPostServiceDialogOpen(false)} 
+                    categoryOptions={OFFERING_OPTIONS}
+                    titlePlaceholder="e.g., Delicious Homemade Biryani"
+                    descriptionPlaceholder="Describe your food or remedy, ingredients, benefits, etc."
+                    pricePlaceholder="e.g., 150 INR per plate or 200 INR for a wellness drink"
+                    contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
+                    ambassadorMessagePlaceholder="e.g., Deliver to Block A, Room 101 by 7 PM"
+                  />
+                </div> {/* END: Scroll pane */}
               </DialogContent>
             </Dialog>
 
-            <Dialog open={isPostCustomOrderDialogOpen} onOpenChange={setIsPostCustomOrderDialogOpen}>
+            <Dialog open={isPostCustomOrderDialogOpen} onOpenChange={(open) => {
+              setIsPostCustomOrderDialogOpen(open);
+              if (open) setShowCustomOrderFormInfoAlert(true); // Reset alert visibility when dialog opens
+            }}>
               <DialogTrigger asChild>
                 <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-2">
                   <Utensils className="mr-2 h-4 w-4" /> Request Custom Order
@@ -179,29 +193,34 @@ const FoodWellnessPage = () => {
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
                 <DialogHeader className="relative">
                   <DialogTitle className="text-foreground">Request Custom Food/Remedy</DialogTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
-                    onClick={() => setIsPostCustomOrderDialogOpen(false)} // Dismiss the dialog
-                  >
-                    <X className="h-4 w-4" />
-                    <span className="sr-only">Close</span>
-                  </Button>
+                  {/* Removed the explicit close button here as requested */}
                 </DialogHeader>
-                <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
-                <PostServiceForm 
-                  onSubmit={handlePostCustomOrder} 
-                  onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
-                  isCustomOrder={true}
-                  categoryOptions={CUSTOM_REQUEST_OPTIONS}
-                  titlePlaceholder="e.g., Request for Vegan Pasta"
-                  descriptionPlaceholder="Describe the custom food or remedy you need, specific requirements, etc."
-                  customOrderDescriptionPlaceholder="Specify details like ingredients, dietary restrictions, quantity, preferred time."
-                  pricePlaceholder="e.g., 250 INR (negotiable) or Your budget"
-                  contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
-                  ambassadorMessagePlaceholder="e.g., Pick up from my room, Block B, Room 205"
-                />
+                {/* NEW: Scroll pane for dialog content */}
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
+                  {showCustomOrderFormInfoAlert && ( // NEW: Conditionally render dismissible alert
+                    <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-center justify-between mb-4">
+                      <AlertDescription>
+                        Describe the custom food or remedy you need.
+                      </AlertDescription>
+                      <Button variant="ghost" size="icon" onClick={() => setShowCustomOrderFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </Alert>
+                  )}
+                  <DeletionInfoMessage />
+                  <PostServiceForm 
+                    onSubmit={handlePostCustomOrder} 
+                    onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
+                    isCustomOrder={true}
+                    categoryOptions={CUSTOM_REQUEST_OPTIONS}
+                    titlePlaceholder="e.g., Request for Vegan Pasta"
+                    descriptionPlaceholder="Describe the custom food or remedy you need, specific requirements, etc."
+                    customOrderDescriptionPlaceholder="Specify details like ingredients, dietary restrictions, quantity, preferred time."
+                    pricePlaceholder="e.g., 250 INR (negotiable) or Your budget"
+                    contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
+                    ambassadorMessagePlaceholder="e.g., Pick up from my room, Block B, Room 205"
+                  />
+                </div> {/* END: Scroll pane */}
               </DialogContent>
             </Dialog>
 
@@ -218,7 +237,18 @@ const FoodWellnessPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
-            <FoodCustomRequestsList requests={postedCustomRequests} isLoading={isLoading} error={error} />
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-secondary-neon" />
+                <p className="ml-3 text-muted-foreground">Loading custom requests...</p>
+              </div>
+            ) : error ? (
+              <p className="text-center text-destructive py-4">Error loading requests: {error}</p>
+            ) : postedCustomRequests.length > 0 ? (
+              <FoodCustomRequestsList requests={postedCustomRequests} isLoading={isLoading} error={error} />
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No custom requests posted yet for your college. Be the first!</p>
+            )}
           </CardContent>
         </Card>
       </div>
