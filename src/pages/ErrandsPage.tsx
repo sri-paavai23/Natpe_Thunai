@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingBag, NotebookPen, Bike, PlusCircle, Loader2, X } from "lucide-react"; // Added X icon
+import { ShoppingBag, NotebookPen, Bike, PlusCircle, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostErrandForm from "@/components/forms/PostErrandForm";
@@ -12,8 +12,9 @@ import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
-import * as z from "zod"; // Import z for zod schema inference
-import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // NEW: Import DeletionInfoMessage
+import * as z from "zod";
+import DeletionInfoMessage from "@/components/DeletionInfoMessage";
+import { Alert, AlertDescription } from "@/components/ui/alert"; // NEW: Import Alert components
 
 // Errand types specific to this page
 const ERRAND_TYPES = ["note-writing", "small-job", "delivery"];
@@ -41,6 +42,7 @@ const ErrandsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
   const [preselectedErrandType, setPreselectedErrandType] = useState<string | undefined>(undefined);
+  const [showErrandFormInfoAlert, setShowErrandFormInfoAlert] = useState(true); // NEW: State for dismissible alert
   
   // Fetch only standard errands for the user's college
   const { errands: postedErrands, isLoading, error } = useErrandListings(ERRAND_TYPES);
@@ -56,6 +58,7 @@ const ErrandsPage = () => {
   const handleErrandClick = (errandType: string) => {
     setPreselectedErrandType(errandType);
     setIsPostErrandDialogOpen(true); // Open the dialog
+    setShowErrandFormInfoAlert(true); // Reset alert visibility when dialog opens
   };
 
   const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
@@ -132,28 +135,41 @@ const ErrandsPage = () => {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-                <DialogHeader className="relative"> {/* Added relative for close button positioning */}
+                <DialogHeader className="relative">
                   <DialogTitle className="text-foreground">Post New Campus Errand</DialogTitle>
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:bg-muted"
-                    onClick={() => setIsPostErrandDialogOpen(false)} // Dismiss the dialog
+                    onClick={() => setIsPostErrandDialogOpen(false)}
                   >
                     <X className="h-4 w-4" />
                     <span className="sr-only">Close</span>
                   </Button>
                 </DialogHeader>
-                <DeletionInfoMessage /> {/* NEW: Deletion Info Message */}
-                <PostErrandForm 
-                  onSubmit={handlePostErrand} 
-                  onCancel={() => {
-                    setIsPostErrandDialogOpen(false);
-                    setPreselectedErrandType(undefined); // Clear preselected type on cancel
-                  }} 
-                  typeOptions={STANDARD_ERRAND_OPTIONS}
-                  initialType={preselectedErrandType} // Pass the preselected type
-                />
+                {/* NEW: Scroll pane for dialog content */}
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
+                  {showErrandFormInfoAlert && ( // NEW: Conditionally render dismissible alert
+                    <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-center justify-between mb-4">
+                      <AlertDescription>
+                        Fill out the details to post your errand for college peers.
+                      </AlertDescription>
+                      <Button variant="ghost" size="icon" onClick={() => setShowErrandFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </Alert>
+                  )}
+                  <DeletionInfoMessage />
+                  <PostErrandForm 
+                    onSubmit={handlePostErrand} 
+                    onCancel={() => {
+                      setIsPostErrandDialogOpen(false);
+                      setPreselectedErrandType(undefined);
+                    }} 
+                    typeOptions={STANDARD_ERRAND_OPTIONS}
+                    initialType={preselectedErrandType}
+                  />
+                </div> {/* END: Scroll pane */}
               </DialogContent>
             </Dialog>
             {isAgeGated && (
