@@ -212,7 +212,7 @@ const [ablyRoom, setAblyRoom] = useState<Room | null>(null);
       // 1. Publish message to Ably
       await ablyRoom.messages.send({
         text: trimmedMessage,
-        senderUsername: senderUsername,
+        metadata: {senderUsername},
       });
 
       // 2. Store message in Appwrite for history
