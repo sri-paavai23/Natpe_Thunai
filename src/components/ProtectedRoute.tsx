@@ -2,14 +2,16 @@
 
 import React from 'react';
 import { useAuth } from "@/context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Outlet } from "react-router-dom"; // Import Outlet
 import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  // children is no longer directly used here, as Outlet handles rendering nested routes.
+  // We can remove it from the interface if it's not used elsewhere.
+  // For now, keeping it as React.ReactNode is fine, but it won't be explicitly rendered.
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = () => { // Removed children from props
   const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -27,7 +29,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     return null;
   }
 
-  return <>{children}</>;
+  return <Outlet />; // Render nested routes using Outlet
 };
 
 export default ProtectedRoute;
