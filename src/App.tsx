@@ -34,7 +34,8 @@ import PostJobPage from './pages/PostJobPage';
 import ServicePaymentConfirmationPage from './pages/ServicePaymentConfirmationPage';
 import ChatPage from './pages/ChatPage';
 import ComingSoonPage from './pages/ComingSoonPage';
-import OfflinePage from './pages/OfflinePage'; // Import the OfflinePage
+import OfflinePage from './pages/OfflinePage';
+import { AuthProvider } from './context/AuthContext'; // Import AuthProvider
 
 function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -57,43 +58,45 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/home" element={<HomePage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/profile/details" element={<ProfileDetailsPage />} />
-        <Route path="/profile/wallet" element={<WalletPage />} />
-        <Route path="/profile/policies" element={<PoliciesPage />} />
-        <Route path="/market" element={<MarketPage />} />
-        <Route path="/market/product/:productId" element={<ProductDetailsPage />} />
-        <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} />
-        <Route path="/services" element={<ServicesPage />} />
-        <Route path="/services/freelance" element={<FreelancePage />} />
-        <Route path="/services/errands" element={<ErrandsPage />} />
-        <Route path="/services/short-term" element={<ShortTermNeedsPage />} />
-        <Route path="/services/food-wellness" element={<FoodWellnessPage />} />
-        <Route path="/services/ticket-booking" element={<TicketBookingPage />} />
-        <Route path="/services/collaborators" element={<CollaboratorsPage />} />
-        <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} />
-        <Route path="/services/post-job" element={<PostJobPage />} /> {/* Specific route for posting jobs */}
-        <Route path="/services/confirm-payment/:transactionId" element={<ServicePaymentConfirmationPage />} />
-        <Route path="/activity" element={<ActivityPage />} />
-        <Route path="/activity/lost-found" element={<LostAndFoundPage />} />
-        <Route path="/activity/tracking" element={<TrackingPage />} />
-        <Route path="/activity/cash-exchange" element={<ComingSoonPage />} /> {/* This was a ComingSoonPage */}
-        <Route path="/tournaments" element={<TournamentPage />} />
-        <Route path="/image-to-url-help" element={<ImageToUrlHelpPage />} />
-        <Route path="/developer-dashboard" element={<DeveloperDashboardPage />} />
-        <Route path="/chat/:chatRoomId" element={<ChatPage />} />
-        <Route path="/coming-soon/:featureName" element={<ComingSoonPage />} /> {/* Generic coming soon page */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Router>
+    <AuthProvider> {/* Wrap the entire application with AuthProvider */}
+      <Router>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile/details" element={<ProfileDetailsPage />} />
+          <Route path="/profile/wallet" element={<WalletPage />} />
+          <Route path="/profile/policies" element={<PoliciesPage />} />
+          <Route path="/market" element={<MarketPage />} />
+          <Route path="/market/product/:productId" element={<ProductDetailsPage />} />
+          <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} />
+          <Route path="/services" element={<ServicesPage />} />
+          <Route path="/services/freelance" element={<FreelancePage />} />
+          <Route path="/services/errands" element={<ErrandsPage />} />
+          <Route path="/services/short-term" element={<ShortTermNeedsPage />} />
+          <Route path="/services/food-wellness" element={<FoodWellnessPage />} />
+          <Route path="/services/ticket-booking" element={<TicketBookingPage />} />
+          <Route path="/services/collaborators" element={<CollaboratorsPage />} />
+          <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} />
+          <Route path="/services/post-job" element={<PostJobPage />} />
+          <Route path="/services/confirm-payment/:transactionId" element={<ServicePaymentConfirmationPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="/activity/lost-found" element={<LostAndFoundPage />} />
+          <Route path="/activity/tracking" element={<TrackingPage />} />
+          <Route path="/activity/cash-exchange" element={<ComingSoonPage />} />
+          <Route path="/tournaments" element={<TournamentPage />} />
+          <Route path="/image-to-url-help" element={<ImageToUrlHelpPage />} />
+          <Route path="/developer-dashboard" element={<DeveloperDashboardPage />} />
+          <Route path="/chat/:chatRoomId" element={<ChatPage />} />
+          <Route path="/coming-soon/:featureName" element={<ComingSoonPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 
