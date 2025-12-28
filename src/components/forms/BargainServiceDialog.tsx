@@ -1,102 +1,162 @@
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ServicePost } from '@/hooks/useServiceListings';
-import { useAuth } from '@/context/AuthContext';
-import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+"use client";
+
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { DialogFooter } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { ServicePost } from "@/hooks/useServiceListings";
+import { useAuth } from "@/context/AuthContext";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
+import { ID, Query } from 'appwrite'; // NEW: Import Query
+import { Loader2, DollarSign, Truck } from "lucide-react";
+import { DEVELOPER_UPI_ID } from "@/lib/config";
+import { Badge } from "@/components/ui/badge";
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+import { useNavigate } from "react-router-dom";
 
 interface BargainServiceDialogProps {
   service: ServicePost;
-  onBargainInitiated: (bargainDetails: { serviceId: string; requestedPrice: number; message: string }) => void;
+  onBargainInitiated: () => void;
   onCancel: () => void;
 }
 
 const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, onBargainInitiated, onCancel }) => {
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   const navigate = useNavigate();
-  const [requestedPrice, setRequestedPrice] = useState<number>(service.price * 0.8); // Default to 80% of original
-  const [message, setMessage] = useState("");
+  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
+  const [ambassadorMessage, setAmbassadorMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleBargain = async () => {
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to initiate a bargain.");
-      navigate('/login');
-      return;
-    }
+  const discountRate = 0.15; // 15% fixed bargain discount
 
-    if (requestedPrice <= 0 || requestedPrice >= service.price) {
-      toast.error("Requested price must be greater than 0 and less than the original price.");
+  // Parse original price
+  const priceMatch = service.price.match(/₹(\d+(\.\d+)?)/);
+  const originalPriceValue = priceMatch ? parseFloat(priceMatch[1]) : 0;
+  const bargainedPrice = originalPriceValue * (1 - discountRate);
+
+  const handleInitiateBargainPayment = async () => {
+    if (!user || !userProfile || !service) return;
+
+    if (!service.posterId || service.posterId.trim() === "") {
+      toast.error("Service provider information is missing or invalid. Cannot proceed with bargain.");
+      console.error("Service poster ID is missing or empty for service:", service);
       return;
     }
 
     setIsProcessing(true);
-    try {
-      // Simulate bargain request submission
-      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      onBargainInitiated({
-        serviceId: service.$id,
-        requestedPrice,
-        message,
-      });
-      toast.success("Bargain request sent successfully!");
-    } catch (error) {
-      console.error("Bargain request failed:", error);
-      toast.error("Failed to send bargain request. Please try again.");
+    const transactionAmount = parseFloat(bargainedPrice.toFixed(2));
+    const transactionNote = `Bargain for Service: ${service.title}`;
+
+    try {
+      // Check for existing initiated transaction for this service by this user
+      const existingTransactions = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        [
+          Query.equal('productId', service.$id), // Using service ID as product ID for transaction
+          Query.equal('buyerId', user.$id),
+          Query.equal('status', 'initiated'), // Check for transactions that are still pending payment
+          Query.limit(1)
+        ]
+      );
+
+      if (existingTransactions.documents.length > 0) {
+        toast.info("You already have an initiated payment for this service. Please complete it or wait for it to expire.");
+        setIsProcessing(false);
+        onBargainInitiated(); // Close dialog
+        navigate(`/market/confirm-payment/${existingTransactions.documents[0].$id}`);
+        return;
+      }
+
+      // Create Appwrite Transaction Document (Status: initiated)
+      const newTransaction = await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        ID.unique(),
+        {
+          productId: service.$id, // Using service ID as product ID
+          productTitle: service.title,
+          buyerId: user.$id,
+          buyerName: user.name,
+          sellerId: service.posterId,
+          sellerName: service.posterName,
+          sellerUpiId: userProfile.upiId, // Buyer's UPI ID for now, actual seller UPI is service.contact
+          amount: transactionAmount,
+          status: "initiated",
+          type: "service", // Mark as service transaction
+          isBargain: true,
+          collegeName: userProfile.collegeName,
+          ambassadorDelivery: ambassadorDelivery,
+          ambassadorMessage: ambassadorMessage || null,
+        }
+      );
+
+      const transactionId = newTransaction.$id;
+
+      // Increment ambassador deliveries count if opted
+      if (ambassadorDelivery) {
+        await incrementAmbassadorDeliveriesCount();
+      }
+
+      // Generate UPI Deep Link (Payment goes to Developer UPI ID)
+      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;
+
+      // Redirect to UPI App
+      window.open(upiDeepLink, "_blank");
+
+      toast.info(`Redirecting to UPI app to pay ₹${transactionAmount.toFixed(2)} to the developer. Please complete the payment and note the UTR ID.`);
+
+      // Redirect to Confirmation Page (or tracking page)
+      onBargainInitiated(); // Close dialog and trigger parent callback
+      navigate(`/market/confirm-payment/${transactionId}`); // Navigate to a generic confirmation/tracking page
+
+    } catch (error: any) {
+      console.error("Error initiating bargain transaction for service:", error);
+      toast.error(error.message || "Failed to initiate bargain transaction.");
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <Dialog open onOpenChange={onCancel}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Initiate Bargain for "{service.title}"</DialogTitle>
-          <DialogDescription>
-            Propose a new price for the service.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="flex items-center justify-between">
-            <Label>Original Price:</Label>
-            <span className="font-semibold">₹{service.price.toFixed(2)}</span>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="requestedPrice">Your Proposed Price (₹)</Label>
-            <Input
-              id="requestedPrice"
-              type="number"
-              value={requestedPrice}
-              onChange={(e) => setRequestedPrice(parseFloat(e.target.value))}
-              min={1}
-              max={service.price - 1}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="message">Message (Optional)</Label>
-            <Input
-              id="message"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="e.g., 'I'm a student on a tight budget.'"
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={isProcessing}>
-            Cancel
-          </Button>
-          <Button onClick={handleBargain} disabled={isProcessing}>
-            {isProcessing ? "Sending..." : `Propose ₹${requestedPrice.toFixed(2)}`}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div className="space-y-4 py-4">
+      <div className="space-y-3 py-2">
+        <p className="font-bold text-red-500">Important: This is a non-Escrow payment system.</p>
+        <p className="text-sm text-muted-foreground">You are about to place this order and will be redirected to your UPI app to complete the secure payment of the **full amount** to the developer's provided UPI ID. Natpe🤝Thunai developers will then transfer the net amount to the service provider.</p>
+      </div>
+      <div className="space-y-3 py-2">
+        <p className="text-sm text-foreground">Service: <span className="font-semibold">{service.title}</span></p>
+        <p className="text-xl font-bold text-secondary-neon">
+          Bargain Price: ₹{bargainedPrice.toFixed(2)}
+        </p>
+        <p className="text-xs text-green-500 flex items-center gap-1">
+          <Badge variant="outline" className="bg-green-100 text-green-800">15% Bargain Applied</Badge>
+        </p>
+        <p className="text-xs text-muted-foreground">Provider: {service.posterName}</p>
+        <p className="text-xs text-destructive-foreground">
+          Payment will be made to Natpe Thunai Developers, who will then transfer the net amount to the service provider.
+        </p>
+      </div>
+
+      <AmbassadorDeliveryOption
+        ambassadorDelivery={ambassadorDelivery}
+        setAmbassadorDelivery={setAmbassadorDelivery}
+        ambassadorMessage={ambassadorMessage}
+        setAmbassadorMessage={setAmbassadorMessage}
+      />
+
+      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isProcessing} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+          Cancel
+        </Button>
+        <Button onClick={handleInitiateBargainPayment} disabled={isProcessing} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
+        </Button>
+      </DialogFooter>
+    </div>
   );
 };
 

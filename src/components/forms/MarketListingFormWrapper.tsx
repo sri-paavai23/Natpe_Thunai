@@ -1,81 +1,130 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/context/AuthContext';
-import MarketListingForm from './MarketListingForm'; // Assuming this component exists
-import toast from 'react-hot-toast'; // Ensure toast is imported
-import { Loader2 } from 'lucide-react';
+    import React, { useState } from "react";
+    import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
+    import SellListingForm from "./SellListingForm";
+    import RentListingForm from "./RentListingForm";
+    import GiftCraftListingForm from "./GiftCraftListingForm";
+    import SportsGearListingForm from "./SportsGearListingForm";
+    import { toast } from "sonner";
+    import { useAuth } from "@/context/AuthContext";
+    import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from "@/lib/appwrite";
+    import { ID } from 'appwrite';
+    import { cn } from '@/lib/utils';
+    import DeletionInfoMessage from "@/components/DeletionInfoMessage";
 
-interface MarketListingFormWrapperProps {
-  onListingPosted: () => void;
-  onCancel: () => void;
-}
-
-const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onListingPosted, onCancel }) => {
-  const [activeTab, setActiveTab] = useState<"sell" | "rent" | "gift" | "sports">("sell");
-  const { user, userPreferences, recordMarketListing } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (formData: any) => {
-    if (!user || !userPreferences?.collegeName) {
-      toast.error("Please log in and set your college name to post a listing.");
-      return;
+    interface MarketListingFormWrapperProps {
+      onClose: () => void;
     }
 
-    setIsSubmitting(true);
-    try {
-      const listingData = {
-        ...formData,
-        category: activeTab,
-        // Seller Info (from Auth Context)
-        userId: user.$id,
-        sellerName: userPreferences.name,
-        collegeName: userPreferences.collegeName,
-        status: 'available', // Default status
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+    const MarketListingFormWrapper: React.FC<MarketListingFormWrapperProps> = ({ onClose }) => {
+      const [activeTab, setActiveTab] = useState<"sell" | "rent" | "gift" | "sports">("sell");
+      const { user, userProfile, recordMarketListing } = useAuth();
+
+      const handleListingSubmit = async (data: any, type: "Sell" | "Rent" | "Gift/Craft" | "Sports Gear") => {
+        if (!user || !userProfile) {
+          toast.error("You must be logged in and have a complete profile to create a listing.");
+          return;
+        }
+        if (!userProfile.collegeName) {
+          toast.error("Your profile is missing college information. Please update your profile first.");
+          return;
+        }
+
+        const productType = type === "Sell" ? "sell" : type === "Rent" ? "rent" : type === "Gift/Craft" ? "gift" : "sports";
+        
+        const newProductData = {
+          // Core Product Fields
+          title: data.title,
+          price: data.price, // e.g., "₹450.00" or "₹15.00/day"
+          description: data.description,
+          imageUrl: data.imageUrl,
+          type: productType,
+          
+          // Seller Info (from Auth Context)
+          userId: user.$id,
+          sellerName: user.name,
+          sellerUpiId: userProfile.upiId,
+          collegeName: userProfile.collegeName,
+          
+          // Mocked/Default Fields
+          sellerRating: 5.0, // Default high rating for new sellers
+          location: "Campus Area", // Placeholder location
+          status: "available", // NEW: Default status for new listings
+          
+          // Type-specific fields (using null for fields not applicable to the current type)
+          category: data.category || null, // Used by Sell
+          damages: data.damages || null, // Used by Sell/Sports
+          condition: data.condition || null, // Used by Sell/Sports
+          policies: data.policies || null, // Used by Rent
+          
+          // Delivery/Ambassador Info
+          ambassadorDelivery: data.ambassadorDelivery,
+          ambassadorMessage: data.ambassadorMessage || null,
+        };
+
+        try {
+          await databases.createDocument(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_PRODUCTS_COLLECTION_ID,
+            ID.unique(),
+            newProductData
+          );
+          
+          toast.success(`New ${type} listing created successfully!`);
+          recordMarketListing();
+          onClose();
+        } catch (error: any) {
+          console.error(`Error creating ${type} listing:`, error);
+          toast.error(error.message || `Failed to create ${type} listing. Check Appwrite permissions and schema.`);
+        }
       };
-      await recordMarketListing(listingData); // Use the context function
-      onListingPosted();
-    } catch (error: any) {
-      console.error("Failed to post market listing:", error);
-      toast.error(error.message || "Failed to post listing.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
-  return (
-    <Card className="w-full bg-card text-foreground shadow-lg rounded-lg border-border">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Post a New Listing</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "sell" | "rent" | "gift" | "sports")} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="sell">Sell</TabsTrigger>
-            <TabsTrigger value="rent">Rent</TabsTrigger>
-            <TabsTrigger value="gift">Gift</TabsTrigger>
-            <TabsTrigger value="sports">Sports</TabsTrigger>
-          </TabsList>
-          <TabsContent value="sell" className="mt-4">
-            <MarketListingForm onSubmit={handleSubmit} onCancel={onCancel} loading={isSubmitting} category="sell" />
-          </TabsContent>
-          <TabsContent value="rent" className="mt-4">
-            <MarketListingForm onSubmit={handleSubmit} onCancel={onCancel} loading={isSubmitting} category="rent" />
-          </TabsContent>
-          <TabsContent value="gift" className="mt-4">
-            <MarketListingForm onSubmit={handleSubmit} onCancel={onCancel} loading={isSubmitting} category="gift" />
-          </TabsContent>
-          <TabsContent value="sports" className="mt-4">
-            <MarketListingForm onSubmit={handleSubmit} onCancel={onCancel} loading={isSubmitting} category="sports" />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
-  );
-};
+      return (
+        <div className="space-y-4">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Create New Listing</DialogTitle>
+          </DialogHeader>
+          <DeletionInfoMessage />
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "sell" | "rent" | "gift" | "sports")}>
+            <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-muted p-1 text-muted-foreground rounded-md shadow-sm scrollbar-hide">
+              <TabsTrigger value="sell" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sell</TabsTrigger>
+              <TabsTrigger value="rent" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Rent</TabsTrigger>
+              <TabsTrigger value="gift" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Handcrafts & Gifts</TabsTrigger>
+              <TabsTrigger value="sports" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sports Gear</TabsTrigger>
+            </TabsList>
 
-export default MarketListingFormWrapper;
+            <TabsContent value="sell" className="mt-4">
+              <SellListingForm 
+                onSubmit={(data) => handleListingSubmit(data, "Sell")} 
+                onCancel={onClose} 
+              />
+            </TabsContent>
+            
+            <TabsContent value="rent" className="mt-4">
+              <RentListingForm 
+                onSubmit={(data) => handleListingSubmit(data, "Rent")} 
+                onCancel={onClose} 
+              />
+            </TabsContent>
+            
+            <TabsContent value="gift" className="mt-4">
+              <GiftCraftListingForm 
+                onSubmit={(data) => handleListingSubmit(data, "Gift/Craft")} 
+                onCancel={onClose} 
+              />
+            </TabsContent>
+            
+            <TabsContent value="sports" className="mt-4">
+              <SportsGearListingForm 
+                onSubmit={(data) => handleListingSubmit(data, "Sports Gear")} 
+                onCancel={onClose} 
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      );
+    };
+
+    export default MarketListingFormWrapper;

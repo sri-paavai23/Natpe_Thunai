@@ -1,190 +1,216 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query, ID } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext';
+import { Product } from '@/lib/mockData';
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const BARGAIN_REQUESTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID;
-
-export type BargainStatus = 'pending' | 'accepted' | 'rejected' | 'completed';
-
-export interface BargainRequest extends AppwriteDocument {
+export interface BargainRequest extends Models.Document {
   productId: string;
   productTitle: string;
-  sellerId: string;
-  sellerName: string;
+  originalPrice: string;
+  requestedPrice: string;
   buyerId: string;
   buyerName: string;
-  offeredPrice: number;
-  status: BargainStatus;
-  message?: string;
+  sellerId: string;
+  sellerName: string;
+  status: "pending" | "accepted" | "denied";
   collegeName: string;
 }
 
-const useBargainRequests = () => {
-  const { user, userPreferences } = useAuth();
+interface UseBargainRequestsState {
+  buyerRequests: BargainRequest[];
+  sellerRequests: BargainRequest[];
+  isLoading: boolean;
+  error: string | null;
+  sendBargainRequest: (product: Product, requestedPrice: number) => Promise<void>;
+  updateBargainStatus: (requestId: string, newStatus: "accepted" | "denied") => Promise<void>;
+  getBargainStatusForProduct: (productId: string) => { status: BargainRequest['status'] | null; requestId: string | null };
+  refetch: () => void;
+}
+
+export const useBargainRequests = (): UseBargainRequestsState => {
+  const { user, userProfile } = useAuth();
   const [buyerRequests, setBuyerRequests] = useState<BargainRequest[]>([]);
   const [sellerRequests, setSellerRequests] = useState<BargainRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchBargainRequests = async () => {
-    setIsLoading(true);
-    setError(null);
-    if (!user) {
+  const fetchBargainRequests = useCallback(async () => {
+    if (!user?.$id || !userProfile?.collegeName) {
       setIsLoading(false);
+      setBuyerRequests([]);
+      setSellerRequests([]);
       return;
     }
 
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const commonQueries = [Query.orderDesc('$createdAt')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        commonQueries.push(Query.equal('collegeName', userPreferences.collegeName));
-      }
-
-      // Fetch requests where current user is the buyer
       const buyerResponse = await databases.listDocuments(
-        DATABASE_ID,
-        BARGAIN_REQUESTS_COLLECTION_ID,
-        [...commonQueries, Query.equal('buyerId', user.$id)]
+        APPWRITE_DATABASE_ID,
+        APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID,
+        [
+          Query.equal('buyerId', user.$id),
+          Query.equal('collegeName', userProfile.collegeName),
+          Query.orderDesc('$createdAt'),
+        ]
       );
-      setBuyerRequests(buyerResponse.documents as BargainRequest[]); // Type assertion is now safer
+      setBuyerRequests(buyerResponse.documents as unknown as BargainRequest[]);
 
-      // Fetch requests where current user is the seller
       const sellerResponse = await databases.listDocuments(
-        DATABASE_ID,
-        BARGAIN_REQUESTS_COLLECTION_ID,
-        [...commonQueries, Query.equal('sellerId', user.$id)]
+        APPWRITE_DATABASE_ID,
+        APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID,
+        [
+          Query.equal('sellerId', user.$id),
+          Query.equal('collegeName', userProfile.collegeName),
+          Query.orderDesc('$createdAt'),
+          Query.equal('status', 'pending')
+        ]
       );
-      setSellerRequests(sellerResponse.documents as BargainRequest[]); // Type assertion is now safer
+      setSellerRequests(sellerResponse.documents as unknown as BargainRequest[]);
 
     } catch (err: any) {
-      setError('Failed to fetch bargain requests.');
-      console.error('Error fetching bargain requests:', err);
-      toast.error('Failed to load bargain requests.');
+      console.error("Error fetching bargain requests:", err);
+      setError(err.message || "Failed to load bargain requests.");
+      toast.error("Failed to load bargain requests.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.$id, userProfile?.collegeName]);
 
   useEffect(() => {
     fetchBargainRequests();
-  }, [user, userPreferences?.collegeName]);
 
-  const sendBargainRequest = async (
-    productId: string,
-    productTitle: string,
-    sellerId: string,
-    sellerName: string,
-    offeredPrice: number,
-    message?: string
-  ) => {
-    if (!user || !userPreferences) {
+    if (!user?.$id || !userProfile?.collegeName) return;
+
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as BargainRequest;
+
+        if (payload.collegeName !== userProfile.collegeName) {
+            return;
+        }
+
+        if (payload.buyerId === user.$id) {
+          setBuyerRequests(prev => {
+            const existingIndex = prev.findIndex(req => req.$id === payload.$id);
+            if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+              if (existingIndex === -1) return [payload, ...prev];
+            } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+              if (existingIndex !== -1) {
+                if (payload.status === 'accepted') {
+                  toast.success(`Bargain for "${payload.productTitle}" accepted! Proceed to purchase at ₹${parseFloat(payload.requestedPrice).toFixed(2)}.`);
+                } else if (payload.status === 'denied') {
+                  toast.info(`Bargain for "${payload.productTitle}" denied. Please reconsider as they too are students.`);
+                }
+                return prev.map(req => req.$id === payload.$id ? payload : req);
+              }
+            }
+            return prev;
+          });
+        }
+
+        if (payload.sellerId === user.$id) {
+          setSellerRequests(prev => {
+            const existingIndex = prev.findIndex(req => req.$id === payload.$id);
+            if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+              if (existingIndex === -1 && payload.status === 'pending') {
+                toast.info(`New bargain request for "${payload.productTitle}" from ${payload.buyerName}.`);
+                return [payload, ...prev];
+              }
+            } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+              if (existingIndex !== -1 && payload.status !== 'pending') {
+                return prev.filter(req => req.$id !== payload.$id);
+              }
+            }
+            return prev;
+          });
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchBargainRequests, user?.$id, userProfile?.collegeName]);
+
+  const sendBargainRequest = useCallback(async (product: Product, requestedPrice: number) => {
+    if (!user || !userProfile) {
       toast.error("You must be logged in to send a bargain request.");
       return;
     }
-
-    try {
-      const newRequest = await databases.createDocument(
-        DATABASE_ID,
-        BARGAIN_REQUESTS_COLLECTION_ID,
-        ID.unique(),
-        {
-          productId,
-          productTitle,
-          sellerId,
-          sellerName,
-          buyerId: user.$id,
-          buyerName: user.name,
-          offeredPrice,
-          status: 'pending',
-          message,
-          collegeName: userPreferences.collegeName,
-        },
-        [
-          Models.Permission.read(Models.Role.user(user.$id)),
-          Models.Permission.write(Models.Role.user(user.$id)),
-          Models.Permission.read(Models.Role.user(sellerId)),
-          Models.Permission.write(Models.Role.user(sellerId)),
-        ]
-      );
-      setBuyerRequests(prev => [newRequest as BargainRequest, ...prev]); // Type assertion is now safer
-      toast.success("Bargain request sent!");
-    } catch (err: any) {
-      toast.error("Failed to send bargain request: " + err.message);
-      console.error("Error sending bargain request:", err);
-    }
-  };
-
-  const updateBargainRequestStatus = async (requestId: string, newStatus: BargainStatus) => {
-    if (!user) {
-      toast.error("You must be logged in to update a bargain request.");
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
+    if (!product.userId || product.userId.trim() === "") {
+      toast.error("Seller information is missing or invalid. Cannot send bargain request.");
+      console.error("Seller ID is missing or empty for product:", product);
+      return;
+    }
+
+    try {
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID,
+        ID.unique(),
+        {
+          productId: product.$id,
+          productTitle: product.title,
+          originalPrice: product.price,
+          requestedPrice: requestedPrice.toFixed(2),
+          buyerId: user.$id,
+          buyerName: user.name,
+          sellerId: product.userId, // Changed to product.userId
+          sellerName: product.sellerName,
+          status: "pending",
+          collegeName: userProfile.collegeName,
+        }
+      );
+      toast.success(`Bargain request for ₹${requestedPrice.toFixed(2)} sent to ${product.sellerName}!`);
+      fetchBargainRequests();
+    } catch (err: any) {
+      console.error("Error sending bargain request:", err);
+      toast.error(err.message || "Failed to send bargain request.");
+      throw err;
+    }
+  }, [user, userProfile, fetchBargainRequests]);
+
+  const updateBargainStatus = useCallback(async (requestId: string, newStatus: "accepted" | "denied") => {
     try {
       await databases.updateDocument(
-        DATABASE_ID,
-        BARGAIN_REQUESTS_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID,
         requestId,
-        { status: newStatus },
-        [Models.Permission.write(Models.Role.user(user.$id))] // Only seller or buyer can update status
+        { status: newStatus }
       );
-      setBuyerRequests(prev =>
-        prev.map(req =>
-          req.$id === requestId ? { ...req, status: newStatus } : req
-        )
-      );
-      setSellerRequests(prev =>
-        prev.map(req =>
-          req.$id === requestId ? { ...req, status: newStatus } : req
-        )
-      );
-      toast.success("Bargain request status updated.");
+      toast.success(`Bargain request ${newStatus}.`);
+      fetchBargainRequests();
     } catch (err: any) {
-      toast.error("Failed to update bargain request status: " + err.message);
-      console.error("Error updating bargain request status:", err);
+      console.error("Error updating bargain status:", err);
+      toast.error(err.message || "Failed to update bargain status.");
+      throw err;
     }
-  };
+  }, [fetchBargainRequests]);
 
-  const checkExistingBargainRequest = async (productId: string, buyerId: string) => {
-    try {
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        BARGAIN_REQUESTS_COLLECTION_ID,
-        [
-          Query.equal('productId', productId),
-          Query.equal('buyerId', buyerId),
-          Query.notEqual('status', 'rejected'), // Consider only active or pending requests
-          Query.limit(1)
-        ]
-      );
-      if (response.documents.length > 0) {
-        const request = response.documents[0] as BargainRequest; // Type assertion is now safer
-        return { status: request.status, requestId: request.$id };
-      }
-      return null;
-    } catch (err: any) {
-      console.error("Error checking existing bargain request:", err);
-      return null;
-    }
-  };
+  const getBargainStatusForProduct = useCallback((productId: string) => {
+    const request = buyerRequests.find(req => req.productId === productId);
+    return { status: request?.status || null, requestId: request?.$id || null };
+  }, [buyerRequests]);
 
   return {
     buyerRequests,
     sellerRequests,
     isLoading,
     error,
-    refetch: fetchBargainRequests,
     sendBargainRequest,
-    updateBargainRequestStatus,
-    checkExistingBargainRequest,
+    updateBargainStatus,
+    getBargainStatusForProduct,
+    refetch: fetchBargainRequests,
   };
 };
-
-export default useBargainRequests;

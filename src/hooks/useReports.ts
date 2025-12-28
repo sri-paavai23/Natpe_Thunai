@@ -1,123 +1,131 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_REPORTS_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext';
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const REPORTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_REPORTS_COLLECTION_ID;
-
-export type ReportType = 'marketplace' | 'service' | 'errand' | 'tournament' | 'other';
-export type ReportStatus = 'pending' | 'reviewed' | 'resolved';
-
-export interface Report extends AppwriteDocument {
+export interface Report extends Models.Document {
   reporterId: string;
   reporterName: string;
-  collegeName: string;
-  listingId: string; // ID of the item/service/errand being reported
-  listingType: ReportType;
+  productId: string;
+  productTitle: string;
+  sellerId: string;
   reason: string;
-  description?: string;
-  status: ReportStatus;
+  message?: string;
+  status: "Pending" | "Reviewed" | "Resolved" | "Dismissed";
+  collegeName: string;
 }
 
-const useReports = () => {
-  const { user, userPreferences } = useAuth();
+interface ReportsState {
+  reports: Report[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+  updateReportStatus: (reportId: string, newStatus: Report['status']) => Promise<void>;
+}
+
+export const useReports = (collegeNameFilter?: string): ReportsState => {
+  const { userProfile } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    
     try {
       const queries = [Query.orderDesc('$createdAt')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        queries.push(Query.equal('collegeName', userPreferences.collegeName));
+      if (collegeNameFilter) {
+        queries.push(Query.equal('collegeName', collegeNameFilter));
+      } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) {
+        // For regular users, if no explicit filter is passed, use their collegeName
+        queries.push(Query.equal('collegeName', userProfile.collegeName));
       }
 
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        REPORTS_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_REPORTS_COLLECTION_ID,
         queries
       );
-      setReports(response.documents as Report[]); // Type assertion is now safer
+      setReports(response.documents as unknown as Report[]);
     } catch (err: any) {
-      setError('Failed to fetch reports.');
-      console.error('Error fetching reports:', err);
-      toast.error('Failed to load reports.');
+      console.error("Error fetching reports:", err);
+      setError(err.message || "Failed to load reports.");
+      toast.error("Failed to load reports.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [collegeNameFilter, userProfile?.collegeName, userProfile?.role]);
+
+  const updateReportStatus = useCallback(async (reportId: string, newStatus: Report['status']) => {
+    try {
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_REPORTS_COLLECTION_ID,
+        reportId,
+        { status: newStatus }
+      );
+      toast.success(`Report ${reportId} status updated to ${newStatus}.`);
+      fetchReports(); // Refetch to update local state
+    } catch (err: any) {
+      console.error("Error updating report status:", err);
+      toast.error(err.message || "Failed to update report status.");
+      throw err;
+    }
+  }, [fetchReports]);
 
   useEffect(() => {
     fetchReports();
-  }, [userPreferences?.collegeName]);
 
-  const submitReport = async (reportData: Omit<Report, '$id' | '$createdAt' | '$updatedAt' | '$permissions' | '$collectionId' | '$databaseId' | '$sequence' | 'reporterId' | 'reporterName' | 'collegeName' | 'status'>) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to submit a report.");
-      return;
+    let subscriptionFilterCollege = '';
+    if (collegeNameFilter) {
+        subscriptionFilterCollege = collegeNameFilter;
+    } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) {
+        subscriptionFilterCollege = userProfile.collegeName;
     }
 
-    try {
-      const newReport = await databases.createDocument(
-        DATABASE_ID,
-        REPORTS_COLLECTION_ID,
-        ID.unique(),
-        {
-          ...reportData,
-          reporterId: user.$id,
-          reporterName: user.name,
-          collegeName: userPreferences.collegeName,
-          status: 'pending',
-        },
-        [
-          Models.Permission.read(Models.Role.user(user.$id)),
-          Models.Permission.write(Models.Role.user(user.$id)),
-          // Potentially add read/write for admin/moderator roles
-        ]
-      );
-      setReports(prev => [newReport as Report, ...prev]); // Type assertion is now safer
-      toast.success("Report submitted successfully!");
-    } catch (err: any) {
-      toast.error("Failed to submit report: " + err.message);
-      console.error("Error submitting report:", err);
-    }
-  };
+    if (!subscriptionFilterCollege && userProfile?.role !== 'developer') return;
 
-  const updateReportStatus = async (reportId: string, newStatus: ReportStatus) => {
-    if (!user) {
-      toast.error("You must be logged in to update report status.");
-      return;
-    }
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        REPORTS_COLLECTION_ID,
-        reportId,
-        { status: newStatus },
-        [Models.Permission.write(Models.Role.user(user.$id))] // Only reporter or admin can update
-      );
-      setReports(prev =>
-        prev.map(report =>
-          report.$id === reportId ? { ...report, status: newStatus } : report
-        )
-      );
-      toast.success("Report status updated.");
-    } catch (err: any) {
-      toast.error("Failed to update report status: " + err.message);
-      console.error("Error updating report status:", err);
-    }
-  };
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_REPORTS_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as Report;
 
-  return { reports, isLoading, error, refetch: fetchReports, submitReport, updateReportStatus };
+        if (subscriptionFilterCollege && payload.collegeName !== subscriptionFilterCollege) {
+            return;
+        }
+
+        setReports(prev => {
+          const existingIndex = prev.findIndex(r => r.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New report submitted for "${payload.productTitle}".`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Report for "${payload.productTitle}" updated to ${payload.status}.`);
+              return prev.map(r => r.$id === payload.$id ? payload : r);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Report for "${payload.productTitle}" removed.`);
+              return prev.filter(r => r.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchReports, collegeNameFilter, userProfile?.collegeName, userProfile?.role]);
+
+  return { reports, isLoading, error, refetch: fetchReports, updateReportStatus };
 };
-
-export default useReports;

@@ -1,131 +1,119 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const ERRAND_LISTINGS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_ERRAND_LISTINGS_COLLECTION_ID;
-
-export type ErrandType = 'delivery' | 'pickup' | 'task' | 'other';
-export type ErrandStatus = 'open' | 'assigned' | 'completed' | 'cancelled';
-
-export interface ErrandPost extends AppwriteDocument {
+export interface ErrandPost extends Models.Document {
   title: string;
   description: string;
-  type: ErrandType;
-  reward: number; // e.g., cash reward
-  location: string; // Pickup/delivery location
-  deadline: string; // ISO date string
+  type: string; // e.g., 'note-writing', 'instant-help' - Changed from category to type
+  compensation: string;
+  deadline?: string;
+  contact: string;
   posterId: string;
   posterName: string;
-  collegeName: string;
-  contactInfo: string;
-  status: ErrandStatus;
-  assignedToId?: string;
-  assignedToName?: string;
+  collegeName: string; // NEW: Add collegeName
 }
 
-const useErrandListings = () => {
-  const { user, userPreferences } = useAuth();
+interface ErrandListingsState {
+  errands: ErrandPost[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export const useErrandListings = (filterTypes: string[] = []): ErrandListingsState => {
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   const [errands, setErrands] = useState<ErrandPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchErrands = async () => {
+  const fetchErrands = useCallback(async () => {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+      setIsLoading(false);
+      setErrands([]); // Clear errands if no college is set
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
-    try {
-      const queries = [Query.orderDesc('$createdAt')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        queries.push(Query.equal('collegeName', userPreferences.collegeName));
-      }
+    
+    const queries = [
+      Query.orderDesc('$createdAt'),
+      Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+    ];
+    
+    if (filterTypes.length > 0) {
+      // Appwrite only supports 10 queries, so we use a single 'or' query if possible
+      queries.push(Query.or(filterTypes.map(type => Query.equal('type', type))));
+    }
 
+    try {
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        ERRAND_LISTINGS_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_ERRANDS_COLLECTION_ID,
         queries
       );
-      setErrands(response.documents as ErrandPost[]); // Type assertion is now safer
+      setErrands(response.documents as unknown as ErrandPost[]);
     } catch (err: any) {
-      setError('Failed to fetch errand listings.');
-      console.error('Error fetching errand listings:', err);
-      toast.error('Failed to load errand listings.');
+      console.error("Error fetching errand listings:", err);
+      setError(err.message || "Failed to load errand listings.");
+      toast.error("Failed to load errand listings.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterTypes, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchErrands();
-  }, [userPreferences?.collegeName]);
 
-  const postErrand = async (errandData: Omit<ErrandPost, '$id' | '$createdAt' | '$updatedAt' | '$permissions' | '$collectionId' | '$databaseId' | '$sequence' | 'posterId' | 'posterName' | 'collegeName' | 'status' | 'assignedToId' | 'assignedToName'>) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to post an errand.");
-      return;
-    }
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
 
-    try {
-      const newErrand = await databases.createDocument(
-        DATABASE_ID,
-        ERRAND_LISTINGS_COLLECTION_ID,
-        ID.unique(),
-        {
-          ...errandData,
-          posterId: user.$id,
-          posterName: user.name,
-          collegeName: userPreferences.collegeName,
-          status: 'open',
-        },
-        [
-          Models.Permission.read(Models.Role.any()),
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
-      );
-      setErrands(prev => [newErrand as ErrandPost, ...prev]); // Type assertion is now safer
-      toast.success("Errand posted successfully!");
-    } catch (err: any) {
-      toast.error("Failed to post errand: " + err.message);
-      console.error("Error posting errand:", err);
-    }
-  };
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_ERRANDS_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as ErrandPost;
+        
+        // Check if the payload matches the current filter AND collegeName
+        const matchesFilter = filterTypes.length === 0 || filterTypes.includes(payload.type);
+        const matchesCollege = payload.collegeName === userProfile.collegeName; // NEW: Check collegeName
 
-  const updateErrandStatus = async (errandId: string, newStatus: ErrandStatus, assignedToId?: string, assignedToName?: string) => {
-    if (!user) {
-      toast.error("You must be logged in to update errand status.");
-      return;
-    }
-    try {
-      const updateData: Partial<ErrandPost> = { status: newStatus };
-      if (assignedToId) updateData.assignedToId = assignedToId;
-      if (assignedToName) updateData.assignedToName = assignedToName;
+        if (!matchesCollege) return; // NEW: Skip if not from current college
 
-      await databases.updateDocument(
-        DATABASE_ID,
-        ERRAND_LISTINGS_COLLECTION_ID,
-        errandId,
-        updateData,
-        [Models.Permission.write(Models.Role.user(user.$id))] // Only poster or assigned user can update
-      );
-      setErrands(prev =>
-        prev.map(errand =>
-          errand.$id === errandId ? { ...errand, ...updateData } : errand
-        )
-      );
-      toast.success("Errand status updated.");
-    } catch (err: any) {
-      toast.error("Failed to update errand status: " + err.message);
-      console.error("Error updating errand status:", err);
-    }
-  };
+        setErrands(prev => {
+          const existingIndex = prev.findIndex(e => e.$id === payload.$id);
 
-  return { errands, isLoading, error, refetch: fetchErrands, postErrand, updateErrandStatus };
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1 && matchesFilter) {
+              toast.info(`New errand posted: ${payload.title}`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Errand updated: ${payload.title}`);
+              return prev.map(e => e.$id === payload.$id ? payload : e);
+            } else if (matchesFilter) {
+                // If updated document now matches filter, add it
+                return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Errand removed: ${payload.title}`);
+              return prev.filter(e => e.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchErrands, filterTypes, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+
+  return { errands, isLoading, error, refetch: fetchErrands };
 };
-
-export default useErrandListings;

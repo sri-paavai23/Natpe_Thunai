@@ -1,126 +1,108 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_COLLABORATORS_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const COLLABORATOR_POSTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_COLLABORATOR_POSTS_COLLECTION_ID;
-
-export type ProjectCategory = 'academic' | 'tech' | 'creative' | 'startup' | 'event' | 'other';
-export type ProjectStatus = 'open' | 'in_progress' | 'completed' | 'closed';
-
-export interface CollaboratorPost extends AppwriteDocument {
+export interface CollaboratorPost extends Models.Document {
   title: string;
   description: string;
-  category: ProjectCategory;
-  skillsNeeded: string[];
-  commitment: string; // e.g., "part-time", "full-time", "flexible"
+  skillsNeeded: string;
+  contact: string;
   posterId: string;
   posterName: string;
-  collegeName: string;
-  contactInfo: string;
-  status: ProjectStatus;
-  teamMembers?: { userId: string; userName: string; role: string }[];
+  collegeName: string; // NEW: Add collegeName
 }
 
-const useCollaboratorPosts = () => {
-  const { user, userPreferences } = useAuth();
+interface CollaboratorPostsState {
+  posts: CollaboratorPost[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export const useCollaboratorPosts = (): CollaboratorPostsState => {
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   const [posts, setPosts] = useState<CollaboratorPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+      setIsLoading(false);
+      setPosts([]); // Clear posts if no college is set
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
+    
     try {
-      const queries = [Query.orderDesc('$createdAt')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        queries.push(Query.equal('collegeName', userPreferences.collegeName));
-      }
+      const queries = [
+        Query.orderDesc('$createdAt'),
+        Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+      ];
 
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        COLLABORATOR_POSTS_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_COLLABORATORS_COLLECTION_ID,
         queries
       );
-      setPosts(response.documents as CollaboratorPost[]); // Type assertion is now safer
+      setPosts(response.documents as unknown as CollaboratorPost[]);
     } catch (err: any) {
-      setError('Failed to fetch collaborator posts.');
-      console.error('Error fetching collaborator posts:', err);
-      toast.error('Failed to load collaborator posts.');
+      console.error("Error fetching collaborator posts:", err);
+      setError(err.message || "Failed to load collaborator posts.");
+      toast.error("Failed to load collaborator posts.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
   useEffect(() => {
     fetchPosts();
-  }, [userPreferences?.collegeName]);
 
-  const postProject = async (postData: Omit<CollaboratorPost, '$id' | '$createdAt' | '$updatedAt' | '$permissions' | '$collectionId' | '$databaseId' | '$sequence' | 'posterId' | 'posterName' | 'collegeName' | 'status' | 'teamMembers'>) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to post a project.");
-      return;
-    }
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
 
-    try {
-      const newPost = await databases.createDocument(
-        DATABASE_ID,
-        COLLABORATOR_POSTS_COLLECTION_ID,
-        ID.unique(),
-        {
-          ...postData,
-          posterId: user.$id,
-          posterName: user.name,
-          collegeName: userPreferences.collegeName,
-          status: 'open',
-          teamMembers: [{ userId: user.$id, userName: user.name, role: 'Creator' }],
-        },
-        [
-          Models.Permission.read(Models.Role.any()),
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
-      );
-      setPosts(prev => [newPost as CollaboratorPost, ...prev]); // Type assertion is now safer
-      toast.success("Project posted successfully!");
-    } catch (err: any) {
-      toast.error("Failed to post project: " + err.message);
-      console.error("Error posting project:", err);
-    }
-  };
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_COLLABORATORS_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as CollaboratorPost;
 
-  const updatePostStatus = async (postId: string, newStatus: ProjectStatus) => {
-    if (!user) {
-      toast.error("You must be logged in to update project status.");
-      return;
-    }
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        COLLABORATOR_POSTS_COLLECTION_ID,
-        postId,
-        { status: newStatus },
-        [Models.Permission.write(Models.Role.user(user.$id))]
-      );
-      setPosts(prev =>
-        prev.map(post =>
-          post.$id === postId ? { ...post, status: newStatus } : post
-        )
-      );
-      toast.success("Project status updated.");
-    } catch (err: any) {
-      toast.error("Failed to update project status: " + err.message);
-      console.error("Error updating project status:", err);
-    }
-  };
+        // NEW: Filter real-time updates by collegeName
+        if (payload.collegeName !== userProfile.collegeName) {
+            return;
+        }
 
-  return { posts, isLoading, error, refetch: fetchPosts, postProject, updatePostStatus };
+        setPosts(prev => {
+          const existingIndex = prev.findIndex(p => p.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New collaboration post: ${payload.title}`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              toast.info(`Collaboration post updated: ${payload.title}`);
+              return prev.map(p => p.$id === payload.$id ? payload : p);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Collaboration post removed: ${payload.title}`);
+              return prev.filter(p => p.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchPosts, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+
+  return { posts, isLoading, error, refetch: fetchPosts };
 };
-
-export default useCollaboratorPosts;

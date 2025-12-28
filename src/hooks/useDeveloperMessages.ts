@@ -1,116 +1,145 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const DEVELOPER_MESSAGES_COLLECTION_ID = import.meta.env.VITE_APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID;
-
-export interface DeveloperMessage extends AppwriteDocument {
+export interface DeveloperMessage extends Models.Document {
   senderId: string;
   senderName: string;
-  collegeName: string;
   message: string;
-  status: 'pending' | 'resolved';
+  isDeveloper: boolean;
+  collegeName: string; // NEW: Add collegeName
 }
 
-const useDeveloperMessages = () => {
-  const { user, userPreferences } = useAuth();
-  const [messages, setMessages] = useState<DeveloperMessage[]>([]);
+interface DeveloperMessagesState {
+  messages: DeveloperMessage[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+// 48 hours in milliseconds
+const VISIBILITY_DURATION_MS = 48 * 60 * 60 * 1000; 
+
+// Client-side filter for time-limited visibility
+const filterRecentMessages = (messages: DeveloperMessage[]): DeveloperMessage[] => {
+  const cutoffTime = Date.now() - VISIBILITY_DURATION_MS;
+  return messages.filter(msg => new Date(msg.$createdAt).getTime() >= cutoffTime);
+};
+
+export const useDeveloperMessages = (collegeNameFilter?: string): DeveloperMessagesState => { // NEW: Add collegeNameFilter parameter
+  const { userProfile } = useAuth(); // NEW: Use useAuth to get current user's college
+  const [allMessages, setAllMessages] = useState<DeveloperMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
+    // NEW: If a collegeNameFilter is provided, and it's not the current user's college,
+    // or if the current user's college is not set, don't fetch.
+    // This ensures regular users only see their college's messages.
+    // The DeveloperDashboard will call this hook without a collegeNameFilter.
+    if (collegeNameFilter && userProfile?.collegeName && collegeNameFilter !== userProfile.collegeName) {
+        setIsLoading(false);
+        setAllMessages([]);
+        return;
+    }
+    if (!collegeNameFilter && !userProfile?.collegeName && userProfile?.role !== 'developer') {
+        // If no filter is provided and user is not developer and has no college, don't fetch
+        setIsLoading(false);
+        setAllMessages([]);
+        return;
+    }
+
+
     setIsLoading(true);
     setError(null);
+    
     try {
       const queries = [Query.orderDesc('$createdAt')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        queries.push(Query.equal('collegeName', userPreferences.collegeName));
+      if (collegeNameFilter) { // NEW: Apply collegeName filter if provided
+        queries.push(Query.equal('collegeName', collegeNameFilter));
+      } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) {
+        // For regular users, if no explicit filter is passed, use their collegeName
+        queries.push(Query.equal('collegeName', userProfile.collegeName));
       }
 
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        DEVELOPER_MESSAGES_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID,
         queries
       );
-      setMessages(response.documents as DeveloperMessage[]); // Type assertion is now safer
+      
+      setAllMessages(response.documents as unknown as DeveloperMessage[]);
     } catch (err: any) {
-      setError('Failed to fetch developer messages.');
-      console.error('Error fetching developer messages:', err);
-      toast.error('Failed to load developer messages.');
+      console.error("Error fetching developer messages:", err);
+      setError(err.message || "Failed to load developer messages.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [collegeNameFilter, userProfile?.collegeName, userProfile?.role]); // NEW: Depend on collegeNameFilter and userProfile
 
   useEffect(() => {
     fetchMessages();
-  }, [userPreferences?.collegeName]);
 
-  const sendMessage = async (messageContent: string) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to send a message.");
-      return;
+    // NEW: Determine subscription filter based on collegeNameFilter or userProfile
+    let subscriptionFilterCollege = '';
+    if (collegeNameFilter) {
+        subscriptionFilterCollege = collegeNameFilter;
+    } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) {
+        subscriptionFilterCollege = userProfile.collegeName;
     }
 
-    try {
-      const newMessage = await databases.createDocument(
-        DATABASE_ID,
-        DEVELOPER_MESSAGES_COLLECTION_ID,
-        ID.unique(),
-        {
-          senderId: user.$id,
-          senderName: user.name,
-          collegeName: userPreferences.collegeName,
-          message: messageContent,
-          status: 'pending',
-        },
-        [
-          Models.Permission.read(Models.Role.any()), // Developers can read
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
-      );
-      setMessages(prev => [newMessage as DeveloperMessage, ...prev]); // Type assertion is now safer
-      toast.success("Message sent to developers!");
-    } catch (err: any) {
-      toast.error("Failed to send message: " + err.message);
-      console.error("Error sending message:", err);
-    }
-  };
+    // Only subscribe if there's a valid college to filter by, or if it's a developer viewing all
+    if (!subscriptionFilterCollege && userProfile?.role !== 'developer') return;
 
-  const updateMessageStatus = async (messageId: string, newStatus: DeveloperMessage['status']) => {
-    if (!user) {
-      toast.error("You must be logged in to update message status.");
-      return;
-    }
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        DEVELOPER_MESSAGES_COLLECTION_ID,
-        messageId,
-        { status: newStatus },
-        [Models.Permission.write(Models.Role.user(user.$id))] // Only sender or specific role can update
-      );
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.$id === messageId ? { ...msg, status: newStatus } : msg
-        )
-      );
-      toast.success("Message status updated.");
-    } catch (err: any) {
-      toast.error("Failed to update message status: " + err.message);
-      console.error("Error updating message status:", err);
-    }
-  };
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as DeveloperMessage;
 
-  return { messages, isLoading, error, refetch: fetchMessages, sendMessage, updateMessageStatus };
+        // NEW: Filter real-time updates by collegeName if a filter is active
+        if (subscriptionFilterCollege && payload.collegeName !== subscriptionFilterCollege) {
+            return;
+        }
+
+        setAllMessages(prev => {
+          const existingIndex = prev.findIndex(m => m.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New message from ${payload.senderName} received.`);
+              return [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              return prev.map(m => m.$id === payload.$id ? payload : m);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              return prev.filter(m => m.$id !== payload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
+
+    // Set up a timer to periodically refetch/re-filter to handle the 48h cutoff
+    const intervalId = setInterval(() => {
+        setAllMessages(prev => [...prev]); // Trigger re-render/re-filter
+    }, 60000); // Check every minute
+
+    return () => {
+      unsubscribe();
+      clearInterval(intervalId);
+    };
+  }, [fetchMessages, collegeNameFilter, userProfile?.collegeName, userProfile?.role]); // NEW: Depend on collegeNameFilter and userProfile
+
+  // Apply the 48-hour filter before returning
+  const recentMessages = filterRecentMessages(allMessages);
+
+  return { messages: recentMessages, isLoading, error, refetch: fetchMessages };
 };
-
-export default useDeveloperMessages;

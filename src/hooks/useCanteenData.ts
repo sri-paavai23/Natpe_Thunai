@@ -1,248 +1,202 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_CANTEEN_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query, ID } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const CANTEENS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_CANTEENS_COLLECTION_ID;
-const FOOD_OFFERINGS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_FOOD_OFFERINGS_COLLECTION_ID;
-
-export interface CanteenData extends AppwriteDocument {
+interface CanteenItem {
   name: string;
-  collegeName: string;
-  location: string;
-  contactInfo: string;
-  openingHours: string;
-  description?: string;
-  imageUrl?: string;
+  available: boolean;
 }
 
-export interface FoodOffering extends AppwriteDocument {
-  canteenId: string;
-  canteenName: string;
+export interface CanteenData extends Models.Document {
   name: string;
-  description: string;
-  price: number;
-  category: string;
-  imageUrl?: string;
-  isAvailable: boolean;
+  isOpen: boolean;
+  items: CanteenItem[];
+  collegeName: string; // NEW: Add collegeName
 }
 
-const useCanteenData = () => {
-  const { user, userPreferences } = useAuth();
+interface CanteenDataState {
+  allCanteens: CanteenData[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+  updateCanteen: (canteenId: string, updates: Partial<CanteenData>) => Promise<void>;
+  addCanteen: (canteenName: string, collegeName: string) => Promise<CanteenData | undefined>; // NEW: Add collegeName parameter
+}
+
+// Helper functions for serialization/deserialization
+const serializeItems = (items: CanteenItem[]): string[] => {
+  return items.map(item => JSON.stringify(item));
+};
+
+const deserializeItems = (items: string[]): CanteenItem[] => {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => {
+    try {
+      return JSON.parse(item);
+    } catch (e) {
+      console.error("Failed to parse canteen item:", item, e);
+      return { name: "Unknown Item", available: false };
+    }
+  });
+};
+
+export const useCanteenData = (): CanteenDataState => {
+  const { userProfile } = useAuth(); // NEW: Use useAuth hook to get current user's college
   const [allCanteens, setAllCanteens] = useState<CanteenData[]>([]);
-  const [allOfferings, setAllOfferings] = useState<FoodOffering[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCanteenAndOfferingData = async () => {
+  const fetchCanteens = useCallback(async () => {
+    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
+      setIsLoading(false);
+      setAllCanteens([]); // Clear canteens if no college is set
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const canteenQueries = [Query.orderAsc('name')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        canteenQueries.push(Query.equal('collegeName', userPreferences.collegeName));
-      }
-
-      const canteenResponse = await databases.listDocuments(
-        DATABASE_ID,
-        CANTEENS_COLLECTION_ID,
-        canteenQueries
+      const response = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CANTEEN_COLLECTION_ID,
+        [
+          Query.equal('collegeName', userProfile.collegeName), // NEW: Filter by collegeName
+          Query.orderAsc('name')
+        ]
       );
-      setAllCanteens(canteenResponse.documents as CanteenData[]); // Type assertion is now safer
+      
+      // Deserialize fetched items
+      const deserializedCanteens = (response.documents as any[]).map(doc => ({
+          ...doc,
+          items: deserializeItems(doc.items || []),
+      })) as CanteenData[];
 
-      const offeringQueries = [Query.orderAsc('name')];
-      // Filter offerings by canteens in the user's college
-      const collegeCanteenIds = canteenResponse.documents.map(c => c.$id);
-      if (collegeCanteenIds.length > 0) {
-        offeringQueries.push(Query.equal('canteenId', collegeCanteenIds));
-      } else if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        // If no canteens found for college, no offerings either
-        setAllOfferings([]);
-        setIsLoading(false);
-        return;
-      }
-
-      const offeringResponse = await databases.listDocuments(
-        DATABASE_ID,
-        FOOD_OFFERINGS_COLLECTION_ID,
-        offeringQueries
-      );
-      setAllOfferings(offeringResponse.documents as FoodOffering[]); // Type assertion is now safer
-
+      setAllCanteens(deserializedCanteens);
     } catch (err: any) {
-      setError('Failed to fetch canteen and food offering data.');
-      console.error('Error fetching canteen data:', err);
-      toast.error('Failed to load canteen data.');
+      console.error("Error fetching canteen data:", err);
+      setError(err.message || "Failed to load canteen status.");
+      toast.error("Failed to load canteen status.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+
+  const updateCanteen = useCallback(async (canteenId: string, updates: Partial<CanteenData>) => {
+    try {
+      // Separate items from other updates
+      const { items: updatedItems, ...otherUpdates } = updates;
+
+      // Initialize payload with non-item updates, ensuring 'items' is typed as string[] for Appwrite
+      const updatePayload: Partial<Omit<CanteenData, 'items'>> & { items?: string[] } = otherUpdates;
+      
+      // Serialize items if they are being updated
+      if (updatedItems) {
+          updatePayload.items = serializeItems(updatedItems);
+      }
+      
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CANTEEN_COLLECTION_ID,
+        canteenId,
+        updatePayload
+      );
+      
+      return;
+    } catch (error: any) {
+      console.error("Error updating canteen data:", error);
+      toast.error(error.message || "Failed to update canteen status.");
+      throw error;
+    }
+  }, []);
+
+  const addCanteen = useCallback(async (canteenName: string, collegeName: string): Promise<CanteenData | undefined> => { // NEW: Accept collegeName
+    const initialItems: CanteenItem[] = [
+        { name: "Coffee", available: true },
+        { name: "Tea", available: true },
+    ];
+    
+    const initialData = {
+      name: canteenName,
+      isOpen: true,
+      collegeName: collegeName, // NEW: Add collegeName
+      // Serialize initial items before sending
+      items: serializeItems(initialItems),
+    };
+    
+    try {
+      const newDoc = await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_CANTEEN_COLLECTION_ID,
+        ID.unique(),
+        initialData
+      ) as unknown as Models.Document;
+      
+      // Deserialize the returned document for local state consistency
+      const deserializedDoc: CanteenData = {
+          ...(newDoc as any),
+          items: deserializeItems((newDoc as any).items || []),
+      };
+
+      return deserializedDoc;
+    } catch (e: any) {
+      console.error("Error adding canteen:", e);
+      toast.error(e.message || "Failed to add new canteen.");
+    }
+  }, []);
 
   useEffect(() => {
-    fetchCanteenAndOfferingData();
-  }, [userPreferences?.collegeName]);
+    fetchCanteens();
 
-  const addCanteen = async (canteenData: Omit<CanteenData, '$id' | '$createdAt' | '$updatedAt' | '$permissions' | '$collectionId' | '$databaseId' | '$sequence' | 'collegeName'>) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to add a canteen.");
-      return;
-    }
-    try {
-      const newCanteen = await databases.createDocument(
-        DATABASE_ID,
-        CANTEENS_COLLECTION_ID,
-        ID.unique(),
-        {
-          ...canteenData,
-          collegeName: userPreferences.collegeName,
-        },
-        [
-          Models.Permission.read(Models.Role.any()),
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
-      );
-      setAllCanteens(prev => [newCanteen as CanteenData, ...prev]); // Type assertion is now safer
-      toast.success("Canteen added successfully!");
-    } catch (err: any) {
-      toast.error("Failed to add canteen: " + err.message);
-      console.error("Error adding canteen:", err);
-    }
-  };
+    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
 
-  const addFoodOffering = async (offeringData: Omit<FoodOffering, '$id' | '$createdAt' | '$updatedAt' | '$permissions' | '$collectionId' | '$databaseId' | '$sequence'>) => {
-    if (!user) {
-      toast.error("You must be logged in to add a food offering.");
-      return;
-    }
-    try {
-      const newOffering = await databases.createDocument(
-        DATABASE_ID,
-        FOOD_OFFERINGS_COLLECTION_ID,
-        ID.unique(),
-        offeringData,
-        [
-          Models.Permission.read(Models.Role.any()),
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
-      );
-      setAllOfferings(prev => [newOffering as FoodOffering, ...prev]);
-      toast.success("Food offering added successfully!");
-    } catch (err: any) {
-      toast.error("Failed to add food offering: " + err.message);
-      console.error("Error adding food offering:", err);
-    }
-  };
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CANTEEN_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as any;
+        
+        // Deserialize payload from real-time update
+        const deserializedPayload: CanteenData = {
+            ...payload,
+            items: deserializeItems(payload.items || []),
+        };
 
-  const updateCanteen = async (canteenId: string, updatedData: Partial<CanteenData>) => {
-    if (!user) {
-      toast.error("You must be logged in to update a canteen.");
-      return;
-    }
-    try {
-      const updatedCanteen = await databases.updateDocument(
-        DATABASE_ID,
-        CANTEENS_COLLECTION_ID,
-        canteenId,
-        updatedData,
-        [Models.Permission.write(Models.Role.user(user.$id))]
-      );
-      setAllCanteens(prev =>
-        prev.map(canteen =>
-          canteen.$id === canteenId ? { ...canteen, ...updatedData } : canteen
-        )
-      );
-      toast.success("Canteen updated successfully!");
-    } catch (err: any) {
-      toast.error("Failed to update canteen: " + err.message);
-      console.error("Error updating canteen:", err);
-    }
-  };
+        // NEW: Filter real-time updates by collegeName
+        if (deserializedPayload.collegeName !== userProfile.collegeName) {
+            return;
+        }
 
-  const updateFoodOffering = async (offeringId: string, updatedData: Partial<FoodOffering>) => {
-    if (!user) {
-      toast.error("You must be logged in to update a food offering.");
-      return;
-    }
-    try {
-      const updatedOffering = await databases.updateDocument(
-        DATABASE_ID,
-        FOOD_OFFERINGS_COLLECTION_ID,
-        offeringId,
-        updatedData,
-        [Models.Permission.write(Models.Role.user(user.$id))]
-      );
-      setAllOfferings(prev =>
-        prev.map(offering =>
-          offering.$id === offeringId ? { ...offering, ...updatedData } : offering
-        )
-      );
-      toast.success("Food offering updated successfully!");
-    } catch (err: any) {
-      toast.error("Failed to update food offering: " + err.message);
-      console.error("Error updating food offering:", err);
-    }
-  };
+        setAllCanteens(prev => {
+          const existingIndex = prev.findIndex(c => c.$id === deserializedPayload.$id);
 
-  const deleteCanteen = async (canteenId: string) => {
-    if (!user) {
-      toast.error("You must be logged in to delete a canteen.");
-      return;
-    }
-    try {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        CANTEENS_COLLECTION_ID,
-        canteenId,
-      );
-      setAllCanteens(prev => prev.filter(canteen => canteen.$id !== canteenId));
-      // Also delete associated offerings
-      setAllOfferings(prev => prev.filter(offering => offering.canteenId !== canteenId));
-      toast.success("Canteen deleted successfully!");
-    } catch (err: any) {
-      toast.error("Failed to delete canteen: " + err.message);
-      console.error("Error deleting canteen:", err);
-    }
-  };
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New canteen added: ${deserializedPayload.name}`);
+              return [deserializedPayload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              // Update existing document
+              return prev.map(c => c.$id === deserializedPayload.$id ? deserializedPayload : c);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              toast.info(`Canteen removed: ${deserializedPayload.name}`);
+              return prev.filter(c => c.$id !== deserializedPayload.$id);
+            }
+          }
+          return prev;
+        });
+      }
+    );
 
-  const deleteFoodOffering = async (offeringId: string) => {
-    if (!user) {
-      toast.error("You must be logged in to delete a food offering.");
-      return;
-    }
-    try {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        FOOD_OFFERINGS_COLLECTION_ID,
-        offeringId,
-      );
-      setAllOfferings(prev => prev.filter(offering => offering.$id !== offeringId));
-      toast.success("Food offering deleted successfully!");
-    } catch (err: any) {
-      toast.error("Failed to delete food offering: " + err.message);
-      console.error("Error deleting food offering:", err);
-    }
-  };
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchCanteens, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
 
-  return {
-    allCanteens,
-    allOfferings,
-    isLoading,
-    error,
-    refetch: fetchCanteenAndOfferingData,
-    addCanteen,
-    addFoodOffering,
-    updateCanteen,
-    updateFoodOffering,
-    deleteCanteen,
-    deleteFoodOffering,
-  };
+  return { allCanteens, isLoading, error, refetch: fetchCanteens, updateCanteen, addCanteen };
 };
-
-export default useCanteenData;

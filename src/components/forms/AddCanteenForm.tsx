@@ -1,103 +1,62 @@
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { useAuth } from '@/context/AuthContext';
-import { toast } from 'sonner';
-import { CanteenData } from '@/hooks/useCanteenData';
+"use client";
+
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { DialogFooter } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
+import { Loader2 } from "lucide-react"; // NEW: Import Loader2
 
 interface AddCanteenFormProps {
-  onSubmit: (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "$sequence">) => Promise<void>; // Omit $sequence
+  onSubmit: (canteenName: string, collegeName: string) => Promise<void>; // Changed to return Promise<void> and accept collegeName
   onCancel: () => void;
-  loading: boolean;
+  loading: boolean; // Added loading prop
 }
 
 const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onCancel, loading }) => {
-  const { userProfile } = useAuth();
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  const [contactInfo, setContactInfo] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [openingTime, setOpeningTime] = useState("08:00");
-  const [closingTime, setClosingTime] = useState("20:00");
-  const [isOperational, setIsOperational] = useState(true);
+  const { userProfile } = useAuth(); // NEW: Use useAuth hook
+  const [canteenName, setCanteenName] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userProfile?.collegeName) {
-      toast.error("User profile or college name not found.");
+    if (!canteenName.trim()) {
+      toast.error("Canteen name cannot be empty.");
       return;
     }
-    if (!name || !location || !contactInfo || !openingTime || !closingTime) {
-      toast.error("Please fill in all required fields.");
+    if (!userProfile?.collegeName) { // NEW: Check for collegeName
+      toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
-
-    try {
-      await onSubmit({
-        name: name.trim(),
-        location: location.trim(),
-        contactInfo: contactInfo.trim(),
-        imageUrl: imageUrl.trim() || undefined,
-        openingTime,
-        closingTime,
-        isOperational,
-        collegeName: userProfile.collegeName, // Pass collegeName here
-      });
-      // Form reset handled by parent on success
-    } catch (error) {
-      console.error("Error submitting canteen form:", error);
-      toast.error("Failed to add canteen.");
-    }
+    await onSubmit(canteenName.trim(), userProfile.collegeName); // NEW: Pass collegeName
+    setCanteenName(""); // Clear input after submission attempt
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">Canteen Name</Label>
-        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Main Canteen" required />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="location">Location</Label>
-        <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g., Near Admin Block" required />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contactInfo">Contact Info</Label>
-        <Input id="contactInfo" value={contactInfo} onChange={(e) => setContactInfo(e.target.value)} placeholder="e.g., +91 9876543210" required />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="imageUrl">Image URL (Optional)</Label>
-        <Input id="imageUrl" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://example.com/canteen.jpg" />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="openingTime">Opening Time</Label>
-          <Input id="openingTime" type="time" value={openingTime} onChange={(e) => setOpeningTime(e.target.value)} required />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="closingTime">Closing Time</Label>
-          <Input id="closingTime" type="time" value={closingTime} onChange={(e) => setClosingTime(e.target.value)} required />
-        </div>
-      </div>
-      <div className="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          id="isOperational"
-          checked={isOperational}
-          onChange={(e) => setIsOperational(e.target.checked)}
-          className="h-4 w-4 text-primary rounded"
+    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="canteenName" className="text-left sm:text-right text-foreground">
+          Canteen Name
+        </Label>
+        <Input
+          id="canteenName"
+          value={canteenName}
+          onChange={(e) => setCanteenName(e.target.value)}
+          className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+          placeholder="e.g., Main Mess, Annex Cafe"
+          required
+          disabled={loading}
         />
-        <Label htmlFor="isOperational">Currently Operational</Label>
       </div>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={loading} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
           Cancel
         </Button>
-        <Button type="submit" disabled={loading}>
-          {loading ? "Adding..." : "Add Canteen"}
+        <Button type="submit" disabled={loading} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Add Canteen"}
         </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 };

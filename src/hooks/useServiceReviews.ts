@@ -1,25 +1,24 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query, ID } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite';
+import { useAuth } from '@/context/AuthContext';
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const SERVICE_REVIEWS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_SERVICE_REVIEWS_COLLECTION_ID;
-
-export interface ServiceReview extends AppwriteDocument {
+export interface ServiceReview extends Models.Document {
   serviceId: string;
-  providerId: string; // Added providerId
+  sellerId: string; // NEW: Added sellerId
   reviewerId: string;
   reviewerName: string;
-  rating: number; // 1-5
+  rating: number; // 1-5 stars
   comment: string;
   collegeName: string;
+}
+
+interface SubmitReviewData {
+  rating: number;
+  comment: string;
 }
 
 interface ServiceReviewsState {
@@ -27,100 +26,156 @@ interface ServiceReviewsState {
   averageRating: number;
   isLoading: boolean;
   error: string | null;
-  submitReview: (serviceId: string, providerId: string, rating: number, comment: string) => Promise<void>;
   refetch: () => void;
+  submitReview: (serviceId: string, sellerId: string, reviewData: SubmitReviewData) => Promise<void>; // NEW: Added sellerId to submitReview
 }
 
-const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
-  const { user, userPreferences } = useAuth();
+export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
+  const { user, userProfile, isLoading: isAuthLoading } = useAuth();
   const [reviews, setReviews] = useState<ServiceReview[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchReviews = async () => {
+  const calculateAverageRating = useCallback((reviewList: ServiceReview[]) => {
+    if (reviewList.length === 0) return 0;
+    const totalRating = reviewList.reduce((sum, review) => sum + review.rating, 0);
+    return totalRating / reviewList.length;
+  }, []);
+
+  const fetchReviews = useCallback(async () => {
+    // Check for environment variable configuration
+    if (APPWRITE_SERVICE_REVIEWS_COLLECTION_ID === 'YOUR_SERVICE_REVIEWS_COLLECTION_ID' || !APPWRITE_SERVICE_REVIEWS_COLLECTION_ID) {
+      const msg = "APPWRITE_SERVICE_REVIEWS_COLLECTION_ID is not configured. Please set it in your .env file.";
+      console.error(msg);
+      setError(msg);
+      setIsLoading(false);
+      return;
+    }
+
+    // Wait for auth to load and userProfile to be available
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setReviews([]);
+      setAverageRating(0);
+      setError(null);
+      return;
+    }
+
+    if (!serviceId) {
+      setIsLoading(false);
+      setReviews([]);
+      setAverageRating(0);
+      setError("Service ID is missing. Cannot fetch reviews.");
+      return;
+    }
+    if (!userProfile?.collegeName) {
+      setIsLoading(false);
+      setReviews([]);
+      setAverageRating(0);
+      setError("User college information is missing. Cannot fetch reviews.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const queries = [Query.orderDesc('$createdAt')];
-      if (serviceId) {
-        queries.push(Query.equal('serviceId', serviceId));
-      }
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        queries.push(Query.equal('collegeName', userPreferences.collegeName));
-      }
-
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        SERVICE_REVIEWS_COLLECTION_ID,
-        queries
+        APPWRITE_DATABASE_ID,
+        APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+        [
+          Query.equal('serviceId', serviceId),
+          Query.equal('collegeName', userProfile.collegeName),
+          Query.orderDesc('$createdAt')
+        ]
       );
-      const fetchedReviews = response.documents as ServiceReview[]; // Type assertion is now safer
+      const fetchedReviews = response.documents as unknown as ServiceReview[];
       setReviews(fetchedReviews);
-
-      if (fetchedReviews.length > 0) {
-        const totalRating = fetchedReviews.reduce((sum, review) => sum + review.rating, 0);
-        setAverageRating(totalRating / fetchedReviews.length);
-      } else {
-        setAverageRating(0);
-      }
+      setAverageRating(calculateAverageRating(fetchedReviews));
     } catch (err: any) {
-      setError('Failed to fetch service reviews.');
-      console.error('Error fetching service reviews:', err);
-      toast.error('Failed to load service reviews.');
+      console.error("Error fetching service reviews:", err);
+      setError(`Failed to load service reviews: ${err.message}. Please check Appwrite collection ID, permissions, and schema.`);
+      toast.error(`Failed to load service reviews: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [serviceId, userProfile?.collegeName, calculateAverageRating, isAuthLoading]);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [serviceId, userPreferences?.collegeName]);
-
-  const submitReview = async (
-    targetServiceId: string,
-    providerId: string,
-    rating: number,
-    comment: string
-  ) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to submit a review.");
+  const submitReview = useCallback(async (serviceId: string, sellerId: string, reviewData: SubmitReviewData) => { // NEW: Added sellerId
+    if (!user || !userProfile || !serviceId || !sellerId) { // NEW: Check sellerId
+      toast.error("You must be logged in, select a service, and have seller info to submit a review.");
+      return;
+    }
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
       return;
     }
 
     try {
-      const newReview = await databases.createDocument(
-        DATABASE_ID,
-        SERVICE_REVIEWS_COLLECTION_ID,
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
         ID.unique(),
         {
-          serviceId: targetServiceId,
-          providerId: providerId,
+          ...reviewData,
+          serviceId: serviceId,
+          sellerId: sellerId, // NEW: Include sellerId
           reviewerId: user.$id,
           reviewerName: user.name,
-          rating,
-          comment,
-          collegeName: userPreferences.collegeName,
-        },
-        [
-          Models.Permission.read(Models.Role.any()),
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
+          collegeName: userProfile.collegeName,
+        }
       );
-      setReviews(prev => {
-        const updatedReviews = [newReview as ServiceReview, ...prev];
-        const totalRating = updatedReviews.reduce((sum, review) => sum + review.rating, 0);
-        setAverageRating(totalRating / updatedReviews.length);
-        return updatedReviews;
-      });
-      toast.success("Review posted successfully!");
+      toast.success("Review submitted successfully!");
+      fetchReviews(); // Refetch to update the list and average rating
     } catch (err: any) {
-      toast.error("Failed to post review: " + err.message);
-      console.error("Error posting review:", err);
+      console.error("Error submitting review:", err);
+      toast.error(err.message || "Failed to submit review.");
+      throw err;
     }
-  };
+  }, [user, userProfile, fetchReviews]);
 
-  return { reviews, averageRating, isLoading, error, submitReview, refetch: fetchReviews };
+  useEffect(() => {
+    fetchReviews();
+
+    if (!serviceId || !userProfile?.collegeName) return;
+
+    const unsubscribe = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICE_REVIEWS_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as ServiceReview;
+
+        if (payload.serviceId !== serviceId || payload.collegeName !== userProfile.collegeName) {
+          return;
+        }
+
+        setReviews(prev => {
+          let updatedReviews = prev;
+          const existingIndex = prev.findIndex(r => r.$id === payload.$id);
+
+          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+            if (existingIndex === -1) {
+              toast.info(`New review for ${serviceId}.`);
+              updatedReviews = [payload, ...prev];
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+            if (existingIndex !== -1) {
+              updatedReviews = prev.map(r => r.$id === payload.$id ? payload : r);
+            }
+          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
+            if (existingIndex !== -1) {
+              updatedReviews = prev.filter(r => r.$id !== payload.$id);
+            }
+          }
+          setAverageRating(calculateAverageRating(updatedReviews));
+          return updatedReviews;
+        });
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchReviews, serviceId, userProfile?.collegeName, calculateAverageRating]);
+
+  return { reviews, averageRating, isLoading, error, refetch: fetchReviews, submitReview };
 };
-
-export default useServiceReviews;

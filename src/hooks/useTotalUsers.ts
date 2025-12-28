@@ -1,66 +1,76 @@
+"use client";
+
 import { useState, useEffect, useCallback } from 'react';
-import { Client, Databases, Query } from 'appwrite';
-import { useAuth } from '@/context/AuthContext';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
+import { Query } from 'appwrite';
 import { toast } from 'sonner';
-
-// Initialize Appwrite client
-const client = new Client();
-client
-  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
-  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
-
-const databases = new Databases(client);
-
-// Collection IDs
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const USER_PREFERENCES_COLLECTION_ID = import.meta.env.VITE_APPWRITE_USER_PREFERENCES_COLLECTION_ID;
+import { useAuth } from '@/context/AuthContext';
 
 interface TotalUsersState {
   totalUsers: number;
   isLoading: boolean;
   error: string | null;
-  refetch: () => Promise<void>;
+  refetch: () => void;
 }
 
 export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => {
-  const { userProfile, isLoading: isAuthLoading } = useAuth(); // Use userProfile and isLoading
+  const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalUsers = useCallback(async () => {
+    // If userProfile is not yet loaded or is null, we can't fetch.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
+      return;
+    }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile.collegeName;
+
     setIsLoading(true);
     setError(null);
     try {
-      const queries = [
-        collegeNameFilter ? Query.equal('collegeName', collegeNameFilter) : Query.limit(1000) // Fetch all if no filter
-      ];
+      const queries = []; 
+
+      if (!isDeveloper && collegeToFilterBy) {
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
+      }
 
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        USER_PREFERENCES_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_USER_PROFILES_COLLECTION_ID,
         queries
       );
       setTotalUsers(response.total);
     } catch (err: any) {
       console.error("Error fetching total users:", err);
-      setError("Failed to fetch total users.");
-      toast.error("Failed to load user count.");
+      setError(err.message || "Failed to load total users for analytics.");
+      toast.error("Failed to load total users for analytics.");
     } finally {
       setIsLoading(false);
     }
-  }, [collegeNameFilter]);
+  }, [collegeNameFilter, userProfile]);
 
   useEffect(() => {
-    if (!isAuthLoading) {
-      fetchTotalUsers();
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setTotalUsers(0); // Clear data while auth is loading
+      setError(null);
+      return;
     }
-  }, [fetchTotalUsers, isAuthLoading]);
 
-  return {
-    totalUsers,
-    isLoading,
-    error,
-    refetch: fetchTotalUsers,
-  };
+    if (userProfile === null) {
+      setIsLoading(false);
+      setTotalUsers(0);
+      setError("User profile not loaded. Cannot fetch total users.");
+      return;
+    }
+
+    // If auth is done and userProfile is available, fetch data
+    fetchTotalUsers();
+  }, [fetchTotalUsers, isAuthLoading, userProfile]);
+
+  return { totalUsers, isLoading, error, refetch: fetchTotalUsers };
 };

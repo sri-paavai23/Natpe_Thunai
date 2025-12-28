@@ -1,89 +1,95 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { useErrandListings, ErrandType } from '@/hooks/useErrandListings';
-import { toast } from 'sonner';
+"use client";
 
+import React, { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import DeletionInfoMessage from "@/components/DeletionInfoMessage";
+
+// Define the schema for the form
 const formSchema = z.object({
-  title: z.string().min(3, { message: "Title must be at least 3 characters." }),
+  title: z.string().min(2, { message: "Title must be at least 2 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
-  type: z.enum(["Delivery", "Pickup", "Shopping", "Academic Help", "Other"]),
-  reward: z.coerce.number().min(0, { message: "Reward cannot be negative." }),
-  contactInfo: z.string().min(1, { message: "Contact information is required." }),
-  location: z.string().optional(),
+  type: z.string().min(1, { message: "Please select a need type." }),
+  otherTypeDescription: z.string().optional(), // For 'other' type
+  compensation: z.string().min(2, { message: "Compensation details are required." }),
   deadline: z.date().optional(),
+  contact: z.string().min(5, { message: "Contact information is required." }),
 });
 
 interface PostErrandFormProps {
-  onSuccess: () => void;
+  onSubmit: (data: z.infer<typeof formSchema>) => Promise<void>;
+  onCancel: () => void;
+  typeOptions: { value: string; label: string }[];
+  initialType?: string;
 }
 
-const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
-  const { postErrand } = useErrandListings();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
+const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSubmit, onCancel, typeOptions, initialType }) => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       description: "",
-      type: "Delivery",
-      reward: 0,
-      contactInfo: "",
-      location: "",
+      type: "",
+      otherTypeDescription: "",
+      compensation: "",
       deadline: undefined,
+      contact: "",
     },
   });
 
-  const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    setIsSubmitting(true);
-    try {
-      await postErrand({ // Corrected argument type to match Omit in hook
-        title: data.title,
-        description: data.description,
-        type: data.type,
-        reward: data.reward,
-        contactInfo: data.contactInfo,
-        location: data.location || undefined,
-        deadline: data.deadline?.toISOString() || undefined,
-      });
-      onSuccess();
-      form.reset();
-    } catch (error) {
-      console.error("Error posting errand:", error);
-      toast.error("Failed to post errand.");
-    } finally {
-      setIsSubmitting(false);
+  // Effect to set initial type when component mounts or initialType changes
+  useEffect(() => {
+    if (initialType) {
+      const isStandardType = typeOptions.some(option => option.value === initialType);
+      if (isStandardType) {
+        form.setValue("type", initialType);
+        form.setValue("otherTypeDescription", ""); // Clear if it was previously 'other'
+      } else {
+        form.setValue("type", "other");
+        form.setValue("otherTypeDescription", initialType);
+      }
+    } else {
+      // Reset type if initialType is cleared (e.g., after form submission/cancel)
+      form.setValue("type", "");
+      form.setValue("otherTypeDescription", "");
     }
+  }, [initialType, typeOptions, form]);
+
+  const handleSubmit = async (data: z.infer<typeof formSchema>) => {
+    await onSubmit(data);
   };
+
+  const selectedType = form.watch("type");
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+        <DeletionInfoMessage />
         <FormField
           control={form.control}
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Errand Title</FormLabel>
+              <FormLabel>Need Title</FormLabel> {/* Changed label */}
               <FormControl>
-                <Input placeholder="e.g., Pick up groceries" {...field} />
+                <Input placeholder="e.g., Help with math homework" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+
         <FormField
           control={form.control}
           name="description"
@@ -91,75 +97,68 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea placeholder="Detailed description of the errand..." rows={3} {...field} />
+                <Textarea placeholder="Provide details about your need..." {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+
         <FormField
           control={form.control}
           name="type"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Errand Type</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <FormLabel>Need Type</FormLabel> {/* Changed label */}
+              <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select errand type" />
+                    <SelectValue placeholder="Select a need type" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="Delivery">Delivery</SelectItem>
-                  <SelectItem value="Pickup">Pickup</SelectItem>
-                  <SelectItem value="Shopping">Shopping</SelectItem>
-                  <SelectItem value="Academic Help">Academic Help</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  {typeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {selectedType === "other" && (
+          <FormField
+            control={form.control}
+            name="otherTypeDescription"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Specify Other Type</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., Help with coding assignment" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         <FormField
           control={form.control}
-          name="reward"
+          name="compensation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Reward (₹)</FormLabel>
+              <FormLabel>Compensation</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="50" {...field} />
+                <Input placeholder="e.g., $10, coffee, help with homework" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="contactInfo"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Contact Information</FormLabel>
-              <FormControl>
-                <Input placeholder="Your phone number or email" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="location"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Location (Optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., College Library" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+
         <FormField
           control={form.control}
           name="deadline"
@@ -172,12 +171,12 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-full justify-start text-left font-normal",
+                        "w-full pl-3 text-left font-normal",
                         !field.value && "text-muted-foreground"
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP") : <span>Set a deadline</span>}
+                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
                   </FormControl>
                 </PopoverTrigger>
@@ -195,9 +194,27 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? "Posting Errand..." : "Post Errand"}
-        </Button>
+
+        <FormField
+          control={form.control}
+          name="contact"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contact Information</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., @your_username, 123-456-7890" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">Post Need</Button> {/* Changed button text */}
+        </div>
       </form>
     </Form>
   );

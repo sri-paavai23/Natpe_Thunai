@@ -1,87 +1,74 @@
 import React, { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useMarketListings, ProductCategory } from '@/hooks/useMarketListings'; // Import Product from useMarketListings
-import ProductCard from './ProductCard'; // Assuming ProductCard exists and uses this Product type
-import { Loader2, AlertTriangle, Laptop, Book, Shirt, Package, MoreHorizontal } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProductListingCard from "@/components/ProductListingCard";
+import { Product } from "@/lib/mockData"; // Import Product interface
+import { Skeleton } from "@/components/ui/skeleton";
+import { useMarketListings } from '@/hooks/useMarketListings'; // Import the new hook
+import { cn } from '@/lib/utils'; // Import cn for utility classes
 
-const categoryIcons = {
-  All: Package,
-  Electronics: Laptop,
-  Books: Book,
-  Apparel: Shirt,
-  Services: MoreHorizontal, // Services might be a separate section, but included for completeness
-  Other: MoreHorizontal,
+// Helper function to filter products by type
+const filterProducts = (products: Product[], type: Product['type'] | 'all'): Product[] => {
+  if (type === 'all') return products;
+  // Handle both 'gift' and 'gift-request' under the 'gift' tab for now, 
+  // but the tab value remains 'gift' for filtering simplicity.
+  if (type === 'gift') {
+    return products.filter(p => p.type === 'gift' || p.type === 'gift-request');
+  }
+  return products.filter(p => p.type === type);
 };
 
-const MarketTabs: React.FC = () => {
-  const [activeCategory, setActiveCategory] = useState<ProductCategory | "All">("All");
-  const { products, isLoading, error } = useMarketListings();
+interface MarketTabsProps {
+  initialTab?: Product['type'] | 'all';
+}
 
-  const filteredProducts = activeCategory === "All"
-    ? products
-    : products.filter(product => product.category === activeCategory);
+const MarketTabs: React.FC<MarketTabsProps> = ({ initialTab = 'all' }) => {
+  const [activeTab, setActiveTab] = useState<Product['type'] | 'all'>(initialTab);
+  const { products, isLoading, error } = useMarketListings(); // useMarketListings already filters by collegeName internally
 
-  if (isLoading) {
+  const items = filterProducts(products, activeTab);
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full" />
+          ))}
+        </div>
+      );
+    }
+    
+    if (error) {
+        return <p className="p-4 text-center text-destructive">Error loading listings: {error}</p>;
+    }
+
+    if (items.length === 0) {
+      return <p className="p-4 text-center text-gray-500">No listings found for this category in your college.</p>;
+    }
+
     return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Marketplace Categories</CardTitle>
-        </CardHeader>
-        <CardContent className="flex justify-center items-center h-48">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-muted-foreground">Loading products...</span>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
+        {items.map((product) => (
+          <ProductListingCard key={product.$id} product={product} />
+        ))}
+      </div>
     );
-  }
-
-  if (error) {
-    return (
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Marketplace Categories</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col justify-center items-center h-48 text-red-500">
-          <AlertTriangle className="h-8 w-8 mb-2" />
-          <span>Error loading products: {error}</span>
-        </CardContent>
-      </Card>
-    );
-  }
+  };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Marketplace Categories</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as ProductCategory | "All")} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:grid-cols-6">
-            {Object.entries(categoryIcons).map(([category, Icon]) => (
-              <TabsTrigger key={category} value={category}>
-                <Icon className="h-4 w-4 mr-2" /> {category}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          <TabsContent value={activeCategory} className="mt-4">
-            <h2 className="text-2xl font-semibold mb-4 text-foreground">
-              {activeCategory === "All" ? "All Products" : `${activeCategory} Products`}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map(product => (
-                  <ProductCard key={product.$id} product={product} />
-                ))
-              ) : (
-                <p className="col-span-full text-center text-muted-foreground">No products found in this category.</p>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Product['type'] | 'all')} className="w-full">
+      <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-muted p-1 text-muted-foreground rounded-md shadow-sm scrollbar-hide">
+        <TabsTrigger value="all" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">All</TabsTrigger>
+        <TabsTrigger value="sell" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sell</TabsTrigger>
+        <TabsTrigger value="rent" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Rent</TabsTrigger>
+        <TabsTrigger value="gift" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Handcrafts & Gifts</TabsTrigger>
+        <TabsTrigger value="sports" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Sports</TabsTrigger>
+      </TabsList>
+      
+      <TabsContent value={activeTab}>
+        {renderContent()}
+      </TabsContent>
+    </Tabs>
   );
 };
 

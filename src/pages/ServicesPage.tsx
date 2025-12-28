@@ -1,124 +1,115 @@
 "use client";
 
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle } from 'lucide-react';
+import React from "react";
+import { MadeWithDyad } from "@/components/made-with-dyad";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { HeartHandshake } from "lucide-react"; // Import HeartHandshake
+import StudentWelfareLinks from "@/components/StudentWelfareLinks"; // NEW IMPORT
 
 const ServicesPage = () => {
   const navigate = useNavigate();
-  const { userPreferences } = useAuth();
+  const { userProfile } = useAuth();
 
-  if (!userPreferences?.collegeName) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-background-dark p-4">
-        <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center">Services</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center text-muted-foreground p-4">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-            <p>Please set your college name in your profile to access services.</p>
-            <Button onClick={() => navigate('/profile/details')} className="mt-4">
-              Go to Profile
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Get user's age from profile, default to 0 if not available
+  const userAge = userProfile?.age || 0; 
+  // Content is age-gated if user is 25 or older (meaning they CANNOT access it)
+  const isAgeGated = userAge >= 25; 
+
+  const handleServiceClick = (path: string, serviceName: string) => {
+    if (isAgeGated && (path === "/services/errands" || path === "/services/short-term")) {
+      toast.error(`Access denied: "${serviceName}" is not available for users aged 25 and above.`);
+      return;
+    }
+    toast.info(`Navigating to "${serviceName}"...`);
+    navigate(path);
+  };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <h1 className="text-3xl font-bold text-foreground mb-6">Campus Services</h1>
+    <div className="min-h-screen bg-background text-foreground p-4 pb-20">
+      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">The Grind (Services)</h1>
+      <div className="max-w-md mx-auto space-y-6">
+        {/* Student Welfare & E-commerce Links */}
+        <StudentWelfareLinks />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="bg-card text-foreground shadow-lg rounded-lg border-border hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Freelance Services</CardTitle>
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/freelance", "Freelance Section")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Freelance Section</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Offer your skills or find help for various tasks.
-            </p>
-            <Button onClick={() => navigate('/services/freelance')} className="w-full">
-              Explore Freelance
-            </Button>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Resume Building, Video Editing, Content Writing, and more.</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-card text-foreground shadow-lg rounded-lg border-border hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Errands & Tasks</CardTitle>
+        {/* Errands Card (Age Gated) */}
+        <Card 
+          className={`bg-card p-4 rounded-lg shadow-md border border-border transition-shadow ${isAgeGated ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-xl'}`} 
+          onClick={() => handleServiceClick("/services/errands", "Errands")}
+        >
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Errands</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Need something done? Post an errand or help others.
-            </p>
-            <Button onClick={() => navigate('/services/errands')} className="w-full">
-              Run Errands
-            </Button>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Note-writing, small jobs, delivery services {isAgeGated ? "(Access Denied)" : "(Age-Gated)"}.</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-card text-foreground shadow-lg rounded-lg border-border hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Food & Wellness</CardTitle>
+        {/* Post a Need Card (Age Gated) */}
+        <Card 
+          className={`bg-card p-4 rounded-lg shadow-md border border-border transition-shadow ${isAgeGated ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-xl'}`} 
+          onClick={() => handleServiceClick("/services/short-term", "Post a Need")}
+        >
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Post a Need</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Find home-cooked meals, healthy options, or wellness services.
-            </p>
-            <Button onClick={() => navigate('/services/food-wellness')} className="w-full">
-              Discover Food & Wellness
-            </Button>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Post requests for products, services, errands, and more {isAgeGated ? "(Access Denied)" : "(Age-Gated)"}.</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-card text-foreground shadow-lg rounded-lg border-border hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Lost & Found</CardTitle>
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/food-wellness", "Food & Wellness")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Food & Wellness</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Post lost items or report found ones to help your community.
-            </p>
-            <Button onClick={() => navigate('/services/lost-found')} className="w-full">
-              Browse Lost & Found
-            </Button>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Homemade food/remedies with cancellation warning and quality assurance.</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-card text-foreground shadow-lg rounded-lg border-border hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Cash Exchange</CardTitle>
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ticket-booking", "Ticket Booking")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Ticket Booking</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Exchange cash with peers securely on campus.
-            </p>
-            <Button onClick={() => navigate('/services/cash-exchange')} className="w-full">
-              Manage Cash Exchange
-            </Button>
-          </CardContent>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">IRCTC, Abhi Bus, Paytm redirection for easy travel bookings.</p>
+            </CardContent>
         </Card>
 
-        <Card className="bg-card text-foreground shadow-lg rounded-lg border-border hover:shadow-xl transition-shadow duration-300">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Short-Term Needs</CardTitle>
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/collaborators", "Project Collaborator Tab")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground">Project Collaborator Tab</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Post or fulfill urgent, short-term requests.
-            </p>
-            <Button onClick={() => navigate('/services/short-term-needs')} className="w-full">
-              View Short-Term Needs
-            </Button>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Post or search for collaborators for academic or personal projects.</p>
+          </CardContent>
+        </Card>
+        
+        {/* New Ambassador Program Card */}
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ambassador-program", "Ambassador Program")}>
+          <CardHeader className="p-0 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <HeartHandshake className="h-5 w-5 text-secondary-neon" /> Ambassador Program
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <p className="text-muted-foreground">Join our team to facilitate deliveries and ensure trust in transactions.</p>
           </CardContent>
         </Card>
       </div>
+      <MadeWithDyad />
     </div>
   );
 };

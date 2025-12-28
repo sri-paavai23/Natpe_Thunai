@@ -1,123 +1,143 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Databases, Query, Models, ID } from 'appwrite';
-import { client } from '@/lib/appwrite'; // Assuming client is exported from here
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
+import { Models, Query } from 'appwrite';
 import { toast } from 'sonner';
-import { AppwriteDocument } from '@/types/appwrite'; // Import AppwriteDocument
+import { Product } from '@/lib/mockData';
+import { useAuth } from '@/context/AuthContext';
 
-const databases = new Databases(client);
-
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const MARKET_LISTINGS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_MARKET_LISTINGS_COLLECTION_ID;
-
-export interface Product extends AppwriteDocument {
-  title: string;
-  description: string;
-  price: number;
-  category: string;
-  condition: string;
-  imageUrl?: string;
-  sellerId: string;
-  sellerName: string;
-  collegeName: string;
-  contactInfo: string;
-  type: 'sell' | 'rent' | 'gift' | 'sports';
-  status: 'available' | 'sold' | 'rented';
+interface MarketListingsState {
+  products: Product[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
 }
 
-const useMarketListings = () => {
-  const { user, userPreferences } = useAuth();
+export const useMarketListings = (): MarketListingsState => {
+  const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
+    // If userProfile is not yet loaded or is null, we can't fetch products.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
+      return;
+    }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = userProfile.collegeName;
+
     setIsLoading(true);
     setError(null);
     try {
-      const queries = [Query.orderDesc('$createdAt')];
-      if (userPreferences?.collegeName && userPreferences.collegeName !== 'N/A') {
-        queries.push(Query.equal('collegeName', userPreferences.collegeName));
+      const queries = [
+        Query.orderDesc('$createdAt'),
+        Query.equal('status', 'available'),
+      ];
+      if (!isDeveloper) {
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
       }
 
       const response = await databases.listDocuments(
-        DATABASE_ID,
-        MARKET_LISTINGS_COLLECTION_ID,
+        APPWRITE_DATABASE_ID,
+        APPWRITE_PRODUCTS_COLLECTION_ID,
         queries
       );
-      setProducts(response.documents as Product[]); // Type assertion is now safer
+      
+      const productsWithSellerInfo = await Promise.all(
+        (response.documents as unknown as Product[]).map(async (product) => {
+          try {
+            const sellerProfileResponse = await databases.listDocuments(
+              APPWRITE_DATABASE_ID,
+              APPWRITE_USER_PROFILES_COLLECTION_ID,
+              [Query.equal('userId', product.userId), Query.limit(1)] // Changed to product.userId
+            );
+            const sellerProfile = sellerProfileResponse.documents[0] as any;
+            return {
+              ...product,
+              sellerLevel: sellerProfile?.level ?? 1,
+            };
+          } catch (sellerError) {
+            console.warn(`Could not fetch profile for seller ${product.userId}:`, sellerError); // Changed to product.userId
+            return { ...product, sellerLevel: 1 };
+          }
+        })
+      );
+
+      setProducts(productsWithSellerInfo);
     } catch (err: any) {
-      setError('Failed to fetch market listings.');
-      console.error('Error fetching market listings:', err);
-      toast.error('Failed to load market listings.');
+      console.error("Error fetching market listings:", err);
+      setError(err.message || "Failed to load market listings.");
+      toast.error("Failed to load market listings.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userProfile]); // Dependencies for useCallback are correct
 
   useEffect(() => {
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setProducts([]); // Clear products while auth is loading
+      setError(null);
+      return;
+    }
+
+    if (userProfile === null) {
+      setIsLoading(false);
+      setProducts([]);
+      setError("User profile not loaded. Cannot fetch market listings.");
+      return;
+    }
+
+    // If auth is done and userProfile is available, fetch products
     fetchProducts();
-  }, [userPreferences?.collegeName]);
 
-  const postProduct = async (productData: Omit<Product, '$id' | '$createdAt' | '$updatedAt' | '$permissions' | '$collectionId' | '$databaseId' | '$sequence' | 'sellerId' | 'sellerName' | 'collegeName' | 'status'>) => {
-    if (!user || !userPreferences) {
-      toast.error("You must be logged in to post a product.");
-      return;
-    }
+    // Setup real-time subscriptions
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = userProfile.collegeName;
 
-    try {
-      const newProduct = await databases.createDocument(
-        DATABASE_ID,
-        MARKET_LISTINGS_COLLECTION_ID,
-        ID.unique(),
-        {
-          ...productData,
-          sellerId: user.$id,
-          sellerName: user.name,
-          collegeName: userPreferences.collegeName,
-          status: 'available',
-        },
-        [
-          Models.Permission.read(Models.Role.any()),
-          Models.Permission.write(Models.Role.user(user.$id)),
-        ]
-      );
-      setProducts(prev => [newProduct as Product, ...prev]); // Type assertion is now safer
-      toast.success("Product posted successfully!");
-    } catch (err: any) {
-      toast.error("Failed to post product: " + err.message);
-      console.error("Error posting product:", err);
-    }
-  };
+    // Only subscribe if there's a valid college to filter by, or if it's a developer viewing all
+    if (!isDeveloper && !collegeToFilterBy) return;
 
-  const updateProductStatus = async (productId: string, newStatus: Product['status']) => {
-    if (!user) {
-      toast.error("You must be logged in to update product status.");
-      return;
-    }
-    try {
-      await databases.updateDocument(
-        DATABASE_ID,
-        MARKET_LISTINGS_COLLECTION_ID,
-        productId,
-        { status: newStatus },
-        [Models.Permission.write(Models.Role.user(user.$id))]
-      );
-      setProducts(prev =>
-        prev.map(product =>
-          product.$id === productId ? { ...product, status: newStatus } : product
-        )
-      );
-      toast.success("Product status updated.");
-    } catch (err: any) {
-      toast.error("Failed to update product status: " + err.message);
-      console.error("Error updating product status:", err);
-    }
-  };
+    const unsubscribeProducts = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_PRODUCTS_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as unknown as Product;
 
-  return { products, isLoading, error, refetch: fetchProducts, postProduct, updateProductStatus };
+        // Filter real-time updates by collegeName if not a developer
+        if (!isDeveloper && payload.collegeName !== collegeToFilterBy) {
+            return;
+        }
+
+        // For any product update (create, update, delete), refetch to ensure sellerLevel and sorting are correct.
+        // This is simpler than trying to merge/update locally with seller profile data.
+        fetchProducts();
+      }
+    );
+
+    const unsubscribeUserProfiles = databases.client.subscribe(
+      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_USER_PROFILES_COLLECTION_ID}.documents`,
+      (response) => {
+        const payload = response.payload as any;
+        if (response.events.includes("databases.*.collections.*.documents.*.update")) {
+          // If a user profile is updated, and that user is a seller of an existing product, refetch products.
+          // This ensures sellerLevel badges are up-to-date.
+          const isSellerOfExistingProduct = products.some(p => p.userId === payload.userId); // Changed to userId
+          if (isSellerOfExistingProduct) {
+            fetchProducts();
+          }
+        }
+      }
+    );
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeUserProfiles();
+    };
+  }, [fetchProducts, isAuthLoading, userProfile]);
+
+  return { products, isLoading, error, refetch: fetchProducts };
 };
-
-export default useMarketListings;

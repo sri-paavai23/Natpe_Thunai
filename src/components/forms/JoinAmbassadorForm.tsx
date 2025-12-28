@@ -1,123 +1,155 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { toast } from 'sonner';
+"use client";
 
-const formSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  email: z.string().email({ message: "Invalid email address." }),
-  mobile: z.string().regex(/^\+?[1-9]\d{9,14}$/, { message: "Invalid mobile number." }),
-  whyJoin: z.string().min(50, { message: "Please tell us more about why you want to join (min 50 characters)." }),
-});
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { DialogFooter } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
+import { databases, APPWRITE_DATABASE_ID } from "@/lib/appwrite"; // NEW: Import Appwrite services
+import { ID } from 'appwrite'; // NEW: Import ID
+import { Loader2 } from "lucide-react"; // NEW: Import Loader2
+
+// Define a new collection ID for ambassador applications
+export const APPWRITE_AMBASSADOR_APPLICATIONS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_AMBASSADOR_APPLICATIONS_COLLECTION_ID || 'ambassador_applications';
 
 interface JoinAmbassadorFormProps {
-  onApply: (data: z.infer<typeof formSchema>) => void;
+  onApply: (data: {
+    name: string;
+    email: string;
+    mobile: string;
+    whyJoin: string;
+  }) => void;
   onCancel: () => void;
 }
 
 const JoinAmbassadorForm: React.FC<JoinAmbassadorFormProps> = ({ onApply, onCancel }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, userProfile } = useAuth(); // NEW: Use useAuth hook
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [whyJoin, setWhyJoin] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false); // NEW: Add loading state
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      mobile: "",
-      whyJoin: "",
-    },
-  });
+  const handleSubmit = async (e: React.FormEvent) => { // NEW: Make handleSubmit async
+    e.preventDefault();
+    if (!user || !userProfile) {
+      toast.error("You must be logged in to apply.");
+      return;
+    }
+    if (!userProfile.collegeName) {
+      toast.error("Your profile is missing college information. Please update your profile first.");
+      return;
+    }
+    if (!name || !email || !mobile || !whyJoin) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
 
-  const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    setIsSubmitting(true);
+    setIsSubmitting(true); // NEW: Set loading state
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      onApply(data);
-      toast.success("Application submitted successfully!");
-      form.reset();
-    } catch (error) {
-      console.error("Ambassador application failed:", error);
-      toast.error("Failed to submit application. Please try again.");
+      const applicationData = {
+        applicantId: user.$id,
+        applicantName: name,
+        applicantEmail: email,
+        applicantMobile: mobile, // FIX: Changed to applicantMobile (camelCase)
+        whyJoin: whyJoin,
+        collegeName: userProfile.collegeName, // NEW: Add collegeName
+        status: "Pending", // Initial status
+      };
+
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_AMBASSADOR_APPLICATIONS_COLLECTION_ID,
+        ID.unique(),
+        applicationData
+      );
+
+      toast.success("Ambassador application submitted! We'll review it shortly.");
+      onApply({ name, email, mobile, whyJoin }); // Call original onApply prop
+      setName("");
+      setEmail("");
+      setMobile("");
+      setWhyJoin("");
+    } catch (error: any) {
+      console.error("Error submitting ambassador application:", error);
+      toast.error(error.message || "Failed to submit application. Check Appwrite collection permissions.");
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false); // NEW: Reset loading state
     }
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Full Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Your full name" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="name" className="text-left sm:text-right text-foreground">
+          Your Name
+        </Label>
+        <Input
+          id="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+          placeholder="John Doe"
+          required
+          disabled={isSubmitting}
         />
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="your@example.com" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="email" className="text-left sm:text-right text-foreground">
+          Email
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+          placeholder="your.email@example.com"
+          required
+          disabled={isSubmitting}
         />
-        <FormField
-          control={form.control}
-          name="mobile"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Mobile Number</FormLabel>
-              <FormControl>
-                <Input type="tel" placeholder="+91 9876543210" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="mobile" className="text-left sm:text-right text-foreground">
+          Mobile Number
+        </Label>
+        <Input
+          id="mobile"
+          type="tel"
+          value={mobile}
+          onChange={(e) => setMobile(e.target.value)}
+          className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+          placeholder="9876543210"
+          required
+          disabled={isSubmitting}
         />
-        <FormField
-          control={form.control}
-          name="whyJoin"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Why do you want to join the Ambassador Program?</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Tell us about your motivation and how you can contribute..."
-                  rows={5}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
+        <Label htmlFor="whyJoin" className="text-left sm:text-right text-foreground">
+          Why join us?
+        </Label>
+        <Textarea
+          id="whyJoin"
+          value={whyJoin}
+          onChange={(e) => setWhyJoin(e.target.value)}
+          className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
+          placeholder="Tell us why you'd be a great ambassador..."
+          required
+          disabled={isSubmitting}
         />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting..." : "Apply Now"}
-          </Button>
-        </div>
-      </form>
-    </Form>
+      </div>
+      <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Submit Application"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 };
 
