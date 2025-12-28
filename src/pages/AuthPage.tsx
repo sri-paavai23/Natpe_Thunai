@@ -2,10 +2,8 @@
 
 import React from 'react';
 
-export default function AuthPage() {
-  return (
-    <div>
-      {/* AuthPage content */}
-    </div>
-  );
-}
+const AuthPage = () => {
+  return <h1>Auth Page</h1>;
+};
+
+export default AuthPage;
