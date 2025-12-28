@@ -1,8 +1,15 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Auth = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Redirect to the Index page after authentication
+    navigate('/');
+  }, [navigate]);
 
   return (
     <div>
