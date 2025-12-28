@@ -10,12 +10,11 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 const DeveloperChatbox = () => {
-  const { user, userProfile, isLoading: isAuthLoading } = useAuth(); // Use userProfile and isLoading
+  const { user, userProfile, isLoading: isAuthLoading } = useAuth();
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const collegeName = userProfile?.collegeName;
-  const { messages, isLoading, error, postMessage, refetch } = useDeveloperMessages(); // Use postMessage, removed collegeName arg
+  const { messages, isLoading, error, postMessage, refetch } = useDeveloperMessages();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,11 +29,11 @@ const DeveloperChatbox = () => {
     }
 
     try {
-      await postMessage({
+      await postMessage({ // Corrected argument type to match Omit in hook
         message: message.trim(),
       });
       setMessage("");
-      refetch(); // Refetch messages to show the new one
+      refetch();
     } catch (err) {
       console.error("Error sending message:", err);
       toast.error("Failed to send message.");

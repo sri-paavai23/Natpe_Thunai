@@ -31,6 +31,7 @@ export interface Product extends Models.Document { // Extend Models.Document
   contactInfo: string;
   negotiable: boolean;
   status: "Available" | "Sold" | "Pending";
+  $sequence: number; // Made $sequence required
 }
 
 interface MarketListingsState {
@@ -38,7 +39,7 @@ interface MarketListingsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  postProduct: (productData: Omit<Product, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "sellerId" | "sellerName" | "collegeName" | "status">) => Promise<void>;
+  postProduct: (productData: Omit<Product, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "sellerId" | "sellerName" | "collegeName" | "status" | "$sequence">) => Promise<void>; // Omit $sequence
   updateProduct: (productId: string, productData: Partial<Product>) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
 }
@@ -79,7 +80,7 @@ export const useMarketListings = (): MarketListingsState => {
     }
   }, [fetchProducts, isAuthLoading]);
 
-  const postProduct = async (productData: Omit<Product, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "sellerId" | "sellerName" | "collegeName" | "status">) => {
+  const postProduct = async (productData: Omit<Product, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "sellerId" | "sellerName" | "collegeName" | "status" | "$sequence">) => {
     if (!userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to post a product.");
       return;
@@ -96,6 +97,7 @@ export const useMarketListings = (): MarketListingsState => {
           sellerName: userProfile.name,
           collegeName: userProfile.collegeName,
           status: "Available", // Default status
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setProducts(prev => [newProduct as Product, ...prev]); // Type assertion is now safer

@@ -33,6 +33,7 @@ export interface ServicePost extends Models.Document { // Extend Models.Document
   location?: string; // Where the service is provided
   isCustomOrder?: boolean; // Added for custom food requests
   customOrderDescription?: string; // Added for custom food requests
+  $sequence: number; // Made $sequence required
 }
 
 interface UseServiceListingsState {
@@ -40,7 +41,7 @@ interface UseServiceListingsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  postService: (serviceData: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "providerId" | "providerName" | "collegeName" | "status">) => Promise<void>;
+  postService: (serviceData: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "providerId" | "providerName" | "collegeName" | "status" | "$sequence">) => Promise<void>; // Omit $sequence
   updateServiceStatus: (serviceId: string, newStatus: ServiceStatus) => Promise<void>;
 }
 
@@ -88,7 +89,7 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
     }
   }, [fetchServices, isAuthLoading]);
 
-  const postService = async (serviceData: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "providerId" | "providerName" | "collegeName" | "status">) => {
+  const postService = async (serviceData: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "providerId" | "providerName" | "collegeName" | "status" | "$sequence">) => {
     if (!userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to post a service.");
       return;
@@ -105,6 +106,7 @@ export const useServiceListings = (categories?: string | string[]): UseServiceLi
           providerName: userProfile.name,
           collegeName: userProfile.collegeName,
           status: "Available", // Default status
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setServices(prev => [newService as ServicePost, ...prev]); // Type assertion is now safer

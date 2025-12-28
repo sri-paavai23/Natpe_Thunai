@@ -26,20 +26,19 @@ export interface UserPreferences extends Models.Document { // Extend Models.Docu
   lastLoginStreakClaim?: string; // Date string (ISO format)
   ambassadorDeliveriesCount: number;
   profilePictureUrl?: string; // Added for consistency with Header.tsx
-  // Add any other preferences here
+  $sequence?: number; // Added missing $sequence property
 }
 
 export interface AuthContextType {
   user: Models.User<Models.Preferences> | null;
   isAuthenticated: boolean;
-  isLoading: boolean; // Changed from 'loading' to 'isLoading'
+  isLoading: boolean;
   userProfile: UserPreferences | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>; // Changed from 'signup' to 'register'
+  register: (email: string, password: string, name: string) => Promise<void>;
   updateUserProfile: (preferences: Partial<UserPreferences>) => Promise<void>;
   incrementAmbassadorDeliveriesCount: () => Promise<void>;
-  // Add other methods as needed
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,7 +46,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Changed from 'loading' to 'isLoading'
+  const [isLoading, setIsLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<UserPreferences | null>(null);
 
   const fetchUser = useCallback(async () => {
@@ -65,19 +64,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           USER_PREFERENCES_COLLECTION_ID,
           loggedInUser.$id
         );
-        prefs = prefsDoc as UserPreferences; // Type assertion is now safer as UserPreferences extends Models.Document
+        prefs = prefsDoc as UserPreferences;
       } catch (docError: any) {
         console.warn("User preferences document not found, using defaults.", docError);
       }
 
-      // Construct userProfile with defaults
+      // Construct userProfile with defaults, ensuring all Models.Document properties are present
       const profile: UserPreferences = {
         $id: loggedInUser.$id,
-        $createdAt: loggedInUser.$createdAt,
-        $updatedAt: loggedInUser.$updatedAt,
-        $collectionId: USER_PREFERENCES_COLLECTION_ID,
-        $databaseId: DATABASE_ID,
-        $permissions: loggedInUser.$permissions, // Assuming permissions are inherited or set on creation
+        $createdAt: prefs.$createdAt || loggedInUser.$createdAt,
+        $updatedAt: prefs.$updatedAt || loggedInUser.$updatedAt,
+        $collectionId: prefs.$collectionId || USER_PREFERENCES_COLLECTION_ID,
+        $databaseId: prefs.$databaseId || DATABASE_ID,
+        $permissions: prefs.$permissions || [],
+        $collection: prefs.$collection || undefined,
+        $read: prefs.$read || [],
+        $write: prefs.$write || [],
+        $sequence: prefs.$sequence || 0, // Added $sequence with a default
         name: loggedInUser.name,
         yearOfStudy: prefs.yearOfStudy || 'I',
         collegeName: prefs.collegeName || undefined,
@@ -135,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, name: string) => { // Changed from 'signup'
+  const register = async (email: string, password: string, name: string) => {
     setIsLoading(true);
     try {
       const newUser = await account.create(ID.unique(), email, password, name);
@@ -145,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await databases.createDocument(
         DATABASE_ID,
         USER_PREFERENCES_COLLECTION_ID,
-        newUser.$id, // Use user ID as document ID for 1:1 mapping
+        newUser.$id,
         {
           name: name,
           yearOfStudy: 'I',
@@ -153,7 +156,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isDeveloper: false,
           isAmbassador: false,
           ambassadorDeliveriesCount: 0,
-          // Add other default preferences
         }
       );
 

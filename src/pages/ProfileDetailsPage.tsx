@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FormControl } from '@/components/ui/form'; // Import FormControl
 import { useAuth, UserPreferences } from '@/context/AuthContext';
 import { getGraduationData } from '@/utils/dateUtils';
 import { Mail, Phone, MapPin, Calendar, GraduationCap, Award, Code, Truck } from 'lucide-react';
@@ -114,7 +115,7 @@ const ProfileDetailsPage = () => {
         </CardHeader>
         <CardContent className="flex flex-col items-center text-center">
           <Avatar className="h-24 w-24 mb-4">
-            <AvatarImage src={user.prefs?.profilePictureUrl || "/avatars/01.png"} alt={user.name} />
+            <AvatarImage src={userProfile.profilePictureUrl || "/avatars/01.png"} alt={user.name} /> {/* Corrected here */}
             <AvatarFallback>{user.name ? user.name[0] : 'U'}</AvatarFallback>
           </Avatar>
           <h2 className="text-3xl font-semibold text-foreground">{userProfile.name}</h2>

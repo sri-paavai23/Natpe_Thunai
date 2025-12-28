@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, XCircle, Truck, Utensils, MapPin, Phone, User, Clock } from 'lucide-react';
+import { CheckCircle2, XCircle, Truck, Utensils, MapPin, Phone, User, Clock, DollarSign } from 'lucide-react'; // Import DollarSign
 import { useFoodOrders, FoodOrder, OrderStatus } from '@/hooks/useFoodOrders';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';

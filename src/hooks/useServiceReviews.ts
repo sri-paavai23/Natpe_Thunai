@@ -15,13 +15,14 @@ const databases = new Databases(client);
 const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 const SERVICE_REVIEWS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_SERVICE_REVIEWS_COLLECTION_ID;
 
-export interface ServiceReview extends Models.Document {
+export interface ServiceReview extends Models.Document { // Extend Models.Document
   serviceId: string;
   reviewerId: string;
   reviewerName: string;
   rating: number; // 1-5 stars
   comment: string;
   collegeName: string;
+  $sequence: number; // Made $sequence required
 }
 
 interface ServiceReviewsState {
@@ -29,7 +30,7 @@ interface ServiceReviewsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  postReview: (reviewData: Omit<ServiceReview, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "reviewerId" | "reviewerName" | "collegeName">) => Promise<void>;
+  postReview: (reviewData: Omit<ServiceReview, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "reviewerId" | "reviewerName" | "collegeName" | "$sequence">) => Promise<void>; // Omit $sequence
 }
 
 export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
@@ -69,7 +70,7 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
     }
   }, [fetchReviews, isAuthLoading]);
 
-  const postReview = async (reviewData: Omit<ServiceReview, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "reviewerId" | "reviewerName" | "collegeName">) => {
+  const postReview = async (reviewData: Omit<ServiceReview, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "reviewerId" | "reviewerName" | "collegeName" | "$sequence">) => {
     if (!user || !userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to post a review.");
       return;
@@ -85,6 +86,7 @@ export const useServiceReviews = (serviceId?: string): ServiceReviewsState => {
           reviewerId: user.$id,
           reviewerName: user.name,
           collegeName: userProfile.collegeName,
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setReviews(prev => [newReview as ServiceReview, ...prev]);

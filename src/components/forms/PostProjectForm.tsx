@@ -7,30 +7,24 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { useErrandListings, ErrandType } from '@/hooks/useErrandListings';
+import { useCollaboratorPosts, ProjectCategory } from '@/hooks/useCollaboratorPosts';
 import { toast } from 'sonner';
 
 const formSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
-  type: z.enum(["Delivery", "Pickup", "Shopping", "Academic Help", "Other"]),
-  reward: z.coerce.number().min(0, { message: "Reward cannot be negative." }),
+  category: z.enum(["Academic", "Startup", "Event", "Research", "Other"]),
+  skillsNeeded: z.string().min(1, { message: "At least one skill is required (comma-separated)." }),
   contactInfo: z.string().min(1, { message: "Contact information is required." }),
-  location: z.string().optional(),
-  deadline: z.date().optional(),
+  imageUrl: z.string().url("Must be a valid URL").optional().or(z.literal('')),
 });
 
-interface PostErrandFormProps {
+interface PostProjectFormProps {
   onSuccess: () => void;
 }
 
-const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
-  const { postErrand } = useErrandListings();
+const PostProjectForm: React.FC<PostProjectFormProps> = ({ onSuccess }) => {
+  const { postProject } = useCollaboratorPosts();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -38,31 +32,29 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
     defaultValues: {
       title: "",
       description: "",
-      type: "Delivery",
-      reward: 0,
+      category: "Academic",
+      skillsNeeded: "",
       contactInfo: "",
-      location: "",
-      deadline: undefined,
+      imageUrl: "",
     },
   });
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
-      await postErrand({ // Corrected argument type to match Omit in hook
+      await postProject({
         title: data.title,
         description: data.description,
-        type: data.type,
-        reward: data.reward,
+        category: data.category,
+        skillsNeeded: data.skillsNeeded.split(',').map(s => s.trim()).filter(s => s.length > 0),
         contactInfo: data.contactInfo,
-        location: data.location || undefined,
-        deadline: data.deadline?.toISOString() || undefined,
+        imageUrl: data.imageUrl || undefined,
       });
       onSuccess();
       form.reset();
     } catch (error) {
-      console.error("Error posting errand:", error);
-      toast.error("Failed to post errand.");
+      console.error("Error posting project:", error);
+      toast.error("Failed to post project.");
     } finally {
       setIsSubmitting(false);
     }
@@ -76,9 +68,9 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
           name="title"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Errand Title</FormLabel>
+              <FormLabel>Project Title</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Pick up groceries" {...field} />
+                <Input placeholder="e.g., AI-powered Study Buddy" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -91,7 +83,7 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea placeholder="Detailed description of the errand..." rows={3} {...field} />
+                <Textarea placeholder="Detailed description of your project..." rows={3} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -99,21 +91,21 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
         />
         <FormField
           control={form.control}
-          name="type"
+          name="category"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Errand Type</FormLabel>
+              <FormLabel>Category</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select errand type" />
+                    <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="Delivery">Delivery</SelectItem>
-                  <SelectItem value="Pickup">Pickup</SelectItem>
-                  <SelectItem value="Shopping">Shopping</SelectItem>
-                  <SelectItem value="Academic Help">Academic Help</SelectItem>
+                  <SelectItem value="Academic">Academic</SelectItem>
+                  <SelectItem value="Startup">Startup</SelectItem>
+                  <SelectItem value="Event">Event</SelectItem>
+                  <SelectItem value="Research">Research</SelectItem>
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -123,12 +115,12 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
         />
         <FormField
           control={form.control}
-          name="reward"
+          name="skillsNeeded"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Reward (₹)</FormLabel>
+              <FormLabel>Skills Needed (comma-separated)</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="50" {...field} />
+                <Input placeholder="e.g., React, Node.js, UI/UX" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -149,58 +141,23 @@ const PostErrandForm: React.FC<PostErrandFormProps> = ({ onSuccess }) => {
         />
         <FormField
           control={form.control}
-          name="location"
+          name="imageUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Location (Optional)</FormLabel>
+              <FormLabel>Image URL (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., College Library" {...field} />
+                <Input placeholder="https://example.com/project.jpg" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="deadline"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Deadline (Optional)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP") : <span>Set a deadline</span>}
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={field.value}
-                    onSelect={field.onChange}
-                    disabled={(date) => date < new Date()}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
         <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? "Posting Errand..." : "Post Errand"}
+          {isSubmitting ? "Posting Project..." : "Post Project"}
         </Button>
       </form>
     </Form>
   );
 };
 
-export default PostErrandForm;
+export default PostProjectForm;

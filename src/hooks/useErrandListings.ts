@@ -32,6 +32,7 @@ export interface ErrandPost extends Models.Document { // Extend Models.Document
   contactInfo: string;
   location?: string; // Specific location for the errand
   deadline?: string; // ISO date string
+  $sequence: number; // Made $sequence required
 }
 
 interface ErrandListingsState {
@@ -39,7 +40,7 @@ interface ErrandListingsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  postErrand: (errandData: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status" | "assignedToId" | "assignedToName">) => Promise<void>;
+  postErrand: (errandData: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status" | "assignedToId" | "assignedToName" | "$sequence">) => Promise<void>; // Omit $sequence
   updateErrandStatus: (errandId: string, newStatus: ErrandStatus, assignedToId?: string, assignedToName?: string) => Promise<void>;
 }
 
@@ -81,7 +82,7 @@ export const useErrandListings = (filterTypes: string[] = []): ErrandListingsSta
     fetchErrands();
   }, [fetchErrands]);
 
-  const postErrand = async (errandData: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status" | "assignedToId" | "assignedToName">) => {
+  const postErrand = async (errandData: Omit<ErrandPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status" | "assignedToId" | "assignedToName" | "$sequence">) => {
     if (!userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to post an errand.");
       return;
@@ -98,6 +99,7 @@ export const useErrandListings = (filterTypes: string[] = []): ErrandListingsSta
           posterName: userProfile.name,
           collegeName: userProfile.collegeName,
           status: "Open", // Default status
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setErrands(prev => [newErrand as ErrandPost, ...prev]); // Type assertion is now safer

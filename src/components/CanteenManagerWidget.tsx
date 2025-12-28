@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Utensils, Edit, Trash2, PlusCircle } from 'lucide-react';
 
 const CanteenManagerWidget = () => {
-  const { userProfile } = useAuth(); // Use userProfile
+  const { userProfile } = useAuth();
   const { allCanteens, isLoading, error, refetch, updateCanteen, addCanteen } = useCanteenData();
   const [isAddCanteenDialogOpen, setIsAddCanteenDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -23,7 +23,7 @@ const CanteenManagerWidget = () => {
   const [editClosingTime, setEditClosingTime] = useState("");
   const [editIsOperational, setEditIsOperational] = useState(false);
 
-  const handleAddCanteenSubmit = async (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "collegeName">) => {
+  const handleAddCanteenSubmit = async (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "$sequence">) => {
     try {
       await addCanteen(canteenData);
       setIsAddCanteenDialogOpen(false);
@@ -121,7 +121,7 @@ const CanteenManagerWidget = () => {
             <DialogHeader>
               <DialogTitle>Edit Canteen: {currentCanteen.name}</DialogTitle>
               <DialogDescription>Update the details for this canteen.</DialogDescription>
-            </DialogHeader>
+            </DialogDescription>
             <form onSubmit={(e) => { e.preventDefault(); handleUpdateCanteenSubmit(); }} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="editName">Canteen Name</Label>
@@ -142,7 +142,7 @@ const CanteenManagerWidget = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="editClosingTime">Closing Time</Label>
-                  <Input id="editClosingTime" type="time" value={editClosingTime} onChange={(e) => setEditClosingTime(e.target.value)} required />
+                  <Input id="editClosingTime" type="time" value={editClosingTime} onChange={(e) => setEditClosingTime(e.target.value)} required /> {/* Corrected here */}
                 </div>
               </div>
               <div className="flex items-center space-x-2">

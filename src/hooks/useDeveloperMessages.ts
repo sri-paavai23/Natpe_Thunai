@@ -26,6 +26,7 @@ export interface DeveloperMessage extends Models.Document { // Extend Models.Doc
   response?: string; // Developer's response
   respondedBy?: string; // Developer's ID
   respondedAt?: string; // ISO date string
+  $sequence: number; // Made $sequence required
 }
 
 export interface DeveloperMessagesState {
@@ -33,13 +34,13 @@ export interface DeveloperMessagesState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  postMessage: (messageData: Omit<DeveloperMessage, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "senderId" | "senderName" | "collegeName" | "status" | "response" | "respondedBy" | "respondedAt">) => Promise<void>;
+  postMessage: (messageData: Omit<DeveloperMessage, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "senderId" | "senderName" | "collegeName" | "status" | "response" | "respondedBy" | "respondedAt" | "$sequence">) => Promise<void>; // Omit $sequence
   updateMessageStatus: (messageId: string, newStatus: MessageStatus, response?: string) => Promise<void>;
 }
 
-export const useDeveloperMessages = (): DeveloperMessagesState => { // Removed collegeNameFilter from hook signature
+export const useDeveloperMessages = (): DeveloperMessagesState => {
   const { user, userProfile } = useAuth();
-  const [messages, setMessages] = useState<DeveloperMessage[]>([]); // Renamed allMessages to messages
+  const [messages, setMessages] = useState<DeveloperMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,7 +73,7 @@ export const useDeveloperMessages = (): DeveloperMessagesState => { // Removed c
     fetchMessages();
   }, [fetchMessages]);
 
-  const postMessage = async (messageData: Omit<DeveloperMessage, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "senderId" | "senderName" | "collegeName" | "status" | "response" | "respondedBy" | "respondedAt">) => {
+  const postMessage = async (messageData: Omit<DeveloperMessage, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "senderId" | "senderName" | "collegeName" | "status" | "response" | "respondedBy" | "respondedAt" | "$sequence">) => {
     if (!user || !userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to send a message.");
       return;
@@ -89,6 +90,7 @@ export const useDeveloperMessages = (): DeveloperMessagesState => { // Removed c
           senderName: user.name,
           collegeName: userProfile.collegeName,
           status: "Pending", // Default status
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setMessages(prev => [newMessage as DeveloperMessage, ...prev]); // Type assertion is now safer

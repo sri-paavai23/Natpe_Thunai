@@ -29,6 +29,7 @@ export interface BargainRequest extends Models.Document { // Extend Models.Docum
   status: BargainStatus;
   message?: string;
   collegeName: string;
+  $sequence: number; // Made $sequence required
 }
 
 interface BargainRequestsState {
@@ -121,6 +122,7 @@ export const useBargainRequests = (): BargainRequestsState => {
           status: "initiated",
           message: message || undefined,
           collegeName: userProfile.collegeName,
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setBuyerRequests(prev => [newRequest as BargainRequest, ...prev]); // Type assertion is now safer

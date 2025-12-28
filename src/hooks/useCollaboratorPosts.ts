@@ -18,7 +18,7 @@ const COLLABORATOR_POSTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_COLLABORA
 export type ProjectCategory = "Academic" | "Startup" | "Event" | "Research" | "Other";
 export type ProjectStatus = "Open" | "Ongoing" | "Completed" | "Closed";
 
-export interface CollaboratorPost extends Models.Document {
+export interface CollaboratorPost extends Models.Document { // Extend Models.Document
   title: string;
   description: string;
   category: ProjectCategory;
@@ -29,6 +29,7 @@ export interface CollaboratorPost extends Models.Document {
   collegeName: string;
   status: ProjectStatus;
   imageUrl?: string;
+  $sequence: number; // Made $sequence required
 }
 
 interface CollaboratorPostsState {
@@ -36,12 +37,12 @@ interface CollaboratorPostsState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  postProject: (postData: Omit<CollaboratorPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status">) => Promise<void>;
+  postProject: (postData: Omit<CollaboratorPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status" | "$sequence">) => Promise<void>; // Omit $sequence
   updatePostStatus: (postId: string, newStatus: ProjectStatus) => Promise<void>;
 }
 
 export const useCollaboratorPosts = (): CollaboratorPostsState => {
-  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
+  const { userProfile } = useAuth();
   const [posts, setPosts] = useState<CollaboratorPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export const useCollaboratorPosts = (): CollaboratorPostsState => {
         COLLABORATOR_POSTS_COLLECTION_ID,
         queries
       );
-      setPosts(response.documents as CollaboratorPost[]);
+      setPosts(response.documents as CollaboratorPost[]); // Type assertion is now safer
     } catch (err: any) {
       console.error("Error fetching collaborator posts:", err);
       setError("Failed to fetch collaborator posts.");
@@ -74,7 +75,7 @@ export const useCollaboratorPosts = (): CollaboratorPostsState => {
     fetchPosts();
   }, [fetchPosts]);
 
-  const postProject = async (postData: Omit<CollaboratorPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status">) => {
+  const postProject = async (postData: Omit<CollaboratorPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status" | "$sequence">) => {
     if (!userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to post a project.");
       return;
@@ -91,9 +92,10 @@ export const useCollaboratorPosts = (): CollaboratorPostsState => {
           posterName: userProfile.name,
           collegeName: userProfile.collegeName,
           status: "Open", // Default status
+          $sequence: 0, // Provide a default for $sequence
         }
       );
-      setPosts(prev => [newPost as CollaboratorPost, ...prev]);
+      setPosts(prev => [newPost as CollaboratorPost, ...prev]); // Type assertion is now safer
       toast.success("Project posted successfully!");
     } catch (err: any) {
       console.error("Error posting project:", err);

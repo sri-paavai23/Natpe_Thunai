@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DollarSign, MapPin, User, Star, MessageSquareText } from 'lucide-react';
+import { DollarSign, MapPin, User, Star, MessageSquareText, Clock } from 'lucide-react'; // Import Clock
 import { ServicePost, ServiceStatus } from '@/hooks/useServiceListings';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -38,12 +38,12 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onOpenBargainDialog,
       toast.error("You must be logged in to contact the provider.");
       return;
     }
-    if (user.$id === service.providerId) { // Use service.providerId
-      toast.message("You are the provider of this service."); // Changed to toast.message
+    if (user.$id === service.providerId) {
+      toast.message("You are the provider of this service.");
       return;
     }
     // In a real app, this would open a chat or contact form
-    toast.success(`Contacting ${service.providerName} at ${service.contactInfo}`); // Use service.providerName and service.contactInfo
+    toast.success(`Contacting ${service.providerName} at ${service.contactInfo}`);
   };
 
   return (
@@ -65,9 +65,9 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onOpenBargainDialog,
         <div className="text-sm text-muted-foreground space-y-1">
           <p className="flex items-center gap-1"><DollarSign className="h-4 w-4" /> Price: ₹{service.price.toFixed(2)} / {service.priceUnit}</p>
           {service.location && <p className="flex items-center gap-1"><MapPin className="h-4 w-4" /> Location: {service.location}</p>}
-          <p className="flex items-center gap-1"><User className="h-4 w-4" /> Provided by: {service.providerName}</p> {/* Use service.providerName */}
+          <p className="flex items-center gap-1"><User className="h-4 w-4" /> Provided by: {service.providerName}</p>
           <p className="flex items-center gap-1"><Clock className="h-4 w-4" /> Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
-          {service.isCustomOrder && ( // Check for isCustomOrder
+          {service.isCustomOrder && (
             <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
               Custom Request
             </Badge>
@@ -83,26 +83,26 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ service, onOpenBargainDialog,
         <Link to={`/service/${service.$id}`} className="flex-1">
           <Button variant="outline" className="w-full">View Details</Button>
         </Link>
-        {service.status === "Available" && user?.$id !== service.providerId && ( // Use service.providerId
+        {service.status === "Available" && user?.$id !== service.providerId && (
           <Button onClick={handleContactProvider} className="flex-1">
             <MessageSquareText className="h-4 w-4 mr-1" /> Contact Provider
           </Button>
         )}
-        {service.status === "Available" && user?.$id !== service.providerId && onOpenBargainDialog && ( // Use service.providerId
+        {service.status === "Available" && user?.$id !== service.providerId && onOpenBargainDialog && (
           <Button
             variant="secondary"
             onClick={() => onOpenBargainDialog(service)}
-            disabled={user?.$id === service.providerId} // Disable bargain on own service
+            disabled={user?.$id === service.providerId}
           >
             Make an Offer
           </Button>
         )}
-        {service.status === "Completed" && user?.$id !== service.providerId && onOpenReviewDialog && ( // Use service.providerId
+        {service.status === "Completed" && user?.$id !== service.providerId && onOpenReviewDialog && (
           <Button
             variant="outline"
             className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-            onClick={() => onOpenReviewDialog(service.$id, service.providerId, service.title)} // Use service.providerId
-            disabled={user?.$id === service.providerId} // Disable review on own service
+            onClick={() => onOpenReviewDialog(service.$id, service.providerId, service.title)}
+            disabled={user?.$id === service.providerId}
           >
             Leave Review
           </Button>

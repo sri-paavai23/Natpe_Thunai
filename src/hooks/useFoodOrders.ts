@@ -32,6 +32,7 @@ export interface FoodOrder extends Models.Document { // Extend Models.Document
   notes?: string;
   ambassadorId?: string; // ID of the ambassador delivering
   ambassadorName?: string; // Name of the ambassador
+  $sequence: number; // Made $sequence required
 }
 
 interface FoodOrdersState {
@@ -39,7 +40,7 @@ interface FoodOrdersState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  placeOrder: (orderData: Omit<FoodOrder, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "buyerId" | "buyerName" | "collegeName" | "status" | "ambassadorId" | "ambassadorName">) => Promise<void>;
+  placeOrder: (orderData: Omit<FoodOrder, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "buyerId" | "buyerName" | "collegeName" | "status" | "ambassadorId" | "ambassadorName" | "$sequence">) => Promise<void>; // Omit $sequence
   updateOrderStatus: (orderId: string, newStatus: OrderStatus, ambassadorId?: string, ambassadorName?: string) => Promise<void>;
 }
 
@@ -84,7 +85,7 @@ export const useFoodOrders = (): FoodOrdersState => {
     fetchOrders();
   }, [fetchOrders]);
 
-  const placeOrder = async (orderData: Omit<FoodOrder, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "buyerId" | "buyerName" | "collegeName" | "status" | "ambassadorId" | "ambassadorName">) => {
+  const placeOrder = async (orderData: Omit<FoodOrder, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "buyerId" | "buyerName" | "collegeName" | "status" | "ambassadorId" | "ambassadorName" | "$sequence">) => {
     if (!user || !userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to place an order.");
       return;
@@ -101,6 +102,7 @@ export const useFoodOrders = (): FoodOrdersState => {
           buyerName: user.name,
           collegeName: userProfile.collegeName,
           status: "Pending",
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setOrders(prev => [newOrder as FoodOrder, ...prev]); // Type assertion is now safer

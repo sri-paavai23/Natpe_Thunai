@@ -3,18 +3,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useAuth, UserPreferences } from '@/context/AuthContext'; // Import UserPreferences
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { CanteenData } from '@/hooks/useCanteenData';
 
 interface AddCanteenFormProps {
-  onSubmit: (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "collegeName">) => Promise<void>;
+  onSubmit: (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "$sequence">) => Promise<void>; // Omit $sequence
   onCancel: () => void;
   loading: boolean;
 }
 
 const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onCancel, loading }) => {
-  const { userProfile } = useAuth(); // Use userProfile
+  const { userProfile } = useAuth();
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [contactInfo, setContactInfo] = useState("");
@@ -43,6 +43,7 @@ const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onCancel, loa
         openingTime,
         closingTime,
         isOperational,
+        collegeName: userProfile.collegeName, // Pass collegeName here
       });
       // Form reset handled by parent on success
     } catch (error) {

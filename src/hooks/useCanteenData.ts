@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Client, Databases, Query, Models, ID } from 'appwrite'; // Import ID
+import { Client, Databases, Query, Models, ID } from 'appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ export interface CanteenData extends Models.Document { // Extend Models.Document
   openingTime: string; // e.g., "08:00"
   closingTime: string; // e.g., "20:00"
   isOperational: boolean;
+  $sequence: number; // Made $sequence required
 }
 
 export interface FoodOffering extends Models.Document { // Extend Models.Document
@@ -38,6 +39,7 @@ export interface FoodOffering extends Models.Document { // Extend Models.Documen
   category: FoodCategory;
   imageUrl?: string;
   isAvailable: boolean;
+  $sequence: number; // Made $sequence required
 }
 
 interface CanteenDataState {
@@ -46,7 +48,7 @@ interface CanteenDataState {
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  addCanteen: (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions">) => Promise<void>;
+  addCanteen: (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "$sequence">) => Promise<void>; // Omit $sequence
   updateCanteen: (canteenId: string, data: Partial<CanteenData>) => Promise<void>;
 }
 
@@ -98,7 +100,7 @@ export const useCanteenData = (): CanteenDataState => {
     }
   }, [fetchCanteenData, isAuthLoading]);
 
-  const addCanteen = async (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions">) => {
+  const addCanteen = async (canteenData: Omit<CanteenData, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "$sequence">) => {
     if (!userProfile?.collegeName) {
       toast.error("You must be logged in and have a college name set to add a canteen.");
       return;
@@ -111,6 +113,7 @@ export const useCanteenData = (): CanteenDataState => {
         {
           ...canteenData,
           collegeName: userProfile.collegeName,
+          $sequence: 0, // Provide a default for $sequence
         }
       );
       setAllCanteens(prev => [newCanteen as CanteenData, ...prev]); // Type assertion is now safer

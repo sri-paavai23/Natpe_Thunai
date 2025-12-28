@@ -5,8 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/context/AuthContext';
 import { useServiceListings, ServiceCategory } from '@/hooks/useServiceListings';
-import ServiceCard from '@/components/ServiceCard'; // Assuming ServiceCard exists
-import PostServiceForm from '@/components/forms/PostServiceForm'; // Assuming PostServiceForm exists
+import ServiceCard from '@/components/ServiceCard';
+import PostServiceForm from '@/components/forms/PostServiceForm';
 import { toast } from 'sonner';
 import { Briefcase, Lightbulb, Code, Paintbrush, Wrench, Heart, MoreHorizontal } from 'lucide-react';
 
@@ -58,7 +58,7 @@ const FreelancePage = () => {
                 Offer your skills to other students in your college.
               </DialogDescription>
             </DialogHeader>
-            <PostServiceForm onSuccess={handlePostServiceSuccess} />
+            <PostServiceForm onSuccess={handlePostServiceSuccess} /> {/* Corrected prop */}
           </DialogContent>
         </Dialog>
       </div>

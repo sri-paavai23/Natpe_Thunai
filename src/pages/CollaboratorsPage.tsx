@@ -5,8 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/context/AuthContext';
 import { useCollaboratorPosts, ProjectCategory } from '@/hooks/useCollaboratorPosts';
-import CollaboratorPostCard from '@/components/CollaboratorPostCard'; // Assuming CollaboratorPostCard exists
-import PostProjectForm from '@/components/forms/PostProjectForm'; // Assuming PostProjectForm exists
+import CollaboratorPostCard from '@/components/CollaboratorPostCard';
+import PostProjectForm from '@/components/forms/PostProjectForm';
 import { toast } from 'sonner';
 import { Users, GraduationCap, Rocket, Calendar, Lightbulb, MoreHorizontal } from 'lucide-react';
 
@@ -20,7 +20,7 @@ const projectCategoryIcons = {
 
 const CollaboratorsPage = () => {
   const { user, userProfile } = useAuth();
-  const { posts: allProjectPosts, isLoading, error } = useCollaboratorPosts(); // Fetch all posts
+  const { posts: allProjectPosts, isLoading, error } = useCollaboratorPosts();
   const [activeCategory, setActiveCategory] = useState<ProjectCategory | "All">("All");
   const [isPostProjectDialogOpen, setIsPostProjectDialogOpen] = useState(false);
 
