@@ -60,6 +60,7 @@ const AuthPage = () => {
   const [collegeName, setCollegeName] = useState("");
   const [avatarStyle, setAvatarStyle] = useState("lorelei");
   const [isReportMissingCollegeDialogOpen, setIsReportMissingCollegeDialogOpen] = useState(false);
+  const [currentStudyYear, setCurrentStudyYear] = useState<string>("I"); // NEW STATE
 
   const { isAuthenticated, isLoading, login } = useAuth();
   const navigate = useNavigate();
@@ -134,6 +135,11 @@ const AuthPage = () => {
           setLoading(false);
           return;
         }
+        if (!currentStudyYear) { // NEW VALIDATION
+          toast.error("Please select your current study year.");
+          setLoading(false);
+          return;
+        }
 
         const user = await account.create("unique()", email, password, selectedUsername);
         
@@ -179,6 +185,7 @@ const AuthPage = () => {
               lastQuestCompletedDate: null,
               itemsListedToday: 0,
               avatarStyle: avatarStyle,
+              currentStudyYear: currentStudyYear, // NEW FIELD
             }
           );
           toast.success("User profile saved.");
@@ -216,6 +223,7 @@ const AuthPage = () => {
         setUserType("student");
         setCollegeName("");
         setAvatarStyle("lorelei");
+        setCurrentStudyYear("I"); // NEW CLEAR
       }
     } catch (error: any) {
       toast.error(error.message || "An error occurred during authentication.");
@@ -391,6 +399,24 @@ const AuthPage = () => {
                   <p className="text-xs text-muted-foreground mt-2">
                     This is the only identifier visible to other users.
                   </p>
+                </div>
+
+                {/* NEW: Current Study Year Selection */}
+                <div>
+                  <Label htmlFor="currentStudyYear" className="text-foreground">Your Current Study Year</Label>
+                  <Select value={currentStudyYear} onValueChange={setCurrentStudyYear} required disabled={loading}>
+                    <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:focus:border-ring">
+                      <SelectValue placeholder="Select your study year" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover text-popover-foreground border-border max-h-60 overflow-y-auto">
+                        <SelectItem value="I">Year I</SelectItem>
+                        <SelectItem value="II">Year II</SelectItem>
+                        <SelectItem value="III">Year III</SelectItem>
+                        <SelectItem value="IV">Year IV</SelectItem>
+                        <SelectItem value="V">Year V</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* NEW: Avatar Style Selection */}
