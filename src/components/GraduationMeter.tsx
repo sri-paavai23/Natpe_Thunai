@@ -15,14 +15,14 @@ const GraduationMeter: React.FC = () => {
   const protocolNotificationShown = useRef(false);
   const graduatedNotificationShown = useRef(false);
 
-  // --- LOGIC: Calculate Graduation State Locally ---
+  // --- LOGIC: Custom Calculation Engine ---
   const calculateGraduationState = () => {
     if (!user?.$createdAt) return null;
 
     const now = new Date();
     const created = new Date(user.$createdAt);
     
-    // 1. Determine Target Date
+    // 1. Determine Target Date (Logic from previous steps)
     let targetDate: Date;
     
     // Cast to 'any' to bypass TS error until UserProfile type is updated globally
@@ -34,41 +34,69 @@ const GraduationMeter: React.FC = () => {
       targetDate.setFullYear(targetDate.getFullYear() + 4);
     }
 
-    // 2. Calculate Time Differences
+    // 2. Calculate Total Remaining Milliseconds
     const totalDuration = targetDate.getTime() - created.getTime();
     const elapsed = now.getTime() - created.getTime();
-    const remaining = targetDate.getTime() - now.getTime();
+    let remaining = targetDate.getTime() - now.getTime();
 
-    // Prevent division by zero & cap percentage
+    // Prevent negative time
+    if (remaining < 0) remaining = 0;
+
+    // 3. Break down milliseconds into Units
+    // Constants
+    const msYear = 1000 * 60 * 60 * 24 * 365;
+    const msMonth = 1000 * 60 * 60 * 24 * 30; // Approx 30 days
+    const msDay = 1000 * 60 * 60 * 24;
+    const msHour = 1000 * 60 * 60;
+    const msMinute = 1000 * 60;
+    const msSecond = 1000;
+
+    // Calculations
+    const years = Math.floor(remaining / msYear);
+    remaining %= msYear;
+
+    const months = Math.floor(remaining / msMonth);
+    remaining %= msMonth;
+
+    const days = Math.floor(remaining / msDay);
+    remaining %= msDay;
+
+    const hours = Math.floor(remaining / msHour);
+    remaining %= msHour;
+
+    const minutes = Math.floor(remaining / msMinute);
+    remaining %= msMinute;
+
+    const seconds = Math.floor(remaining / msSecond);
+
+    // Percentage Calculation
     const safeTotal = totalDuration > 0 ? totalDuration : 1;
     const percentage = Math.min(100, Math.max(0, (elapsed / safeTotal) * 100));
-
-    // 3. Define Variables
-    const calculatedDays = Math.floor(remaining / (1000 * 60 * 60 * 24));
-    const calculatedHours = Math.floor((remaining / (1000 * 60 * 60)) % 24);
-    const calculatedMinutes = Math.floor((remaining / 1000 / 60) % 60);
-    const calculatedSeconds = Math.floor((remaining / 1000) % 60);
 
     return {
       progressPercentage: percentage,
       isGraduated: percentage >= 100,
       isGraduationProtocolActive: percentage >= 87.5,
-      // Pass raw values so we can format them perfectly in the render
+      // Object containing broken down units
       countdown: {
-        days: calculatedDays,
-        hours: calculatedHours,
-        minutes: calculatedMinutes,
-        seconds: calculatedSeconds,
+        years,
+        months,
+        days,
+        hours,
+        minutes,
+        seconds,
+        totalDays: Math.floor((targetDate.getTime() - now.getTime()) / msDay) // For motivation text
       },
     };
   };
 
   const [graduationData, setGraduationData] = useState(() => calculateGraduationState());
 
+  // Update loop
   useEffect(() => {
     if (!user?.$createdAt) return;
 
-    setGraduationData(calculateGraduationState()); // Update immediately on load
+    setGraduationData(calculateGraduationState()); // Initial run
 
     const interval = setInterval(() => {
       setGraduationData(calculateGraduationState());
@@ -103,23 +131,29 @@ const GraduationMeter: React.FC = () => {
     countdown,
   } = graduationData;
 
-  // --- NEW: Custom Display Formatter ---
-  // This replaces 'formatDuration' to ensure we show Years/Days correctly
-  const getCountdownDisplay = () => {
-    if (countdown.days > 365) {
-      const years = Math.floor(countdown.days / 365);
-      const remainingDays = countdown.days % 365;
-      return `${years} Yr ${remainingDays} Days`;
+  // --- CUSTOM DISPLAY FORMATTER ---
+  // Returns string: "2 Yrs 3 Mos 12 Days 45 Secs"
+  const getFormattedString = () => {
+    const parts = [];
+    
+    if (countdown.years > 0) parts.push(`${countdown.years} Yr${countdown.years > 1 ? 's' : ''}`);
+    if (countdown.months > 0) parts.push(`${countdown.months} Mo${countdown.months > 1 ? 's' : ''}`);
+    if (countdown.days > 0) parts.push(`${countdown.days} Day${countdown.days > 1 ? 's' : ''}`);
+    
+    // Always show seconds for "liveness", or Hours if it's getting close
+    if (parts.length < 2) { 
+        // If we only have days (e.g. 0 years 0 months), add hours
+        parts.push(`${countdown.hours} Hr${countdown.hours > 1 ? 's' : ''}`);
     }
-    if (countdown.days > 0) {
-      return `${countdown.days} Days ${countdown.hours} Hrs`;
-    }
-    // Final countdown (less than 24 hours)
-    return `${countdown.hours}:${countdown.minutes}:${countdown.seconds}`;
+    
+    // Add seconds at the end for the ticking effect
+    parts.push(`${countdown.seconds} Sec${countdown.seconds > 1 ? 's' : ''}`);
+
+    return parts.join(" ");
   };
 
-  const countdownDisplay = getCountdownDisplay();
-
+  const countdownDisplay = getFormattedString();
+  
   const progressColorClass = isGraduationProtocolActive
     ? "bg-orange-500" 
     : "bg-secondary-neon"; 
@@ -133,7 +167,7 @@ const GraduationMeter: React.FC = () => {
   const renderGraduationMotivation = () => {
     if (userProfile?.userType !== "student" || userProfile?.role === "developer") return null;
     
-    const daysRemaining = countdown.days; 
+    const daysRemaining = countdown.totalDays; 
     const targetLevel = 25;
     const userLevel = userProfile.level;
     
@@ -171,7 +205,8 @@ const GraduationMeter: React.FC = () => {
               <span className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Clock className="h-5 w-5 text-secondary-neon" /> Time Remaining:
               </span>
-              <span className="text-3xl font-extrabold text-secondary-neon animate-pulse-slow">
+              {/* Reduced font size slightly to fit the longer string */}
+              <span className="text-xl sm:text-2xl font-extrabold text-secondary-neon animate-pulse-slow break-words text-center">
                 {countdownDisplay}
               </span>
             </div>
