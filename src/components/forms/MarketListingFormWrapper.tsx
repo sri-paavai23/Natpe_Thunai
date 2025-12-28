@@ -73,7 +73,7 @@
           );
           
           toast.success(`New ${type} listing created successfully!`);
-          recordMarketListing();
+          recordMarketListing(type);
           onClose();
         } catch (error: any) {
           console.error(`Error creating ${type} listing:`, error);
