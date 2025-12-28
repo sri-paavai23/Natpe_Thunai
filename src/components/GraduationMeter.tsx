@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Clock, GraduationCap, AlertTriangle, Download, Users, CheckCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { formatDuration } from "@/utils/time"; 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -26,7 +25,7 @@ const GraduationMeter: React.FC = () => {
     // 1. Determine Target Date
     let targetDate: Date;
     
-    // FIX 1: Cast to 'any' to bypass TS error until UserProfile type is updated globally
+    // Cast to 'any' to bypass TS error until UserProfile type is updated globally
     if ((userProfile as any)?.graduationDate) {
       targetDate = new Date((userProfile as any).graduationDate);
     } else {
@@ -49,25 +48,18 @@ const GraduationMeter: React.FC = () => {
     const calculatedHours = Math.floor((remaining / (1000 * 60 * 60)) % 24);
     const calculatedMinutes = Math.floor((remaining / 1000 / 60) % 60);
     const calculatedSeconds = Math.floor((remaining / 1000) % 60);
-    const totalSeconds = Math.floor(remaining / 1000);
-
-    // 4. Create Countdown Object
-    const countdownObj = {
-      years: 0, // FIX 2: Added 'years' to satisfy Countdown interface
-      months: 0, 
-      days: calculatedDays,
-      hours: calculatedHours,
-      minutes: calculatedMinutes,
-      seconds: calculatedSeconds,
-      total: totalSeconds,
-      totalDays: calculatedDays,
-    };
 
     return {
       progressPercentage: percentage,
       isGraduated: percentage >= 100,
       isGraduationProtocolActive: percentage >= 87.5,
-      countdown: countdownObj,
+      // Pass raw values so we can format them perfectly in the render
+      countdown: {
+        days: calculatedDays,
+        hours: calculatedHours,
+        minutes: calculatedMinutes,
+        seconds: calculatedSeconds,
+      },
     };
   };
 
@@ -83,7 +75,6 @@ const GraduationMeter: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  // FIX 3: Updated dependency to cast as any
   }, [user?.$createdAt, (userProfile as any)?.graduationDate]); 
 
   // Notification Logic
@@ -112,7 +103,22 @@ const GraduationMeter: React.FC = () => {
     countdown,
   } = graduationData;
 
-  const countdownDisplay = formatDuration(countdown); 
+  // --- NEW: Custom Display Formatter ---
+  // This replaces 'formatDuration' to ensure we show Years/Days correctly
+  const getCountdownDisplay = () => {
+    if (countdown.days > 365) {
+      const years = Math.floor(countdown.days / 365);
+      const remainingDays = countdown.days % 365;
+      return `${years} Yr ${remainingDays} Days`;
+    }
+    if (countdown.days > 0) {
+      return `${countdown.days} Days ${countdown.hours} Hrs`;
+    }
+    // Final countdown (less than 24 hours)
+    return `${countdown.hours}:${countdown.minutes}:${countdown.seconds}`;
+  };
+
+  const countdownDisplay = getCountdownDisplay();
 
   const progressColorClass = isGraduationProtocolActive
     ? "bg-orange-500" 
