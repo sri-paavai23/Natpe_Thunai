@@ -1,97 +1,118 @@
-"use client";
-
-import { DateTime } from 'luxon';
-
-interface CountdownDuration {
+export interface Countdown {
   years: number;
   months: number;
-  days: number;
-  hours: number;
+  days: number; // Keeping for internal calculation, not directly used in requested format
+  hours: number; // Keeping for internal calculation, not directly used in requested format
   minutes: number;
   seconds: number;
-  totalDays: number;
-  milliseconds: number;
+  totalDays: number; // Total days remaining
 }
 
-interface GraduationData {
+export interface GraduationData {
   progressPercentage: number;
   isGraduationProtocolActive: boolean;
   isGraduated: boolean;
-  countdown: CountdownDuration;
+  countdown: Countdown;
 }
 
-export const getGraduationData = (userCreationDate: string, currentStudyYear: string = "I"): GraduationData => {
-  const creationDateTime = DateTime.fromISO(userCreationDate);
-  let yearsToAdd: number;
+/**
+ * Calculates graduation data based on user creation date.
+ * Assumes a 4-year graduation timeline.
+ * @param userCreationDateString The user's account creation date as a string.
+ * @returns GraduationData object containing progress, status, and countdown.
+ */
+export const getGraduationData = (userCreationDateString: string): GraduationData => {
+  const now = new Date();
+  const userCreationDate = new Date(userCreationDateString);
 
-  switch (currentStudyYear) {
-    case "I":
-      yearsToAdd = 4; // 3 years and 12 months
-      break;
-    case "II":
-      yearsToAdd = 3; // 2 years and 12 months
-      break;
-    case "III":
-      yearsToAdd = 2; // 1 year and 12 months
-      break;
-    case "IV":
-    case "V":
-    case "Other":
-      yearsToAdd = 1; // 12 months
-      break;
-    default:
-      yearsToAdd = 4; // Default to 4 years if not specified or invalid
-  }
+  // Calculate 4 years from creation date for the actual graduation date
+  const graduationDate = new Date(userCreationDate);
+  graduationDate.setFullYear(graduationDate.getFullYear() + 4);
 
-  const targetGraduationDate = creationDateTime.plus({ years: yearsToAdd });
+  // Calculate 3.5 years from creation date for protocol activation
+  const protocolDate = new Date(userCreationDate);
+  protocolDate.setFullYear(protocolDate.getFullYear() + 3);
+  protocolDate.setMonth(protocolDate.getMonth() + 6); // Add 6 months for .5 year
 
-  const now = DateTime.now();
-  const diff = targetGraduationDate.diff(now, ["years", "months", "days", "hours", "minutes", "seconds"]);
+  let remainingDurationMs = graduationDate.getTime() - now.getTime();
+  if (remainingDurationMs < 0) remainingDurationMs = 0;
 
-  const totalDurationInMilliseconds = targetGraduationDate.diff(creationDateTime, "milliseconds").milliseconds;
-  const elapsedDurationInMilliseconds = now.diff(creationDateTime, "milliseconds").milliseconds;
+  const totalDurationMs = graduationDate.getTime() - userCreationDate.getTime();
+  let progressPercentage = (1 - (remainingDurationMs / totalDurationMs)) * 100;
+  if (progressPercentage < 0) progressPercentage = 0;
+  if (progressPercentage > 100) progressPercentage = 100;
 
-  let progressPercentage = (elapsedDurationInMilliseconds / totalDurationInMilliseconds) * 100;
-  progressPercentage = Math.max(0, Math.min(100, progressPercentage));
+  const isGraduated = remainingDurationMs <= 0;
+  const isGraduationProtocolActive = now.getTime() >= protocolDate.getTime() && !isGraduated;
 
-  const isGraduated = diff.milliseconds <= 0;
-  const isGraduationProtocolActive = diff.milliseconds > 0 && diff.as("months") <= 6;
+  // Calculate countdown components
+  const totalSeconds = Math.floor(remainingDurationMs / 1000);
+  const currentSeconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const currentMinutes = totalMinutes % 60;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const currentHours = totalHours % 24; // Hours within the current day
+  const totalDays = Math.floor(totalHours / 24);
 
-  const countdownYears = Math.max(0, Math.floor(diff.years));
-  const countdownMonths = Math.max(0, Math.floor(diff.months % 12));
-  const countdownDays = Math.max(0, Math.floor(diff.days));
-  const countdownHours = Math.max(0, Math.floor(diff.hours));
-  const countdownMinutes = Math.max(0, Math.floor(diff.minutes));
-  const countdownSeconds = Math.max(0, Math.floor(diff.seconds));
-  const totalDaysRemaining = Math.max(0, Math.floor(diff.as("days")));
+  // Approximate years and months from totalDays for display
+  const years = Math.floor(totalDays / 365);
+  const remainingDaysAfterYears = totalDays % 365;
+  const months = Math.floor(remainingDaysAfterYears / 30); // Approximate 30 days per month
+  const days = remainingDaysAfterYears % 30; // Remaining days after approximating months
 
+  const countdown: Countdown = {
+    years,
+    months,
+    days,
+    hours: currentHours,
+    minutes: currentMinutes,
+    seconds: currentSeconds,
+    totalDays,
+  };
 
   return {
     progressPercentage,
     isGraduationProtocolActive,
     isGraduated,
-    countdown: {
-      years: countdownYears,
-      months: countdownMonths,
-      days: countdownDays,
-      hours: countdownHours,
-      minutes: countdownMinutes,
-      seconds: countdownSeconds,
-      totalDays: totalDaysRemaining,
-      milliseconds: diff.milliseconds,
-    },
+    countdown,
   };
 };
 
-export const formatDuration = (duration: CountdownDuration): string => {
-  const parts = [];
-  if (duration.years > 0) parts.push(`${duration.years}y`);
-  if (duration.months > 0) parts.push(`${duration.months}m`);
-  if (duration.days > 0) parts.push(`${duration.days}d`);
-  if (duration.hours > 0) parts.push(`${duration.hours}h`);
-  if (duration.minutes > 0) parts.push(`${duration.minutes}m`);
-  if (duration.seconds > 0) parts.push(`${duration.seconds}s`);
+/**
+ * Formats the countdown object into a human-readable string.
+ * Displays in "X years Y months Z minutes A seconds" format.
+ * @param countdown The Countdown object.
+ * @returns Formatted duration string.
+ */
+export const formatDuration = (countdown: Countdown): string => {
+  if (countdown.totalDays <= 0 && countdown.hours <= 0 && countdown.minutes <= 0 && countdown.seconds <= 0) {
+    return "Graduated!";
+  }
 
-  if (parts.length === 0) return "0s";
-  return parts.join(" ");
+  const parts: string[] = [];
+  if (countdown.years > 0) {
+    parts.push(`${countdown.years} year${countdown.years !== 1 ? 's' : ''}`);
+  }
+  if (countdown.months > 0) {
+    parts.push(`${countdown.months} month${countdown.months !== 1 ? 's' : ''}`);
+  }
+  // Per your request, we are skipping days and hours in the output string.
+  if (countdown.minutes > 0) {
+    parts.push(`${countdown.minutes} minute${countdown.minutes !== 1 ? 's' : ''}`);
+  }
+  // Always show seconds if it's the only remaining part, or if it's greater than 0.
+  if (countdown.seconds > 0 || parts.length === 0) { 
+    parts.push(`${countdown.seconds} second${countdown.seconds !== 1 ? 's' : ''}`);
+  }
+
+  if (parts.length === 0) {
+    return "0 seconds"; // Fallback for very small durations
+  }
+
+  // Join parts with commas, and "and" before the last part
+  if (parts.length > 1) {
+    const lastPart = parts.pop();
+    return `${parts.join(', ')} and ${lastPart}`;
+  }
+  return parts[0];
 };

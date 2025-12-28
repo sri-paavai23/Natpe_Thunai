@@ -1,14 +1,10 @@
-"use client";
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import "./globals.css";
+import { ThemeProvider } from "next-themes"; // Import ThemeProvider
 
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import { AuthProvider } from './context/AuthContext';
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </React.StrictMode>
+createRoot(document.getElementById("root")!).render(
+  <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <App />
+  </ThemeProvider>
 );

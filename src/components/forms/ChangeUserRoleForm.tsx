@@ -48,7 +48,7 @@ const ChangeUserRoleForm: React.FC<ChangeUserRoleFormProps> = ({ onRoleChanged }
       const profileId = userProfileDoc.$id;
 
       // Then, update the role using the profile document ID
-      await updateUserProfile( {$id: profileId, role: newRole });
+      await updateUserProfile(profileId, { role: newRole });
       toast.success(`User ${targetUserId} role changed to "${newRole}" successfully!`);
       setTargetUserId("");
       setNewRole("user");

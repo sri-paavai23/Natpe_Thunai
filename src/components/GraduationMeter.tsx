@@ -13,10 +13,9 @@ import { toast } from "sonner";
 const GraduationMeter: React.FC = () => {
   const { user, userProfile, isLoading: isAuthLoading, addXp } = useAuth();
   const userCreationDate = user?.$createdAt;
-  const currentStudyYear = userProfile?.currentStudyYear || "I"; // Default to "I" if not set
 
   const [graduationData, setGraduationData] = useState(() => 
-    userCreationDate ? getGraduationData(userCreationDate, currentStudyYear) : null
+    userCreationDate ? getGraduationData(userCreationDate) : null
   );
 
   // Refs to track if notifications have been shown
@@ -28,11 +27,11 @@ const GraduationMeter: React.FC = () => {
     if (!userCreationDate) return;
 
     const interval = setInterval(() => {
-      setGraduationData(getGraduationData(userCreationDate, currentStudyYear));
+      setGraduationData(getGraduationData(userCreationDate));
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [userCreationDate, currentStudyYear]); // Add currentStudyYear to dependencies
+  }, [userCreationDate]);
 
   // Handle notifications based on state changes
   useEffect(() => {

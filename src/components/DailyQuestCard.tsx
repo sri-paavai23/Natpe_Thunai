@@ -45,7 +45,7 @@ const DailyQuestCard = () => {
       // In a real app, you'd also add coins to a separate balance
       
       // Update user profile to mark quest as claimed today and reset items listed
-      await updateUserProfile( {$id: userProfile.$id,
+      await updateUserProfile(userProfile.$id, {
         lastQuestCompletedDate: new Date().toISOString(),
         itemsListedToday: 0, // Reset for the next quest
       });
