@@ -63,7 +63,8 @@ const ProfileDetailsPage = () => {
     avatarStyle: string; // NEW: Add avatarStyle
   }) => {
     if (userProfile) {
-      await updateUserProfile(userProfile.$id, data);
+       use : ($id : userProfile.$id, data);
+       await updateUserProfile
     }
   };
 
