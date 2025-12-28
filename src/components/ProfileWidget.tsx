@@ -1,79 +1,50 @@
-"use client";
-
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { getGraduationData } from '@/utils/time';
-import { User } from 'lucide-react';
+import { User, Award, Code, Truck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const ProfileWidget = () => {
-  const { user, userPreferences, loading } = useAuth();
+  const { user, userProfile, isLoading } = useAuth(); // Use userProfile and isLoading
 
-  if (loading) {
+  if (isLoading || !user || !userProfile) {
     return (
-      <Card className="w-full max-w-xs bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-        <CardContent className="p-4 flex flex-col items-center text-center">
-          <div className="h-12 w-12 rounded-full bg-muted animate-pulse"></div>
-          <div className="h-4 w-3/4 bg-muted mt-3 animate-pulse"></div>
-          <div className="h-3 w-1/2 bg-muted mt-1 animate-pulse"></div>
-          <div className="h-2 w-full bg-muted mt-4 animate-pulse"></div>
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">My Profile</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center text-center">
+          <User className="h-12 w-12 text-muted-foreground mb-2" />
+          <p className="text-muted-foreground">Loading profile...</p>
         </CardContent>
       </Card>
     );
   }
 
-  if (!user || !userPreferences) {
-    return null; // Or a placeholder for logged out state
-  }
-
-  const userCreationDate = user.$createdAt;
-  const userYearOfStudy = userPreferences.yearOfStudy;
-
-  if (!userCreationDate || !userYearOfStudy) return null;
-
-  const graduationInfo = getGraduationData(userCreationDate, userYearOfStudy);
-  const targetLevel = 25; // Example target level
-  const currentLevel = userPreferences.level || 1;
-
-  const levelsToGo = targetLevel - currentLevel;
-  const daysRemaining = graduationInfo.remainingDays;
-
   return (
-    <Card className="w-full max-w-xs bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-      <CardContent className="p-4 flex flex-col items-center text-center">
-        <Avatar className="h-16 w-16 mb-3 border-2 border-primary-neon">
-          <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${userPreferences.name}`} alt={userPreferences.name} />
-          <AvatarFallback><User className="h-8 w-8 text-muted-foreground" /></AvatarFallback>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">My Profile</CardTitle>
+        <User className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent className="flex flex-col items-center text-center">
+        <Avatar className="h-16 w-16 mb-2">
+          <AvatarImage src={userProfile.profilePictureUrl || "/avatars/01.png"} alt={userProfile.name} />
+          <AvatarFallback>{userProfile.name ? userProfile.name[0] : 'U'}</AvatarFallback>
         </Avatar>
-        <h3 className="text-lg font-semibold text-foreground">{userPreferences.name}</h3>
-        <p className="text-sm text-muted-foreground">{userPreferences.collegeName || 'College Student'}</p>
-
-        <div className="w-full mt-4 space-y-2">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Level {currentLevel}</span>
-            <span>{targetLevel}</span>
-          </div>
-          <Progress value={(currentLevel / targetLevel) * 100} className="h-2 bg-muted" />
+        <h3 className="text-lg font-semibold">{userProfile.name}</h3>
+        <p className="text-xs text-muted-foreground">{userProfile.collegeName || "College not set"}</p>
+        <div className="flex gap-1 mt-2">
+          <Badge variant="secondary">Level {userProfile.level}</Badge>
+          {userProfile.isDeveloper && <Badge className="bg-purple-500 hover:bg-purple-600"><Code className="h-3 w-3 mr-1" /> Dev</Badge>}
+          {userProfile.isAmbassador && <Badge className="bg-green-500 hover:bg-green-600"><Truck className="h-3 w-3 mr-1" /> Amb</Badge>}
         </div>
-
-        <div className="w-full mt-4 space-y-2">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Graduation Progress</span>
-            <span>{graduationInfo.progress.toFixed(1)}%</span>
-          </div>
-          <Progress value={graduationInfo.progress} className="h-2 bg-muted" />
-        </div>
-
-        <div className="mt-4 text-sm text-muted-foreground">
-          {levelsToGo > 0 ? (
-            <p>{levelsToGo} levels to go!</p>
-          ) : (
-            <p>Max level reached!</p>
-          )}
-          <p>{daysRemaining > 0 ? `${daysRemaining} days until graduation` : 'Graduated!'}</p>
-        </div>
+        <Button asChild variant="link" className="mt-2">
+          <Link to="/profile">View Profile</Link>
+        </Button>
       </CardContent>
     </Card>
   );

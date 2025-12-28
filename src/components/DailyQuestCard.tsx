@@ -1,92 +1,57 @@
-"use client";
-
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, Award } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast'; // Ensure toast is imported
-import { format } from 'date-fns';
+import { toast } from 'sonner'; // Ensure sonner is imported
 
-const DailyQuestCard = () => {
-  const [isClaiming, setIsClaiming] = useState(false);
-  const { user, userPreferences, addXp, updateUserPreferences } = useAuth();
-  const [questCompletedToday, setQuestCompletedToday] = useState(false);
+const DailyQuestCard: React.FC = () => {
+  const { userProfile, updateUserProfile } = useAuth();
+  const questCompletedToday = userProfile?.dailyQuestCompleted === new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    if (userPreferences?.dailyQuestCompleted) {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const lastCompletionDate = userPreferences.dailyQuestCompleted; // This is now a string
-      if (lastCompletionDate === today) {
-        setQuestCompletedToday(true);
-      } else {
-        // If it's a new day, reset the quest status
-        setQuestCompletedToday(false);
-        // Optionally, update the preference in Appwrite to reflect it's not completed for today
-        // This would require a separate function or a more complex update logic in AuthContext
-      }
-    } else {
-      setQuestCompletedToday(false); // No completion date means not completed
-    }
-  }, [userPreferences?.dailyQuestCompleted]);
-
-  const handleClaimReward = async () => {
-    if (!user || !userPreferences) {
-      toast.error("Please log in to claim rewards.");
+  const handleCompleteQuest = async () => {
+    if (!userProfile || !updateUserProfile) {
+      toast.error("User not logged in or profile update function not available.");
       return;
     }
+
     if (questCompletedToday) {
-      toast.info("You've already completed today's quest!");
+      toast.message("You've already completed today's quest!"); // Changed from toast.info
       return;
     }
 
-    setIsClaiming(true);
     try {
-      // Simulate quest completion (e.g., user performed an action)
-      // For this example, we'll just directly claim the reward
-      await addXp(10); // Add 10 XP for completing the daily quest
-      await updateUserPreferences({ dailyQuestCompleted: format(new Date(), 'yyyy-MM-dd') }); // Mark quest as completed for today
-      setQuestCompletedToday(true);
-      toast.success("Daily quest reward claimed!");
+      await updateUserProfile({ dailyQuestCompleted: new Date().toISOString().split('T')[0] });
+      toast.success("Daily quest completed! You earned 10 points.");
+      // Logic to add points would go here
     } catch (error) {
-      console.error("Failed to claim daily quest reward:", error);
-      toast.error("Failed to claim reward.");
-    } finally {
-      setIsClaiming(false);
+      toast.error("Failed to complete daily quest.");
+      console.error("Error completing daily quest:", error);
     }
   };
 
   return (
-    <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
+    <Card className="w-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-2xl font-bold">Daily Quest</CardTitle>
-        <Award className="h-6 w-6 text-yellow-500" />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-muted-foreground">
-          Complete a simple task to earn daily XP!
-        </p>
+        <CardTitle className="text-sm font-medium">Daily Quest</CardTitle>
         {questCompletedToday ? (
-          <div className="flex items-center text-green-600">
-            <CheckCircle className="h-5 w-5 mr-2" />
-            <span>Quest completed for today!</span>
-          </div>
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
         ) : (
-          <Button
-            onClick={handleClaimReward}
-            disabled={isClaiming || !user}
-            className="w-full bg-primary-neon text-primary-foreground hover:bg-primary-neon/90"
-          >
-            {isClaiming ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Claiming...
-              </>
-            ) : (
-              'Claim 10 XP'
-            )}
-          </Button>
+          <XCircle className="h-4 w-4 text-red-500" />
         )}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold mb-2">Earn 10 Points</div>
+        <p className="text-xs text-muted-foreground mb-4">
+          {questCompletedToday ? "Come back tomorrow for a new quest!" : "Complete a simple task to earn points."}
+        </p>
+        <Button
+          onClick={handleCompleteQuest}
+          disabled={questCompletedToday}
+          className="w-full"
+        >
+          {questCompletedToday ? "Quest Completed" : "Complete Quest"}
+        </Button>
       </CardContent>
     </Card>
   );

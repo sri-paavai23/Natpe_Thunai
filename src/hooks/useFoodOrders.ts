@@ -1,112 +1,151 @@
-"use client";
-
 import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query } from 'appwrite';
-import { toast } from 'sonner';
+import { Client, Databases, Query, Models, ID } from 'appwrite';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
-export interface FoodOrder extends Models.Document {
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
+
+// Collection IDs
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const FOOD_ORDERS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_FOOD_ORDERS_COLLECTION_ID;
+
+export type OrderStatus = "Pending" | "Preparing" | "Ready for Pickup" | "Delivered" | "Cancelled";
+
+export interface FoodOrder extends Models.Document { // Extend Models.Document
   offeringId: string;
-  offeringTitle: string;
-  providerId: string;
-  providerName: string;
+  offeringName: string;
+  canteenName: string;
+  collegeName: string;
   buyerId: string;
   buyerName: string;
   quantity: number;
-  totalAmount: number;
-  deliveryLocation: string; // Added missing property
-  notes: string; // Added missing property
-  status: "Pending Confirmation" | "Confirmed" | "Preparing" | "Out for Delivery" | "Delivered" | "Cancelled";
-  collegeName: string; // NEW: Add collegeName
-  ambassadorDelivery?: boolean; // NEW
-  ambassadorMessage?: string; // NEW
+  totalPrice: number;
+  status: OrderStatus;
+  deliveryLocation: string;
+  contactNumber: string;
+  notes?: string;
+  ambassadorId?: string; // ID of the ambassador delivering
+  ambassadorName?: string; // Name of the ambassador
 }
 
 interface FoodOrdersState {
   orders: FoodOrder[];
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
+  placeOrder: (orderData: Omit<FoodOrder, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "buyerId" | "buyerName" | "collegeName" | "status" | "ambassadorId" | "ambassadorName">) => Promise<void>;
+  updateOrderStatus: (orderId: string, newStatus: OrderStatus, ambassadorId?: string, ambassadorName?: string) => Promise<void>;
 }
 
 export const useFoodOrders = (): FoodOrdersState => {
-  const { user, userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
+  const { user, userProfile } = useAuth();
   const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
-    if (!user?.$id || !userProfile?.collegeName) { // NEW: Only fetch if user and collegeName are available
-        setIsLoading(false);
-        setOrders([]); // Clear orders if no user or college is set
-        return;
-    }
     setIsLoading(true);
     setError(null);
-    
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Fetch orders where the current user is the buyer OR the provider AND from their college
       const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
+        DATABASE_ID,
+        FOOD_ORDERS_COLLECTION_ID,
         [
-            Query.or([
-                Query.equal('buyerId', user.$id),
-                Query.equal('providerId', user.$id)
-            ]),
-            Query.equal('collegeName', userProfile.collegeName), // NEW: Filter by collegeName
-            Query.orderDesc('$createdAt')
+          Query.or([
+            Query.equal('buyerId', user.$id),
+            Query.equal('ambassadorId', user.$id),
+            userProfile?.collegeName ? Query.equal('collegeName', userProfile.collegeName) : Query.limit(100) // For canteen owners/ambassadors to see all orders in their college
+          ]),
+          Query.orderDesc('$createdAt')
         ]
       );
-      setOrders(response.documents as unknown as FoodOrder[]);
+      setOrders(response.documents as FoodOrder[]); // Type assertion is now safer
     } catch (err: any) {
       console.error("Error fetching food orders:", err);
-      setError(err.message || "Failed to load food orders.");
+      setError("Failed to fetch food orders.");
       toast.error("Failed to load food orders.");
     } finally {
       setIsLoading(false);
     }
-  }, [user?.$id, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+  }, [user, userProfile?.collegeName]);
 
   useEffect(() => {
     fetchOrders();
+  }, [fetchOrders]);
 
-    if (!user?.$id || !userProfile?.collegeName) return; // NEW: Only subscribe if user and collegeName are available
+  const placeOrder = async (orderData: Omit<FoodOrder, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "buyerId" | "buyerName" | "collegeName" | "status" | "ambassadorId" | "ambassadorName">) => {
+    if (!user || !userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name set to place an order.");
+      return;
+    }
 
-    const unsubscribe = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_ORDERS_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as FoodOrder;
-        
-        // Only process if the current user is involved AND from their college
-        if ((payload.buyerId !== user.$id && payload.providerId !== user.$id) || payload.collegeName !== userProfile.collegeName) { // NEW: Check collegeName
-            return;
+    try {
+      const newOrder = await databases.createDocument(
+        DATABASE_ID,
+        FOOD_ORDERS_COLLECTION_ID,
+        ID.unique(),
+        {
+          ...orderData,
+          buyerId: user.$id,
+          buyerName: user.name,
+          collegeName: userProfile.collegeName,
+          status: "Pending",
         }
+      );
+      setOrders(prev => [newOrder as FoodOrder, ...prev]); // Type assertion is now safer
+      toast.success("Order placed successfully!");
+    } catch (err: any) {
+      console.error("Error placing order:", err);
+      toast.error(err.message || "Failed to place order.");
+      throw err;
+    }
+  };
 
-        setOrders(prev => {
-          const existingIndex = prev.findIndex(o => o.$id === payload.$id);
+  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus, ambassadorId?: string, ambassadorName?: string) => {
+    if (!user) {
+      toast.error("You must be logged in to update an order.");
+      return;
+    }
 
-          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-            if (existingIndex === -1) {
-              toast.info(`New food order: ${payload.offeringTitle}`);
-              return [payload, ...prev];
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-            if (existingIndex !== -1) {
-              toast.info(`Order status updated: ${payload.offeringTitle} is now ${payload.status}`);
-              return prev.map(o => o.$id === payload.$id ? payload : o);
-            }
-          }
-          return prev;
-        });
+    try {
+      const dataToUpdate: Partial<FoodOrder> = { status: newStatus };
+      if (ambassadorId && ambassadorName) {
+        dataToUpdate.ambassadorId = ambassadorId;
+        dataToUpdate.ambassadorName = ambassadorName;
       }
-    );
 
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchOrders, user?.$id, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+      const updatedOrder = await databases.updateDocument(
+        DATABASE_ID,
+        FOOD_ORDERS_COLLECTION_ID,
+        orderId,
+        dataToUpdate
+      );
+      setOrders(prev => prev.map(order => order.$id === orderId ? { ...order, ...dataToUpdate } : order));
+      toast.success(`Order ${orderId} status updated to ${newStatus}!`);
+    } catch (err: any) {
+      console.error("Error updating order status:", err);
+      toast.error(err.message || "Failed to update order status.");
+      throw err;
+    }
+  };
 
-  return { orders, isLoading, error, refetch: fetchOrders };
+  return {
+    orders,
+    isLoading,
+    error,
+    refetch: fetchOrders,
+    placeOrder,
+    updateOrderStatus,
+  };
 };

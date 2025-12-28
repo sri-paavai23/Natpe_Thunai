@@ -1,26 +1,43 @@
-"use client";
-
 import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_COLLABORATORS_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query } from 'appwrite';
+import { Client, Databases, Query, Models, ID } from 'appwrite';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext'; // NEW: Import useAuth
+
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
+
+// Collection IDs
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const COLLABORATOR_POSTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_COLLABORATOR_POSTS_COLLECTION_ID;
+
+export type ProjectCategory = "Academic" | "Startup" | "Event" | "Research" | "Other";
+export type ProjectStatus = "Open" | "Ongoing" | "Completed" | "Closed";
 
 export interface CollaboratorPost extends Models.Document {
   title: string;
   description: string;
-  skillsNeeded: string;
-  contact: string;
+  category: ProjectCategory;
+  skillsNeeded: string[]; // e.g., ["React", "Node.js", "UI/UX"]
+  contactInfo: string;
   posterId: string;
   posterName: string;
-  collegeName: string; // NEW: Add collegeName
+  collegeName: string;
+  status: ProjectStatus;
+  imageUrl?: string;
 }
 
 interface CollaboratorPostsState {
   posts: CollaboratorPost[];
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
+  postProject: (postData: Omit<CollaboratorPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status">) => Promise<void>;
+  updatePostStatus: (postId: string, newStatus: ProjectStatus) => Promise<void>;
 }
 
 export const useCollaboratorPosts = (): CollaboratorPostsState => {
@@ -30,79 +47,89 @@ export const useCollaboratorPosts = (): CollaboratorPostsState => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchPosts = useCallback(async () => {
-    if (!userProfile?.collegeName) { // NEW: Only fetch if collegeName is available
-      setIsLoading(false);
-      setPosts([]); // Clear posts if no college is set
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
-    
     try {
       const queries = [
         Query.orderDesc('$createdAt'),
-        Query.equal('collegeName', userProfile.collegeName) // NEW: Filter by collegeName
+        userProfile?.collegeName ? Query.equal('collegeName', userProfile.collegeName) : Query.limit(100) // Filter by college if available
       ];
 
       const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_COLLABORATORS_COLLECTION_ID,
+        DATABASE_ID,
+        COLLABORATOR_POSTS_COLLECTION_ID,
         queries
       );
-      setPosts(response.documents as unknown as CollaboratorPost[]);
+      setPosts(response.documents as CollaboratorPost[]);
     } catch (err: any) {
       console.error("Error fetching collaborator posts:", err);
-      setError(err.message || "Failed to load collaborator posts.");
+      setError("Failed to fetch collaborator posts.");
       toast.error("Failed to load collaborator posts.");
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
+  }, [userProfile?.collegeName]);
 
   useEffect(() => {
     fetchPosts();
+  }, [fetchPosts]);
 
-    if (!userProfile?.collegeName) return; // NEW: Only subscribe if collegeName is available
+  const postProject = async (postData: Omit<CollaboratorPost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "posterId" | "posterName" | "collegeName" | "status">) => {
+    if (!userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name set to post a project.");
+      return;
+    }
 
-    const unsubscribe = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_COLLABORATORS_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as CollaboratorPost;
-
-        // NEW: Filter real-time updates by collegeName
-        if (payload.collegeName !== userProfile.collegeName) {
-            return;
+    try {
+      const newPost = await databases.createDocument(
+        DATABASE_ID,
+        COLLABORATOR_POSTS_COLLECTION_ID,
+        ID.unique(),
+        {
+          ...postData,
+          posterId: userProfile.$id!,
+          posterName: userProfile.name,
+          collegeName: userProfile.collegeName,
+          status: "Open", // Default status
         }
+      );
+      setPosts(prev => [newPost as CollaboratorPost, ...prev]);
+      toast.success("Project posted successfully!");
+    } catch (err: any) {
+      console.error("Error posting project:", err);
+      toast.error(err.message || "Failed to post project.");
+      throw err;
+    }
+  };
 
-        setPosts(prev => {
-          const existingIndex = prev.findIndex(p => p.$id === payload.$id);
+  const updatePostStatus = async (postId: string, newStatus: ProjectStatus) => {
+    if (!userProfile) {
+      toast.error("You must be logged in to update a post.");
+      return;
+    }
 
-          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-            if (existingIndex === -1) {
-              toast.info(`New collaboration post: ${payload.title}`);
-              return [payload, ...prev];
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-            if (existingIndex !== -1) {
-              toast.info(`Collaboration post updated: ${payload.title}`);
-              return prev.map(p => p.$id === payload.$id ? payload : p);
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-            if (existingIndex !== -1) {
-              toast.info(`Collaboration post removed: ${payload.title}`);
-              return prev.filter(p => p.$id !== payload.$id);
-            }
-          }
-          return prev;
-        });
-      }
-    );
+    try {
+      const updatedPost = await databases.updateDocument(
+        DATABASE_ID,
+        COLLABORATOR_POSTS_COLLECTION_ID,
+        postId,
+        { status: newStatus }
+      );
+      setPosts(prev => prev.map(post => post.$id === postId ? { ...post, status: newStatus } : post));
+      toast.success(`Post status updated to ${newStatus}!`);
+    } catch (err: any) {
+      console.error("Error updating post status:", err);
+      toast.error(err.message || "Failed to update post status.");
+      throw err;
+    }
+  };
 
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchPosts, userProfile?.collegeName]); // NEW: Depend on userProfile.collegeName
-
-  return { posts, isLoading, error, refetch: fetchPosts };
+  return {
+    posts,
+    isLoading,
+    error,
+    refetch: fetchPosts,
+    postProject,
+    updatePostStatus,
+  };
 };

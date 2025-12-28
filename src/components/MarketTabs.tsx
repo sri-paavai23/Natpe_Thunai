@@ -1,92 +1,87 @@
-"use client";
-
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Product } from '@/hooks/useMarketListings'; // Import Product from useMarketListings
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMarketListings, ProductCategory } from '@/hooks/useMarketListings'; // Import Product from useMarketListings
 import ProductCard from './ProductCard'; // Assuming ProductCard exists and uses this Product type
+import { Loader2, AlertTriangle, Laptop, Book, Shirt, Package, MoreHorizontal } from 'lucide-react';
 
-interface MarketTabsProps {
-  products: Product[];
-}
-
-// Helper function to filter products by category
-const filterProducts = (products: Product[], category: string) => {
-  if (category === 'all') {
-    return products;
-  }
-  return products.filter(product => product.category === category);
+const categoryIcons = {
+  All: Package,
+  Electronics: Laptop,
+  Books: Book,
+  Apparel: Shirt,
+  Services: MoreHorizontal, // Services might be a separate section, but included for completeness
+  Other: MoreHorizontal,
 };
 
-const MarketTabs: React.FC<MarketTabsProps> = ({ products }) => {
-  const [activeTab, setActiveTab] = useState<string>('all');
+const MarketTabs: React.FC = () => {
+  const [activeCategory, setActiveCategory] = useState<ProductCategory | "All">("All");
+  const { products, isLoading, error } = useMarketListings();
 
-  const items = filterProducts(products, activeTab);
+  const filteredProducts = activeCategory === "All"
+    ? products
+    : products.filter(product => product.category === activeCategory);
+
+  if (isLoading) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Marketplace Categories</CardTitle>
+        </CardHeader>
+        <CardContent className="flex justify-center items-center h-48">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Loading products...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Marketplace Categories</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col justify-center items-center h-48 text-red-500">
+          <AlertTriangle className="h-8 w-8 mb-2" />
+          <span>Error loading products: {error}</span>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-5">
-        <TabsTrigger value="all">All</TabsTrigger>
-        <TabsTrigger value="sell">Sell</TabsTrigger>
-        <TabsTrigger value="rent">Rent</TabsTrigger>
-        <TabsTrigger value="gift">Gift</TabsTrigger>
-        <TabsTrigger value="sports">Sports</TabsTrigger>
-      </TabsList>
-      <TabsContent value="all" className="mt-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.length === 0 ? (
-            <p className="col-span-full text-center text-muted-foreground">No listings found.</p>
-          ) : (
-            items.map((product) => (
-              <ProductCard key={product.$id} product={product} />
-            ))
-          )}
-        </div>
-      </TabsContent>
-      <TabsContent value="sell" className="mt-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.length === 0 ? (
-            <p className="col-span-full text-center text-muted-foreground">No listings for sale found.</p>
-          ) : (
-            items.map((product) => (
-              <ProductCard key={product.$id} product={product} />
-            ))
-          )}
-        </div>
-      </TabsContent>
-      <TabsContent value="rent" className="mt-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.length === 0 ? (
-            <p className="col-span-full text-center text-muted-foreground">No listings for rent found.</p>
-          ) : (
-            items.map((product) => (
-              <ProductCard key={product.$id} product={product} />
-            ))
-          )}
-        </div>
-      </TabsContent>
-      <TabsContent value="gift" className="mt-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.length === 0 ? (
-            <p className="col-span-full text-center text-muted-foreground">No gift listings found.</p>
-          ) : (
-            items.map((product) => (
-              <ProductCard key={product.$id} product={product} />
-            ))
-          )}
-        </div>
-      </TabsContent>
-      <TabsContent value="sports" className="mt-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.length === 0 ? (
-            <p className="col-span-full text-center text-muted-foreground">No sports equipment listings found.</p>
-          ) : (
-            items.map((product) => (
-              <ProductCard key={product.$id} product={product} />
-            ))
-          )}
-        </div>
-      </TabsContent>
-    </Tabs>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Marketplace Categories</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as ProductCategory | "All")} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-6">
+            {Object.entries(categoryIcons).map(([category, Icon]) => (
+              <TabsTrigger key={category} value={category}>
+                <Icon className="h-4 w-4 mr-2" /> {category}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          <TabsContent value={activeCategory} className="mt-4">
+            <h2 className="text-2xl font-semibold mb-4 text-foreground">
+              {activeCategory === "All" ? "All Products" : `${activeCategory} Products`}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredProducts.length > 0 ? (
+                filteredProducts.map(product => (
+                  <ProductCard key={product.$id} product={product} />
+                ))
+              ) : (
+                <p className="col-span-full text-center text-muted-foreground">No products found in this category.</p>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   );
 };
 

@@ -1,126 +1,116 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/context/AuthContext';
 import { useDeveloperMessages } from '@/hooks/useDeveloperMessages';
-import { Loader2, Send } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Send, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const DeveloperChatbox = () => {
-  const { user, userPreferences, loading: isAuthLoading } = useAuth();
+  const { user, userProfile, isLoading: isAuthLoading } = useAuth(); // Use userProfile and isLoading
   const [message, setMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const collegeName = userPreferences?.collegeName;
-  const { allMessages: messages, isLoading, error, sendMessage, refetch } = useDeveloperMessages(collegeName);
+  const collegeName = userProfile?.collegeName;
+  const { messages, isLoading, error, postMessage, refetch } = useDeveloperMessages(); // Use postMessage, removed collegeName arg
 
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
-    if (!user || !userPreferences?.collegeName) {
-      toast.error("Please log in and set your college name to send messages.");
+    if (!user || !userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name to send a message.");
       return;
     }
 
-    setIsSending(true);
     try {
-      await sendMessage(message.trim());
+      await postMessage({
+        message: message.trim(),
+      });
       setMessage("");
+      refetch(); // Refetch messages to show the new one
     } catch (err) {
-      // Error handled in hook
-    } finally {
-      setIsSending(false);
+      console.error("Error sending message:", err);
+      toast.error("Failed to send message.");
     }
   };
 
   if (isAuthLoading) {
     return (
-      <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Developer Chat</CardTitle>
-        </CardHeader>
-        <CardContent className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-neon" />
+      <Card className="w-full">
+        <CardHeader><CardTitle>Developer Chat</CardTitle></CardHeader>
+        <CardContent className="flex justify-center items-center h-48">
+          <Loader2 className="h-6 w-6 animate-spin" />
         </CardContent>
       </Card>
     );
   }
 
-  if (!userPreferences?.isDeveloper) {
+  if (!user) {
     return (
-      <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Developer Chat</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center text-muted-foreground p-4">
-          <p>You must be a developer to access this chat.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Developer Chat</CardTitle>
-        </CardHeader>
-        <CardContent className="text-destructive-foreground bg-destructive/10 p-4 rounded-lg">
-          <p>Error loading messages: {error}</p>
-          <Button onClick={refetch} className="mt-2">Retry</Button>
+      <Card className="w-full">
+        <CardHeader><CardTitle>Developer Chat</CardTitle></CardHeader>
+        <CardContent className="text-center text-muted-foreground h-48 flex items-center justify-center">
+          Please log in to chat with developers.
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in flex flex-col h-[500px]">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-2xl font-bold">Developer Chat ({collegeName || 'All Colleges'})</CardTitle>
+    <Card className="w-full flex flex-col h-[400px]">
+      <CardHeader className="border-b">
+        <CardTitle className="text-lg">Developer Chat</CardTitle>
       </CardHeader>
-      <CardContent ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 border-t border-b border-border">
+      <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
         {isLoading ? (
           <div className="flex justify-center items-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-neon" />
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="text-center text-red-500 h-full flex items-center justify-center">
+            Error loading messages: {error}
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center text-muted-foreground h-full flex items-center justify-center">
+            No messages yet. Send one to get started!
           </div>
         ) : (
           messages.map((msg) => (
-            <div key={msg.$id} className={`flex ${msg.senderId === user?.$id ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-2 rounded-lg ${msg.senderId === user?.$id ? 'bg-secondary-neon text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                <p className="text-xs font-semibold mb-1">
-                  {msg.senderId === user?.$id ? 'You' : msg.senderName}
-                </p>
+            <div
+              key={msg.$id}
+              className={`flex ${msg.senderId === user.$id ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === user.$id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}
+              >
                 <p className="text-sm">{msg.message}</p>
-                <p className="text-xs text-right mt-1 opacity-70">
-                  {format(new Date(msg.createdAt), 'HH:mm')}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {msg.senderName} - {format(new Date(msg.$createdAt), 'HH:mm')}
                 </p>
               </div>
             </div>
           ))
         )}
+        <div ref={messagesEndRef} />
       </CardContent>
-      <CardFooter className="p-4">
-        <form onSubmit={handleSendMessage} className="flex w-full space-x-2">
+      <CardFooter className="border-t p-4">
+        <form onSubmit={handleSendMessage} className="flex w-full gap-2">
           <Input
             placeholder="Type your message..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            disabled={isSending || !user}
-            className="flex-1 bg-input text-foreground border-border"
+            className="flex-1"
+            disabled={!user}
           />
-          <Button type="submit" disabled={isSending || !user}>
-            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          <Button type="submit" size="icon" disabled={!user || !message.trim()}>
+            <Send className="h-4 w-4" />
           </Button>
         </form>
       </CardFooter>

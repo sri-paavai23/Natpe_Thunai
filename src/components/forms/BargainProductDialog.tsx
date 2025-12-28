@@ -3,32 +3,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ServicePost } from '@/hooks/useServiceListings';
-import { useAuth } from '@/context/AuthContext';
+import { Product } from '@/hooks/useMarketListings';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
 
-interface BargainServiceDialogProps {
-  service: ServicePost;
-  onBargainInitiated: (bargainDetails: { serviceId: string; requestedPrice: number; message: string }) => void;
+interface BargainProductDialogProps {
+  product: Product;
+  onBargainInitiated: (bargainDetails: { productId: string; requestedPrice: number; message: string }) => void;
   onCancel: () => void;
 }
 
-const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, onBargainInitiated, onCancel }) => {
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
-  const navigate = useNavigate();
-  const [requestedPrice, setRequestedPrice] = useState<number>(service.price * 0.8); // Default to 80% of original
+const BargainProductDialog: React.FC<BargainProductDialogProps> = ({ product, onBargainInitiated, onCancel }) => {
+  const [requestedPrice, setRequestedPrice] = useState<number>(product.price * 0.8); // Default to 80% of original
   const [message, setMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleBargain = async () => {
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to initiate a bargain.");
-      navigate('/login');
-      return;
-    }
-
-    if (requestedPrice <= 0 || requestedPrice >= service.price) {
+    if (requestedPrice <= 0 || requestedPrice >= product.price) {
       toast.error("Requested price must be greater than 0 and less than the original price.");
       return;
     }
@@ -39,11 +29,11 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       onBargainInitiated({
-        serviceId: service.$id,
+        productId: product.$id,
         requestedPrice,
         message,
       });
-      toast.success("Bargain request sent successfully!");
+      // toast.success("Bargain request sent successfully!"); // Toast handled by parent
     } catch (error) {
       console.error("Bargain request failed:", error);
       toast.error("Failed to send bargain request. Please try again.");
@@ -56,15 +46,15 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
     <Dialog open onOpenChange={onCancel}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Initiate Bargain for "{service.title}"</DialogTitle>
+          <DialogTitle>Initiate Bargain for "{product.title}"</DialogTitle>
           <DialogDescription>
-            Propose a new price for the service.
+            Propose a new price for the product.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="flex items-center justify-between">
             <Label>Original Price:</Label>
-            <span className="font-semibold">₹{service.price.toFixed(2)}</span>
+            <span className="font-semibold">₹{product.price.toFixed(2)}</span>
           </div>
           <div className="space-y-2">
             <Label htmlFor="requestedPrice">Your Proposed Price (₹)</Label>
@@ -74,7 +64,7 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
               value={requestedPrice}
               onChange={(e) => setRequestedPrice(parseFloat(e.target.value))}
               min={1}
-              max={service.price - 1}
+              max={product.price - 1}
             />
           </div>
           <div className="space-y-2">
@@ -100,4 +90,4 @@ const BargainServiceDialog: React.FC<BargainServiceDialogProps> = ({ service, on
   );
 };
 
-export default BargainServiceDialog;
+export default BargainProductDialog;

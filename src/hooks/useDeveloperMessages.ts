@@ -1,115 +1,140 @@
-"use client";
-
 import { useState, useEffect, useCallback } from 'react';
-import { Client, Databases, Query, Models } from 'appwrite';
-import { useAuth } from '@/context/AuthContext'; // NEW: Use useAuth to get current user's college
-import toast from 'react-hot-toast';
+import { Client, Databases, Query, Models, ID } from 'appwrite';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
-export interface DeveloperMessage {
-  $id: string;
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
+
+// Collection IDs
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const DEVELOPER_MESSAGES_COLLECTION_ID = import.meta.env.VITE_APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID;
+
+export type MessageStatus = "Pending" | "Resolved" | "Archived";
+
+export interface DeveloperMessage extends Models.Document { // Extend Models.Document
   senderId: string;
   senderName: string;
   collegeName: string;
   message: string;
-  createdAt: string;
+  status: MessageStatus;
+  response?: string; // Developer's response
+  respondedBy?: string; // Developer's ID
+  respondedAt?: string; // ISO date string
 }
 
-interface DeveloperMessagesState {
-  allMessages: DeveloperMessage[];
+export interface DeveloperMessagesState {
+  messages: DeveloperMessage[];
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
-  sendMessage: (message: string) => Promise<void>;
+  refetch: () => Promise<void>;
+  postMessage: (messageData: Omit<DeveloperMessage, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "senderId" | "senderName" | "collegeName" | "status" | "response" | "respondedBy" | "respondedAt">) => Promise<void>;
+  updateMessageStatus: (messageId: string, newStatus: MessageStatus, response?: string) => Promise<void>;
 }
 
-const client = new Client();
-client
-  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
-
-const databases = new Databases(client);
-
-const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'default_database_id';
-const DEVELOPER_MESSAGES_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID || 'developer_messages';
-
-export const useDeveloperMessages = (collegeNameFilter?: string): DeveloperMessagesState => { // NEW: Add collegeNameFilter parameter
-  const { user, userPreferences, loading: isAuthLoading } = useAuth(); // NEW: Use useAuth to get current user's college
-  const [allMessages, setAllMessages] = useState<DeveloperMessage[]>([]);
+export const useDeveloperMessages = (): DeveloperMessagesState => { // Removed collegeNameFilter from hook signature
+  const { user, userProfile } = useAuth();
+  const [messages, setMessages] = useState<DeveloperMessage[]>([]); // Renamed allMessages to messages
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveCollegeNameFilter = collegeNameFilter || userPreferences?.collegeName;
-
   const fetchMessages = useCallback(async () => {
-    if (isAuthLoading) return; // Wait for auth to load
-
     setIsLoading(true);
     setError(null);
     try {
-      let queries = [
-        Query.orderAsc('$createdAt'),
-        Query.limit(100) // Fetch last 100 messages
+      const queries = [
+        Query.orderDesc('$createdAt'),
+        // Only developers can see all messages, others only their own
+        userProfile?.isDeveloper ? Query.limit(100) : Query.equal('senderId', user?.$id || 'invalid')
       ];
-
-      if (effectiveCollegeNameFilter) {
-        queries.push(Query.equal('collegeName', effectiveCollegeNameFilter));
-      }
 
       const response = await databases.listDocuments(
         DATABASE_ID,
         DEVELOPER_MESSAGES_COLLECTION_ID,
         queries
       );
-      setAllMessages(response.documents as DeveloperMessage[]);
+      setMessages(response.documents as DeveloperMessage[]); // Type assertion is now safer
     } catch (err: any) {
-      console.error("Failed to fetch developer messages:", err);
-      setError(err.message || "Failed to fetch developer messages.");
-      toast.error(err.message || "Failed to fetch developer messages.");
+      console.error("Error fetching developer messages:", err);
+      setError("Failed to fetch developer messages.");
+      toast.error("Failed to load developer messages.");
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveCollegeNameFilter, isAuthLoading]);
+  }, [user, userProfile?.isDeveloper]);
 
   useEffect(() => {
     fetchMessages();
+  }, [fetchMessages]);
 
-    const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${DEVELOPER_MESSAGES_COLLECTION_ID}.documents`, response => {
-      const payload = response.payload as DeveloperMessage;
-      if (!effectiveCollegeNameFilter || payload.collegeName === effectiveCollegeNameFilter) {
-        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          setAllMessages(prev => [...prev, payload]);
-        }
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchMessages, effectiveCollegeNameFilter]);
-
-  const sendMessage = async (message: string) => {
-    if (!user?.$id || !userPreferences?.name || !effectiveCollegeNameFilter) {
-      toast.error("Please log in and ensure your college is set to send messages.");
+  const postMessage = async (messageData: Omit<DeveloperMessage, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "senderId" | "senderName" | "collegeName" | "status" | "response" | "respondedBy" | "respondedAt">) => {
+    if (!user || !userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name set to send a message.");
       return;
     }
+
     try {
-      await databases.createDocument(
+      const newMessage = await databases.createDocument(
         DATABASE_ID,
         DEVELOPER_MESSAGES_COLLECTION_ID,
-        Models.ID.unique(),
+        ID.unique(),
         {
+          ...messageData,
           senderId: user.$id,
-          senderName: userPreferences.name,
-          collegeName: effectiveCollegeNameFilter,
-          message,
+          senderName: user.name,
+          collegeName: userProfile.collegeName,
+          status: "Pending", // Default status
         }
       );
+      setMessages(prev => [newMessage as DeveloperMessage, ...prev]); // Type assertion is now safer
+      toast.success("Message sent to developers!");
     } catch (err: any) {
-      console.error("Failed to send message:", err);
+      console.error("Error posting message:", err);
       toast.error(err.message || "Failed to send message.");
       throw err;
     }
   };
 
-  return { allMessages, isLoading, error, refetch: fetchMessages, sendMessage };
+  const updateMessageStatus = async (messageId: string, newStatus: MessageStatus, response?: string) => {
+    if (!user || !userProfile?.isDeveloper) {
+      toast.error("You are not authorized to update message status.");
+      return;
+    }
+
+    try {
+      const dataToUpdate: Partial<DeveloperMessage> = { status: newStatus };
+      if (response) {
+        dataToUpdate.response = response;
+        dataToUpdate.respondedBy = user.$id;
+        dataToUpdate.respondedAt = new Date().toISOString();
+      }
+
+      const updatedMessage = await databases.updateDocument(
+        DATABASE_ID,
+        DEVELOPER_MESSAGES_COLLECTION_ID,
+        messageId,
+        dataToUpdate
+      );
+      setMessages(prev => prev.map(msg => msg.$id === messageId ? { ...msg, ...dataToUpdate } : msg));
+      toast.success(`Message status updated to ${newStatus}!`);
+    } catch (err: any) {
+      console.error("Error updating message status:", err);
+      toast.error(err.message || "Failed to update message status.");
+      throw err;
+    }
+  };
+
+  return {
+    messages,
+    isLoading,
+    error,
+    refetch: fetchMessages,
+    postMessage,
+    updateMessageStatus,
+  };
 };

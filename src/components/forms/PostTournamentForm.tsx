@@ -1,160 +1,277 @@
-"use client";
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils"; // Import cn
+import { useTournamentData } from "@/hooks/useTournamentData";
+import { toast } from "sonner";
 
-import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast'; // Ensure toast is imported
-import { useTournamentData } from '@/hooks/useTournamentData';
+const formSchema = z.object({
+  title: z.string().min(3, { message: "Title must be at least 3 characters." }),
+  game: z.string().min(2, { message: "Game name is required." }),
+  platform: z.string().min(2, { message: "Platform is required." }),
+  date: z.date({ required_error: "A date is required." }),
+  time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Invalid time format (HH:MM)." }),
+  prizePool: z.string().min(1, { message: "Prize pool is required." }),
+  fee: z.coerce.number().min(0, { message: "Fee cannot be negative." }),
+  minPlayers: z.coerce.number().min(1, { message: "Minimum players must be at least 1." }),
+  maxPlayers: z.coerce.number().min(1, { message: "Maximum players must be at least 1." }),
+  maxParticipants: z.coerce.number().min(1, { message: "Maximum participants must be at least 1." }),
+  description: z.string().optional(),
+}).refine(data => data.maxPlayers >= data.minPlayers, {
+  message: "Max players cannot be less than min players.",
+  path: ["maxPlayers"],
+});
 
 interface PostTournamentFormProps {
-  onTournamentPosted: () => void;
-  onCancel: () => void;
+  onSuccess: () => void;
 }
 
-const PostTournamentForm: React.FC<PostTournamentFormProps> = ({ onTournamentPosted, onCancel }) => {
-  const { user, userPreferences } = useAuth();
+const PostTournamentForm: React.FC<PostTournamentFormProps> = ({ onSuccess }) => {
   const { postTournament } = useTournamentData();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [title, setTitle] = useState("");
-  const [game, setGame] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [date, setDate] = useState<Date>();
-  const [time, setTime] = useState("");
-  const [prizePool, setPrizePool] = useState("");
-  const [entryFee, setEntryFee] = useState("");
-  const [maxParticipants, setMaxParticipants] = useState("");
-  const [description, setDescription] = useState("");
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: "",
+      game: "",
+      platform: "",
+      time: "18:00",
+      prizePool: "",
+      fee: 0,
+      minPlayers: 1,
+      maxPlayers: 1,
+      maxParticipants: 16,
+      description: "",
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !userPreferences?.collegeName) {
-      toast.error("Please log in and set your college name to post a tournament.");
-      return;
-    }
-    if (!title || !game || !platform || !date || !time || !prizePool || !entryFee || !maxParticipants) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
-
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     try {
       await postTournament({
-        title,
-        game,
-        platform,
-        date: date.toISOString(),
-        time,
-        prizePool,
-        entryFee,
-        maxParticipants: parseInt(maxParticipants),
-        description: description || undefined,
+        title: data.title,
+        game: data.game,
+        platform: data.platform,
+        date: data.date.toISOString(),
+        time: data.time,
+        prizePool: data.prizePool,
+        fee: data.fee,
+        minPlayers: data.minPlayers,
+        maxPlayers: data.maxPlayers,
+        maxParticipants: data.maxParticipants,
+        description: data.description || undefined,
       });
-      onTournamentPosted();
+      onSuccess();
+      form.reset();
     } catch (error) {
-      // Error handled in hook
+      console.error("Error posting tournament:", error);
+      toast.error("Failed to post tournament.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="title">Tournament Title</Label>
-        <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-      </div>
-      <div>
-        <Label htmlFor="game">Game</Label>
-        <Input id="game" value={game} onChange={(e) => setGame(e.target.value)} required />
-      </div>
-      <div>
-        <Label htmlFor="platform">Platform</Label>
-        <Select value={platform} onValueChange={setPlatform} required>
-          <SelectTrigger id="platform">
-            <SelectValue placeholder="Select platform" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="PC">PC</SelectItem>
-            <SelectItem value="PlayStation">PlayStation</SelectItem>
-            <SelectItem value="Xbox">Xbox</SelectItem>
-            <SelectItem value="Nintendo Switch">Nintendo Switch</SelectItem>
-            <SelectItem value="Mobile">Mobile</SelectItem>
-            <SelectItem value="Other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="date">Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !date && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {date ? format(date, "PPP") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div>
-          <Label htmlFor="time">Time</Label>
-          <Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
-        </div>
-      </div>
-      <div>
-        <Label htmlFor="prizePool">Prize Pool</Label>
-        <Input id="prizePool" value={prizePool} onChange={(e) => setPrizePool(e.target.value)} placeholder="e.g., ₹5000, Gift Cards" required />
-      </div>
-      <div>
-        <Label htmlFor="entryFee">Entry Fee</Label>
-        <Input id="entryFee" value={entryFee} onChange={(e) => setEntryFee(e.target.value)} placeholder="e.g., ₹50, Free" required />
-      </div>
-      <div>
-        <Label htmlFor="maxParticipants">Max Participants</Label>
-        <Input id="maxParticipants" type="number" value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} min="2" required />
-      </div>
-      <div>
-        <Label htmlFor="description">Description (Optional)</Label>
-        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-      </div>
-      <div className="flex justify-end space-x-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Posting...
-            </>
-          ) : (
-            'Post Tournament'
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tournament Title</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Valorant College Clash" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
           )}
+        />
+        <FormField
+          control={form.control}
+          name="game"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Game</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Valorant" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="platform"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Platform</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select platform" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="PC">PC</SelectItem>
+                  <SelectItem value="PlayStation">PlayStation</SelectItem>
+                  <SelectItem value="Xbox">Xbox</SelectItem>
+                  <SelectItem value="Mobile">Mobile</SelectItem>
+                  <SelectItem value="Nintendo Switch">Nintendo Switch</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Date</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={field.onChange}
+                      disabled={(date) => date < new Date()}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="time"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Time (HH:MM)</FormLabel>
+                <FormControl>
+                  <Input type="time" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="prizePool"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Prize Pool</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., ₹10,000" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="fee"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Entry Fee (₹)</FormLabel>
+                <FormControl>
+                  <Input type="number" placeholder="0" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <FormField
+            control={form.control}
+            name="minPlayers"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Players/Team</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="maxPlayers"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Players/Team</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="maxParticipants"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Teams/Participants</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description (Optional)</FormLabel>
+              <FormControl>
+                <Textarea placeholder="Tell us more about the tournament..." rows={3} {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? "Posting..." : "Post Tournament"}
         </Button>
-      </div>
-    </form>
+      </form>
+    </Form>
   );
 };
 

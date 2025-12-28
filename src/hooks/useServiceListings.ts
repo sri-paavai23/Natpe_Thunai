@@ -1,138 +1,149 @@
-"use client";
-
 import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query } from 'appwrite';
-import { toast } from 'sonner';
+import { Client, Databases, Query, Models, ID } from 'appwrite';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
-export interface ServicePost extends Models.Document {
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
+
+// Collection IDs
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const SERVICE_LISTINGS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_SERVICE_LISTINGS_COLLECTION_ID;
+
+export type ServiceCategory = "Academics" | "Tech" | "Creative" | "Manual Labor" | "Wellness" | "Other";
+export type ServiceStatus = "Available" | "Booked" | "Completed" | "Cancelled";
+
+export interface ServicePost extends Models.Document { // Extend Models.Document
   title: string;
   description: string;
-  category: string;
-  price: string;
-  contact: string;
-  posterId: string;
-  posterName: string;
+  category: ServiceCategory;
+  price: number; // Price per unit (e.g., per hour, per task)
+  priceUnit: string; // e.g., "hour", "task", "project"
+  imageUrl?: string;
+  providerId: string;
+  providerName: string;
   collegeName: string;
-  isCustomOrder: boolean;
-  customOrderDescription?: string; // NEW: Added customOrderDescription
+  status: ServiceStatus;
+  contactInfo: string;
+  location?: string; // Where the service is provided
+  isCustomOrder?: boolean; // Added for custom food requests
+  customOrderDescription?: string; // Added for custom food requests
 }
 
 interface UseServiceListingsState {
   services: ServicePost[];
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
+  postService: (serviceData: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "providerId" | "providerName" | "collegeName" | "status">) => Promise<void>;
+  updateServiceStatus: (serviceId: string, newStatus: ServiceStatus) => Promise<void>;
 }
 
-export const useServiceListings = (categories?: string | string[]): UseServiceListingsState => { // NEW: Accept string or string[]
+export const useServiceListings = (categories?: string | string[]): UseServiceListingsState => {
   const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [services, setServices] = useState<ServicePost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchServices = useCallback(async () => {
-    if (isAuthLoading) {
-      setIsLoading(true);
-      setServices([]);
-      setError(null);
-      return;
-    }
-
-    if (!userProfile?.collegeName) {
-      setIsLoading(false);
-      setServices([]);
-      setError("User college information is missing. Cannot fetch services.");
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
-
     try {
       const queries = [
-        Query.equal('collegeName', userProfile.collegeName),
-        Query.orderDesc('$createdAt')
+        Query.orderDesc('$createdAt'),
+        userProfile?.collegeName ? Query.equal('collegeName', userProfile.collegeName) : Query.limit(100) // Filter by college if available
       ];
 
       if (categories) {
         if (Array.isArray(categories)) {
-          // If categories is an array, use Query.or for multiple category filters
-          if (categories.length > 0) {
-            queries.push(Query.or(categories.map(cat => Query.equal('category', cat))));
-          }
+          queries.push(Query.or(categories.map(cat => Query.equal('category', cat))));
         } else {
-          // If it's a single string, use Query.equal
           queries.push(Query.equal('category', categories));
         }
       }
 
       const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID,
+        DATABASE_ID,
+        SERVICE_LISTINGS_COLLECTION_ID,
         queries
       );
-      setServices(response.documents as unknown as ServicePost[]);
+      setServices(response.documents as ServicePost[]); // Type assertion is now safer
     } catch (err: any) {
       console.error("Error fetching service listings:", err);
-      setError(err.message || "Failed to load service listings.");
+      setError("Failed to fetch service listings.");
       toast.error("Failed to load service listings.");
     } finally {
       setIsLoading(false);
     }
-  }, [userProfile?.collegeName, categories, isAuthLoading]); // NEW: Add categories to dependency array
+  }, [categories, userProfile?.collegeName]);
 
   useEffect(() => {
-    fetchServices();
+    if (!isAuthLoading) {
+      fetchServices();
+    }
+  }, [fetchServices, isAuthLoading]);
 
-    if (!userProfile?.collegeName) return;
+  const postService = async (serviceData: Omit<ServicePost, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "providerId" | "providerName" | "collegeName" | "status">) => {
+    if (!userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name set to post a service.");
+      return;
+    }
 
-    const unsubscribe = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_SERVICES_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as ServicePost;
-
-        if (payload.collegeName !== userProfile.collegeName) {
-          return;
+    try {
+      const newService = await databases.createDocument(
+        DATABASE_ID,
+        SERVICE_LISTINGS_COLLECTION_ID,
+        ID.unique(),
+        {
+          ...serviceData,
+          providerId: userProfile.$id!,
+          providerName: userProfile.name,
+          collegeName: userProfile.collegeName,
+          status: "Available", // Default status
         }
+      );
+      setServices(prev => [newService as ServicePost, ...prev]); // Type assertion is now safer
+      toast.success("Service posted successfully!");
+    } catch (err: any) {
+      console.error("Error posting service:", err);
+      toast.error(err.message || "Failed to post service.");
+      throw err;
+    }
+  };
 
-        // Check if the payload's category matches the filtered categories
-        const matchesCategory = !categories || 
-                                (Array.isArray(categories) && categories.includes(payload.category)) ||
-                                (!Array.isArray(categories) && categories === payload.category);
+  const updateServiceStatus = async (serviceId: string, newStatus: ServiceStatus) => {
+    if (!userProfile) {
+      toast.error("You must be logged in to update a service.");
+      return;
+    }
 
-        if (!matchesCategory) {
-          return;
-        }
+    try {
+      const updatedService = await databases.updateDocument(
+        DATABASE_ID,
+        SERVICE_LISTINGS_COLLECTION_ID,
+        serviceId,
+        { status: newStatus }
+      );
+      setServices(prev => prev.map(service => service.$id === serviceId ? { ...service, status: newStatus } : service));
+      toast.success(`Service status updated to ${newStatus}!`);
+    } catch (err: any) {
+      console.error("Error updating service status:", err);
+      toast.error(err.message || "Failed to update service status.");
+      throw err;
+    }
+  };
 
-        setServices(prev => {
-          let updatedServices = prev;
-          const existingIndex = prev.findIndex(s => s.$id === payload.$id);
-
-          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-            if (existingIndex === -1) {
-              toast.info(`New service posted: "${payload.title}"`);
-              updatedServices = [payload, ...prev];
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-            if (existingIndex !== -1) {
-              updatedServices = prev.map(s => s.$id === payload.$id ? payload : s);
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-            if (existingIndex !== -1) {
-              updatedServices = prev.filter(s => s.$id !== payload.$id);
-            }
-          }
-          return updatedServices;
-        });
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchServices, userProfile?.collegeName, categories]); // NEW: Add categories to dependency array
-
-  return { services, isLoading, error, refetch: fetchServices };
+  return {
+    services,
+    isLoading,
+    error,
+    refetch: fetchServices,
+    postService,
+    updateServiceStatus,
+  };
 };

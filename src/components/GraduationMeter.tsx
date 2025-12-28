@@ -1,81 +1,44 @@
-"use client";
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { getGraduationData, formatTimeRemaining } from '@/utils/time';
+import { GraduationCap } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { getGraduationData } from '@/utils/dateUtils';
 
 const GraduationMeter = () => {
-  const { user, userPreferences, loading } = useAuth();
+  const { user, userProfile, isLoading } = useAuth(); // Use userProfile and isLoading
 
-  if (loading) {
+  if (isLoading || !user || !userProfile) {
     return (
-      <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-foreground">
-            Graduation Meter
-          </CardTitle>
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Graduation Progress</CardTitle>
         </CardHeader>
-        <CardContent className="p-4 pt-4 space-y-5 flex flex-col items-center text-center">
-          <p className="text-muted-foreground">Loading graduation data...</p>
+        <CardContent>
+          <div className="text-2xl font-bold">Loading...</div>
+          <p className="text-xs text-muted-foreground">Please log in to see your progress.</p>
         </CardContent>
       </Card>
     );
   }
 
-  if (!user || !user.$createdAt || !userPreferences || !userPreferences.yearOfStudy) {
-    return (
-      <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-foreground">
-            Graduation Meter
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-4 space-y-5 flex flex-col items-center text-center">
-          <div className="text-center text-muted-foreground bg-muted/10 p-4 rounded-lg w-full">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-            <p>Please log in or complete your profile to see your graduation meter.</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { graduationDate, remainingDays, progress, isGraduated } = getGraduationData(user.$createdAt, userPreferences.yearOfStudy);
+  const userCreationDate = user.$createdAt;
+  const graduationInfo = getGraduationData(userCreationDate, userProfile.yearOfStudy);
 
   return (
-    <Card className="w-full max-w-md bg-card text-foreground shadow-lg rounded-lg border-border animate-fade-in">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold text-foreground">
-          Graduation Meter
-        </CardTitle>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">Graduation Progress</CardTitle>
+        <GraduationCap className="h-4 w-4 text-primary" />
       </CardHeader>
-      <CardContent className="p-4 pt-4 space-y-5 flex flex-col items-center text-center">
-        {isGraduated ? (
-          <div className="text-center text-green-700 bg-green-100 p-4 rounded-lg w-full">
-            <CheckCircle className="h-8 w-8 mx-auto mb-3 text-green-600" />
-            <p className="text-lg font-semibold">Congratulations! You've graduated!</p>
-            <p className="text-sm text-green-800">Your journey has been successfully completed.</p>
-          </div>
-        ) : (
-          <>
-            <div className="w-full">
-              <Progress value={progress} className="h-3 bg-muted" />
-              <div className="flex justify-between text-sm text-muted-foreground mt-2">
-                <span>{progress.toFixed(1)}% Complete</span>
-                <span>{formatTimeRemaining(remainingDays)} Left</span>
-              </div>
-            </div>
-            <div className="text-lg font-medium text-foreground">
-              Estimated Graduation: {graduationDate}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Based on your {userPreferences.yearOfStudy === 'I' ? 'first' : userPreferences.yearOfStudy === 'II' ? 'second' : userPreferences.yearOfStudy === 'III' ? 'third' : userPreferences.yearOfStudy === 'IV' ? 'fourth' : userPreferences.yearOfStudy === 'V' ? 'fifth' : 'selected'} year of study.
-            </p>
-          </>
-        )}
+      <CardContent>
+        <div className="text-2xl font-bold mb-2">
+          {graduationInfo.isGraduated ? "Graduated!" : `${graduationInfo.countdown.years}y ${graduationInfo.countdown.months}m ${graduationInfo.countdown.days}d`}
+        </div>
+        <Progress value={graduationInfo.progress} className="w-full mb-2" />
+        <p className="text-xs text-muted-foreground">
+          {graduationInfo.isGraduated ? "Congratulations!" : `Estimated: ${graduationInfo.graduationDate}`}
+        </p>
       </CardContent>
     </Card>
   );

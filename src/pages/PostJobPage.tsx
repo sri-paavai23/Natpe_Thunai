@@ -1,168 +1,170 @@
-"use client";
-
-import React, { useState } from "react";
-import { MadeWithDyad } from "@/components/made-with-dyad";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Briefcase, DollarSign, Loader2 } from "lucide-react"; // NEW: Import Loader2
-import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite"; // NEW: Import Appwrite services
-import { ID } from 'appwrite'; // NEW: Import ID
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 const PostJobPage = () => {
   const { user, userProfile } = useAuth(); // NEW: Use useAuth hook
+  const navigate = useNavigate();
+
   const [jobTitle, setJobTitle] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [jobCategory, setJobCategory] = useState("");
-  const [compensation, setCompensation] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [isPosting, setIsPosting] = useState(false); // NEW: Add loading state
+  const [companyName, setCompanyName] = useState("");
+  const [location, setLocation] = useState("");
+  const [jobType, setJobType] = useState(""); // Full-time, Part-time, Internship
+  const [description, setDescription] = useState("");
+  const [requirements, setRequirements] = useState("");
+  const [applicationLink, setApplicationLink] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => { // NEW: Make handleSubmit async
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to post a job.");
-      return;
-    }
-    if (!userProfile.collegeName) {
-      toast.error("Your profile is missing college information. Please update your profile first.");
-      return;
-    }
-    if (!jobTitle || !jobDescription || !jobCategory || !compensation || !contactEmail) {
-      toast.error("Please fill in all required fields.");
+    if (!user || !userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name set to post a job.");
+      navigate('/login');
       return;
     }
 
-    setIsPosting(true); // NEW: Set loading state
+    setIsSubmitting(true);
     try {
-      const newJobData = {
-        title: jobTitle,
-        description: jobDescription,
-        category: jobCategory,
-        price: compensation, // Using 'price' attribute for compensation
-        contact: contactEmail,
+      // Simulate API call to post job
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log("Job Posted:", {
+        jobTitle,
+        companyName,
+        location,
+        jobType,
+        description,
+        requirements,
+        applicationLink,
         posterId: user.$id,
         posterName: user.name,
-        collegeName: userProfile.collegeName, // NEW: Add collegeName
-        isCustomOrder: false, // Jobs are not custom orders
-      };
+        collegeName: userProfile.collegeName,
+      });
 
-      await databases.createDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_SERVICES_COLLECTION_ID,
-        ID.unique(),
-        newJobData
-      );
-
-      toast.success(`Job "${jobTitle}" posted successfully!`);
-      // In a real app, send data to backend
+      toast.success("Job posted successfully!");
+      // Clear form
       setJobTitle("");
-      setJobDescription("");
-      setJobCategory("");
-      setCompensation("");
-      setContactEmail("");
-    } catch (error: any) {
-      console.error("Error posting job:", error);
-      toast.error(error.message || "Failed to post job/service.");
+      setCompanyName("");
+      setLocation("");
+      setJobType("");
+      setDescription("");
+      setRequirements("");
+      setApplicationLink("");
+    } catch (error) {
+      console.error("Failed to post job:", error);
+      toast.error("Failed to post job. Please try again.");
     } finally {
-      setIsPosting(false); // NEW: Reset loading state
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Post a Job/Service</h1>
-      <div className="max-w-md mx-auto space-y-6">
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-secondary-neon" /> New Listing
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <p className="text-sm text-muted-foreground mb-4">
-              Describe the job or service you need help with, or the service you are offering.
-            </p>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="jobTitle" className="text-foreground">Job/Service Title</Label>
+    <div className="container mx-auto p-4 max-w-3xl">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-foreground">Post a New Job</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="jobTitle">Job Title</Label>
                 <Input
                   id="jobTitle"
-                  type="text"
-                  placeholder="e.g., Need a tutor for Calculus"
                   value={jobTitle}
                   onChange={(e) => setJobTitle(e.target.value)}
+                  placeholder="e.g., Software Engineer Intern"
                   required
-                  className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                  disabled={isPosting}
                 />
               </div>
-              <div>
-                <Label htmlFor="jobDescription" className="text-foreground">Description</Label>
-                <Textarea
-                  id="jobDescription"
-                  placeholder="Provide details about the task or service..."
-                  value={jobDescription}
-                  onChange={(e) => setJobDescription(e.target.value)}
+              <div className="space-y-2">
+                <Label htmlFor="companyName">Company Name</Label>
+                <Input
+                  id="companyName"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g., Tech Innovations Inc."
                   required
-                  className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                  disabled={isPosting}
                 />
               </div>
-              <div>
-                <Label htmlFor="jobCategory" className="text-foreground">Category</Label>
-                <Select value={jobCategory} onValueChange={setJobCategory} required disabled={isPosting}>
-                  <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-                    <SelectValue placeholder="Select a category" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g., Bengaluru, India (Remote)"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="jobType">Job Type</Label>
+                <Select value={jobType} onValueChange={setJobType} required>
+                  <SelectTrigger id="jobType">
+                    <SelectValue placeholder="Select job type" />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover text-popover-foreground border-border">
-                    <SelectItem value="tutoring">Tutoring</SelectItem>
-                    <SelectItem value="tech-support">Tech Support</SelectItem>
-                    <SelectItem value="design">Design</SelectItem>
-                    <SelectItem value="writing">Writing</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                  <SelectContent>
+                    <SelectItem value="Full-time">Full-time</SelectItem>
+                    <SelectItem value="Part-time">Part-time</SelectItem>
+                    <SelectItem value="Internship">Internship</SelectItem>
+                    <SelectItem value="Contract">Contract</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label htmlFor="compensation" className="text-foreground">Compensation/Fee</Label>
-                <Input
-                  id="compensation"
-                  type="text"
-                  placeholder="e.g., ₹500/hour, Negotiable"
-                  value={compensation}
-                  onChange={(e) => setCompensation(e.target.value)}
-                  required
-                  className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                  disabled={isPosting}
-                />
-              </div>
-              <div>
-                <Label htmlFor="contactEmail" className="text-foreground">Contact Email</Label>
-                <Input
-                  id="contactEmail"
-                  type="email"
-                  placeholder="your.email@example.com"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  required
-                  className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                  disabled={isPosting}
-                />
-              </div>
-              <Button type="submit" className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90" disabled={isPosting}>
-                {isPosting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <><DollarSign className="mr-2 h-4 w-4" /> Post Job/Service</>}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-      <MadeWithDyad />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Job Description</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Provide a detailed description of the job role and responsibilities."
+                rows={5}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="requirements">Requirements</Label>
+              <Textarea
+                id="requirements"
+                value={requirements}
+                onChange={(e) => setRequirements(e.target.value)}
+                placeholder="List the required skills, qualifications, and experience."
+                rows={3}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="applicationLink">Application Link</Label>
+              <Input
+                id="applicationLink"
+                type="url"
+                value={applicationLink}
+                onChange={(e) => setApplicationLink(e.target.value)}
+                placeholder="e.g., https://company.com/careers/job-title"
+                required
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Posting Job..." : "Post Job"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };

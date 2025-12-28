@@ -1,103 +1,161 @@
-"use client";
-
 import { useState, useEffect, useCallback } from 'react';
-import { Client, Databases, Query, Models } from 'appwrite';
+import { Client, Databases, Query, Models, ID } from 'appwrite';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast'; // Ensure toast is imported
+import { toast } from 'sonner';
+
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
+
+// Collection IDs
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const MARKET_LISTINGS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_MARKET_LISTINGS_COLLECTION_ID;
+
+export type ProductCategory = "Electronics" | "Books" | "Apparel" | "Services" | "Other";
+export type ProductCondition = "New" | "Used - Like New" | "Used - Good" | "Used - Fair";
 
 export interface Product extends Models.Document { // Extend Models.Document
   title: string;
   description: string;
   price: number;
-  category: string; // e.g., "sell", "rent", "gift", "sports"
+  category: ProductCategory;
+  condition: ProductCondition;
   imageUrl?: string;
-  userId: string; // ID of the user who posted the listing
-  sellerName: string; // Name of the user who posted the listing
-  collegeName: string; // College of the user who posted the listing
-  status: 'available' | 'sold' | 'rented' | 'gifted';
-  // createdAt: string; // Already in Models.Document
-  // updatedAt: string; // Already in Models.Document
+  sellerId: string;
+  sellerName: string;
+  collegeName: string;
+  contactInfo: string;
+  negotiable: boolean;
+  status: "Available" | "Sold" | "Pending";
 }
 
 interface MarketListingsState {
   products: Product[];
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
+  postProduct: (productData: Omit<Product, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "sellerId" | "sellerName" | "collegeName" | "status">) => Promise<void>;
+  updateProduct: (productId: string, productData: Partial<Product>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
 }
 
-const client = new Client();
-client
-  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
-
-const databases = new Databases(client);
-
-const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'default_database_id';
-const MARKET_LISTINGS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_MARKET_LISTINGS_COLLECTION_ID || 'market_listings';
-
 export const useMarketListings = (): MarketListingsState => {
-  const { userPreferences, loading: isAuthLoading } = useAuth();
+  const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const collegeName = userPreferences?.collegeName;
-
-  const fetchListings = useCallback(async () => {
-    if (isAuthLoading) return; // Wait for auth to load
-
+  const fetchProducts = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      let queries = [
-        Query.equal('status', 'available'),
+      const queries = [
         Query.orderDesc('$createdAt'),
+        userProfile?.collegeName ? Query.equal('collegeName', userProfile.collegeName) : Query.limit(100) // Filter by college if available
       ];
-
-      if (collegeName) {
-        queries.push(Query.equal('collegeName', collegeName));
-      } else {
-        // If collegeName is not available, we might want to restrict listings or show a message.
-        // For now, if no collegeName, it will fetch all available listings (if no collegeName query is added).
-        // If collegeName is mandatory, you might want to return early here.
-      }
 
       const response = await databases.listDocuments(
         DATABASE_ID,
         MARKET_LISTINGS_COLLECTION_ID,
         queries
       );
-      setProducts(response.documents as Product[]); // Corrected type assertion
+      setProducts(response.documents as Product[]); // Type assertion is now safer
     } catch (err: any) {
-      console.error("Failed to fetch market listings:", err);
-      setError(err.message || "Failed to fetch market listings.");
-      toast.error(err.message || "Failed to fetch market listings.");
+      console.error("Error fetching market listings:", err);
+      setError("Failed to fetch market listings.");
+      toast.error("Failed to load market listings.");
     } finally {
       setIsLoading(false);
     }
-  }, [collegeName, isAuthLoading]);
+  }, [userProfile?.collegeName]);
 
   useEffect(() => {
-    fetchListings();
+    if (!isAuthLoading) {
+      fetchProducts();
+    }
+  }, [fetchProducts, isAuthLoading]);
 
-    // Realtime updates
-    const unsubscribe = client.subscribe(`databases.${DATABASE_ID}.collections.${MARKET_LISTINGS_COLLECTION_ID}.documents`, response => {
-      if (response.events.includes("databases.*.collections.*.documents.*.create") ||
-          response.events.includes("databases.*.collections.*.documents.*.update") ||
-          response.events.includes("databases.*.collections.*.documents.*.delete")) {
-        // Only refetch if the document's collegeName matches the current user's collegeName
-        const payload = response.payload as Product;
-        if (!collegeName || payload.collegeName === collegeName) {
-          fetchListings();
+  const postProduct = async (productData: Omit<Product, "$id" | "$createdAt" | "$updatedAt" | "$collectionId" | "$databaseId" | "$permissions" | "sellerId" | "sellerName" | "collegeName" | "status">) => {
+    if (!userProfile?.collegeName) {
+      toast.error("You must be logged in and have a college name set to post a product.");
+      return;
+    }
+
+    try {
+      const newProduct = await databases.createDocument(
+        DATABASE_ID,
+        MARKET_LISTINGS_COLLECTION_ID,
+        ID.unique(),
+        {
+          ...productData,
+          sellerId: userProfile.$id!,
+          sellerName: userProfile.name,
+          collegeName: userProfile.collegeName,
+          status: "Available", // Default status
         }
-      }
-    });
+      );
+      setProducts(prev => [newProduct as Product, ...prev]); // Type assertion is now safer
+      toast.success("Product posted successfully!");
+    } catch (err: any) {
+      console.error("Error posting product:", err);
+      toast.error(err.message || "Failed to post product.");
+      throw err;
+    }
+  };
 
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchListings, collegeName]);
+  const updateProduct = async (productId: string, productData: Partial<Product>) => {
+    if (!userProfile) {
+      toast.error("You must be logged in to update a product.");
+      return;
+    }
 
-  return { products, isLoading, error, refetch: fetchListings };
+    try {
+      const updatedProduct = await databases.updateDocument(
+        DATABASE_ID,
+        MARKET_LISTINGS_COLLECTION_ID,
+        productId,
+        productData
+      );
+      setProducts(prev => prev.map(product => product.$id === productId ? { ...product, ...productData } : product));
+      toast.success("Product updated successfully!");
+    } catch (err: any) {
+      console.error("Error updating product:", err);
+      toast.error(err.message || "Failed to update product.");
+      throw err;
+    }
+  };
+
+  const deleteProduct = async (productId: string) => {
+    if (!userProfile) {
+      toast.error("You must be logged in to delete a product.");
+      return;
+    }
+
+    try {
+      await databases.deleteDocument(
+        DATABASE_ID,
+        MARKET_LISTINGS_COLLECTION_ID,
+        productId
+      );
+      setProducts(prev => prev.filter(product => product.$id !== productId));
+      toast.success("Product deleted successfully!");
+    } catch (err: any) {
+      console.error("Error deleting product:", err);
+      toast.error("Failed to delete product.");
+    }
+  };
+
+  return {
+    products,
+    isLoading,
+    error,
+    refetch: fetchProducts,
+    postProduct,
+    updateProduct,
+    deleteProduct,
+  };
 };

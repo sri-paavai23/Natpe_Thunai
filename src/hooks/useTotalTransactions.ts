@@ -1,82 +1,66 @@
-"use client";
-
 import { useState, useEffect, useCallback } from 'react';
-import { Client, Databases, Query, Models } from 'appwrite';
+import { Client, Databases, Query } from 'appwrite';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast'; // Ensure toast is imported
+import { toast } from 'sonner';
+
+// Initialize Appwrite client
+const client = new Client();
+client
+  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+  .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+const databases = new Databases(client);
+
+// Collection IDs (replace with your actual IDs for transactions)
+const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+const TRANSACTIONS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_TRANSACTIONS_COLLECTION_ID; // Assuming a transactions collection
 
 interface TotalTransactionsState {
   totalTransactions: number;
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
 }
 
-const client = new Client();
-client
-  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
-
-const databases = new Databases(client);
-
-const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || 'default_database_id';
-const MARKET_TRANSACTIONS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_MARKET_TRANSACTIONS_COLLECTION_ID || 'market_transactions';
-const SERVICE_TRANSACTIONS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_SERVICE_TRANSACTIONS_COLLECTION_ID || 'service_transactions';
-const FOOD_ORDERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_FOOD_ORDERS_COLLECTION_ID || 'food_orders';
-
 export const useTotalTransactions = (collegeNameFilter?: string): TotalTransactionsState => {
-  const { userPreferences, loading: isAuthLoading } = useAuth();
+  const { userProfile, isLoading: isAuthLoading } = useAuth(); // Use userProfile and isLoading
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveCollegeNameFilter = collegeNameFilter || userPreferences?.collegeName;
-
   const fetchTotalTransactions = useCallback(async () => {
-    if (isAuthLoading) return; // Wait for auth to load
-
     setIsLoading(true);
     setError(null);
     try {
-      let queries = [
-        Query.equal('status', 'completed') // Only count completed transactions
+      const queries = [
+        collegeNameFilter ? Query.equal('collegeName', collegeNameFilter) : Query.limit(1000) // Fetch all if no filter
       ];
 
-      if (effectiveCollegeNameFilter) {
-        queries.push(Query.equal('collegeName', effectiveCollegeNameFilter));
-      }
-
-      const marketResponse = await databases.listDocuments(
+      const response = await databases.listDocuments(
         DATABASE_ID,
-        MARKET_TRANSACTIONS_COLLECTION_ID,
+        TRANSACTIONS_COLLECTION_ID,
         queries
       );
-
-      const serviceResponse = await databases.listDocuments(
-        DATABASE_ID,
-        SERVICE_TRANSACTIONS_COLLECTION_ID,
-        queries
-      );
-
-      const foodResponse = await databases.listDocuments(
-        DATABASE_ID,
-        FOOD_ORDERS_COLLECTION_ID,
-        queries
-      );
-
-      setTotalTransactions(marketResponse.total + serviceResponse.total + foodResponse.total);
+      setTotalTransactions(response.total);
     } catch (err: any) {
-      console.error("Failed to fetch total transactions:", err);
-      setError(err.message || "Failed to fetch total transactions.");
-      toast.error(err.message || "Failed to fetch total transactions.");
+      console.error("Error fetching total transactions:", err);
+      setError("Failed to fetch total transactions.");
+      toast.error("Failed to load transaction count.");
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveCollegeNameFilter, isAuthLoading]);
+  }, [collegeNameFilter]);
 
   useEffect(() => {
-    fetchTotalTransactions();
-  }, [fetchTotalTransactions]);
+    if (!isAuthLoading) {
+      fetchTotalTransactions();
+    }
+  }, [fetchTotalTransactions, isAuthLoading]);
 
-  return { totalTransactions, isLoading, error, refetch: fetchTotalTransactions };
+  return {
+    totalTransactions,
+    isLoading,
+    error,
+    refetch: fetchTotalTransactions,
+  };
 };
