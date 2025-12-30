@@ -10,8 +10,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useServiceReviews } from "@/hooks/useServiceReviews";
 import { ServicePost } from "@/hooks/useServiceListings";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // NEW
-import ServicePaymentDialog from "./forms/ServicePaymentDialog"; // NEW
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import ServicePaymentDialog from "./forms/ServicePaymentDialog";
 
 interface ServiceListingCardProps {
   service: ServicePost;
@@ -28,13 +28,15 @@ const formatCategoryTitle = (categorySlug: string | undefined) => {
 
 const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   service,
-  onOpenBargainDialog,
+  onOpenBargainDialog, // This prop will no longer be used by the bargain button
   onOpenReviewDialog,
   isFoodOrWellnessCategory,
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false); // NEW
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isBargainPaymentDialogOpen, setIsBargainPaymentDialogOpen] = useState(false); // NEW
+  const [bargainedService, setBargainedService] = useState<ServicePost | null>(null); // NEW
   
   // Only call useServiceReviews if service.$id is valid
   const { averageRating, isLoading: isReviewsLoading, error: reviewsError, reviews: serviceReviews } = 
@@ -42,7 +44,7 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   
   const hasReviewed = false; // Simulate: In a real app, check if user has already reviewed this service
 
-  const handleContactProvider = () => { // Modified to open payment dialog
+  const handleContactProvider = () => {
     if (!user) {
       toast.error("Please log in to contact the provider.");
       navigate("/auth");
@@ -52,7 +54,35 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
       toast.info("You are the provider of this service.");
       return;
     }
-    setIsPaymentDialogOpen(true); // Open the new payment dialog
+    setIsPaymentDialogOpen(true);
+  };
+
+  // NEW: Handle bargain button click
+  const handleBargainClick = () => {
+    if (!user) {
+      toast.error("Please log in to bargain for a service.");
+      navigate("/auth");
+      return;
+    }
+    if (user.$id === service.posterId) {
+      toast.info("You are the provider of this service.");
+      return;
+    }
+
+    const originalPrice = parseFloat(service.price.replace(/[^0-9.]+/g, "")); // Extract number from string
+    if (isNaN(originalPrice)) {
+      toast.error("Invalid service price for bargaining.");
+      return;
+    }
+    const discountedPrice = originalPrice * 0.85; // 15% off
+
+    const updatedService: ServicePost = {
+      ...service,
+      price: discountedPrice.toFixed(2), // Format back to string with 2 decimal places
+      title: `${service.title} (Bargained - 15% off)` // Update title for clarity in dialog
+    };
+    setBargainedService(updatedService);
+    setIsBargainPaymentDialogOpen(true);
   };
 
   return (
@@ -98,7 +128,7 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
               size="sm" 
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleContactProvider}
-              disabled={user?.$id === service.posterId} // Disable if it's their own service
+              disabled={user?.$id === service.posterId}
             >
               Contact Provider
             </Button>
@@ -116,15 +146,32 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
         </Dialog>
 
         {!isFoodOrWellnessCategory && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-            onClick={() => onOpenBargainDialog(service)}
-            disabled={user?.$id === service.posterId} // Disable bargain on own service
-          >
-            <DollarSign className="mr-2 h-4 w-4" /> Bargain (15% off)
-          </Button>
+          // NEW: Bargain button now opens a dialog with the discounted price
+          <Dialog open={isBargainPaymentDialogOpen} onOpenChange={setIsBargainPaymentDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
+                onClick={handleBargainClick}
+                disabled={user?.$id === service.posterId}
+              >
+                <DollarSign className="mr-2 h-4 w-4" /> Bargain (15% off)
+              </Button>
+            </DialogTrigger>
+            {bargainedService && ( // Only render content if bargainedService is available
+              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+                <DialogHeader>
+                  <DialogTitle className="text-foreground">Pay for Bargained Service: {bargainedService.title}</DialogTitle>
+                </DialogHeader>
+                <ServicePaymentDialog
+                  service={bargainedService} // Pass the bargained service
+                  onPaymentInitiated={() => setIsBargainPaymentDialogOpen(false)}
+                  onCancel={() => setIsBargainPaymentDialogOpen(false)}
+                />
+              </DialogContent>
+            )}
+          </Dialog>
         )}
         {!hasReviewed && (
           <Button
@@ -132,7 +179,7 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
             variant="outline"
             className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
             onClick={() => onOpenReviewDialog(service.$id, service.posterId, service.title)}
-            disabled={user?.$id === service.posterId} // Disable review on own service
+            disabled={user?.$id === service.posterId}
           >
             <Star className="mr-2 h-4 w-4" /> Leave a Review
           </Button>
