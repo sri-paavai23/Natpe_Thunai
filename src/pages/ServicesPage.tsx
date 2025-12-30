@@ -6,17 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import { HeartHandshake } from "lucide-react"; // Import HeartHandshake
-import StudentWelfareLinks from "@/components/StudentWelfareLinks"; // NEW IMPORT
+import { useAuth } from "@/context/AuthContext";
+import { HeartHandshake } from "lucide-react";
+import StudentWelfareLinks from "@/components/StudentWelfareLinks";
 
 const ServicesPage = () => {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
 
-  // Get user's age from profile, default to 0 if not available
   const userAge = userProfile?.age || 0; 
-  // Content is age-gated if user is 25 or older (meaning they CANNOT access it)
   const isAgeGated = userAge >= 25; 
 
   const handleServiceClick = (path: string, serviceName: string) => {
@@ -79,13 +77,14 @@ const ServicesPage = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/ticket-booking", "Ticket Booking")}>
+        {/* The Edit Card (formerly Ticket Booking) */}
+        <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/the-edit", "The Edit")}>
           <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Ticket Booking</CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground">The Edit</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <p className="text-muted-foreground">IRCTC, Abhi Bus, Paytm redirection for easy travel bookings.</p>
-            </CardContent>
+            <p className="text-muted-foreground">Curated deals and essential products for students, powered by Cuelinks.</p>
+          </CardContent>
         </Card>
 
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleServiceClick("/services/collaborators", "Project Collaborator Tab")}>

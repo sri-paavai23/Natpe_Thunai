@@ -1,0 +1,14 @@
+{
+  "name": "generate-cuelink",
+  "version": "1.0.0",
+  "description": "Generates a Cuelink for an affiliate listing using Appwrite and Cuelinks API.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "node-appwrite": "^11.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}
