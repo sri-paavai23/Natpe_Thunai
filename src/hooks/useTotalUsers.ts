@@ -1,7 +1,10 @@
+"use client";
+
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
 import { Query } from 'appwrite';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 interface TotalUsersState {
   totalUsers: number;
@@ -11,26 +14,28 @@ interface TotalUsersState {
 }
 
 export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => {
-  const { userProfile, loading: isAuthLoading } = useAuth(); // Corrected 'isLoading' to 'loading'
+  const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalUsers = useCallback(async () => {
-    if (isAuthLoading) return;
+    // If userProfile is not yet loaded or is null, we can't fetch.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
+      return;
+    }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile.collegeName;
 
     setIsLoading(true);
     setError(null);
     try {
-      let queries = [];
+      const queries = []; 
 
-      // If a collegeNameFilter is provided, use it.
-      // If user is a developer, they can see all users (collegeNameFilter would be undefined).
-      // If user is not a developer, filter by their collegeName if no explicit filter is provided.
-      if (collegeNameFilter) {
-        queries.push(Query.equal('collegeName', collegeNameFilter));
-      } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) { // Corrected userType to role
-        queries.push(Query.equal('collegeName', userProfile.collegeName));
+      if (!isDeveloper && collegeToFilterBy) {
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
       }
 
       const response = await databases.listDocuments(
@@ -41,16 +46,31 @@ export const useTotalUsers = (collegeNameFilter?: string): TotalUsersState => {
       setTotalUsers(response.total);
     } catch (err: any) {
       console.error("Error fetching total users:", err);
-      setError(err.message || "Failed to fetch total users.");
-      setTotalUsers(0);
+      setError(err.message || "Failed to load total users for analytics.");
+      toast.error("Failed to load total users for analytics.");
     } finally {
       setIsLoading(false);
     }
-  }, [collegeNameFilter, userProfile?.collegeName, userProfile?.role, isAuthLoading]); // Added userProfile.role to dependencies
+  }, [collegeNameFilter, userProfile]);
 
   useEffect(() => {
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setTotalUsers(0); // Clear data while auth is loading
+      setError(null);
+      return;
+    }
+
+    if (userProfile === null) {
+      setIsLoading(false);
+      setTotalUsers(0);
+      setError("User profile not loaded. Cannot fetch total users.");
+      return;
+    }
+
+    // If auth is done and userProfile is available, fetch data
     fetchTotalUsers();
-  }, [fetchTotalUsers]);
+  }, [fetchTotalUsers, isAuthLoading, userProfile]);
 
   return { totalUsers, isLoading, error, refetch: fetchTotalUsers };
 };

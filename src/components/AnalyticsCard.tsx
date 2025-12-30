@@ -1,66 +1,79 @@
-import React from 'react';
+"use client";
+
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from '@/context/AuthContext';
-import { useTotalUsers } from '@/hooks/useTotalUsers';
-import { useTotalTransactions } from '@/hooks/useTotalTransactions';
-import { useFoodOrdersAnalytics } from '@/hooks/useFoodOrdersAnalytics';
-import { Loader2 } from 'lucide-react';
+import { TrendingUp, Package, Users, Utensils } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { useMarketListings } from '@/hooks/useMarketListings'; // Import existing hook
+import { useTotalUsers } from '@/hooks/useTotalUsers'; // NEW IMPORT
+import { useFoodOrdersAnalytics } from '@/hooks/useFoodOrdersAnalytics'; // NEW IMPORT
+import { useTotalTransactions } from '@/hooks/useTotalTransactions'; // NEW IMPORT
+import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton for loading states
+import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
 
-interface AnalyticsCardProps {
-  title: string;
-  value: number | string;
-  description: string;
-  isLoading: boolean;
-}
-
-const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ title, value, description, isLoading }) => (
-  <Card className="bg-card border-border-dark text-foreground">
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold">
-        {isLoading ? <Loader2 className="h-6 w-6 animate-spin text-primary-blue" /> : value}
-      </div>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </CardContent>
-  </Card>
-);
-
-const AnalyticsDashboard: React.FC = () => {
-  const { userProfile, loading: isAuthLoading } = useAuth(); // Corrected 'isLoading' to 'loading'
-
+const AnalyticsCard = () => {
+  const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   // Determine the collegeName to pass to hooks. If developer, pass undefined to fetch all.
-  const collegeNameFilter = userProfile?.role === 'developer' ? undefined : userProfile?.collegeName; // Corrected userType to role, added collegeName
+  const collegeNameForAnalytics = userProfile?.role === 'developer' ? undefined : userProfile?.collegeName;
 
-  const { totalUsers, isLoading: isUsersLoading } = useTotalUsers(collegeNameFilter);
-  const { totalTransactions, isLoading: isTransactionsLoading } = useTotalTransactions(collegeNameFilter);
-  const { foodOrdersLastWeek, isLoading: isFoodOrdersLoading } = useFoodOrdersAnalytics(collegeNameFilter);
+  // Pass collegeNameForAnalytics to the hooks
+  const { products, isLoading: isLoadingListings, error: listingsError } = useMarketListings(); // useMarketListings already filters internally based on userProfile.role
+  const { totalUsers, isLoading: isLoadingUsers, error: usersError } = useTotalUsers(collegeNameForAnalytics);
+  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders, error: foodOrdersError } = useFoodOrdersAnalytics(collegeNameForAnalytics);
+  const { totalTransactions, isLoading: isLoadingTransactions, error: transactionsError } = useTotalTransactions(collegeNameForAnalytics);
 
-  const isLoadingAny = isAuthLoading || isUsersLoading || isTransactionsLoading || isFoodOrdersLoading;
+  const isLoadingAny = isLoadingListings || isLoadingUsers || isLoadingFoodOrders || isLoadingTransactions;
+  const hasError = listingsError || usersError || foodOrdersError || transactionsError;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      <AnalyticsCard
-        title="Total Users"
-        value={totalUsers}
-        description="Users registered in your college"
-        isLoading={isLoadingAny}
-      />
-      <AnalyticsCard
-        title="Total Transactions"
-        value={totalTransactions}
-        description="Marketplace transactions in your college"
-        isLoading={isLoadingAny}
-      />
-      <AnalyticsCard
-        title="Food Orders (Last 7 Days)"
-        value={foodOrdersLastWeek}
-        description="Food orders placed in your college"
-        isLoading={isLoadingAny}
-      />
-    </div>
+    <Card className="bg-card text-card-foreground shadow-lg border-border">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-secondary-neon" /> Campus Analytics
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
+        <p className="text-sm text-muted-foreground mb-3">Real-time insights into your college's activity.</p>
+        {hasError ? (
+          <div className="text-center text-destructive py-4">
+            <p>Error loading analytics data.</p>
+            <p className="text-xs">{listingsError || usersError || foodOrdersError || transactionsError}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
+              <div className="flex items-center text-sm font-medium text-foreground">
+                <Package className="h-4 w-4 mr-2 text-blue-500" /> Listings
+              </div>
+              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{products.length}</p>}
+              <p className="text-xs text-muted-foreground">Total Exchange Items</p>
+            </div>
+            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
+              <div className="flex items-center text-sm font-medium text-foreground">
+                <Users className="h-4 w-4 mr-2 text-purple-500" /> Users
+              </div>
+              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{totalUsers}</p>}
+              <p className="text-xs text-muted-foreground">Total Registered</p>
+            </div>
+            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
+              <div className="flex items-center text-sm font-medium text-foreground">
+                <Utensils className="h-4 w-4 mr-2 text-red-500" /> Food Orders
+              </div>
+              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{foodOrdersLastWeek}</p>}
+              <p className="text-xs text-muted-foreground">Last 7 Days</p>
+            </div>
+            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
+              <div className="flex items-center text-sm font-medium text-foreground">
+                <TrendingUp className="h-4 w-4 mr-2 text-green-500" /> Transactions
+              </div>
+              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{totalTransactions}</p>}
+              <p className="text-xs text-muted-foreground">Total Completed</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
-export default AnalyticsDashboard;
+export default AnalyticsCard;

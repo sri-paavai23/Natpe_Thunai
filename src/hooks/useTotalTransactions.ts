@@ -1,7 +1,10 @@
+"use client";
+
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from '@/lib/appwrite';
-import { Query } from 'appwrite';
+import { Query, Models } from 'appwrite';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 interface TotalTransactionsState {
   totalTransactions: number;
@@ -11,28 +14,27 @@ interface TotalTransactionsState {
 }
 
 export const useTotalTransactions = (collegeNameFilter?: string): TotalTransactionsState => {
-  const { userProfile, loading: isAuthLoading } = useAuth(); // Corrected 'isLoading' to 'loading'
+  const { userProfile, isLoading: isAuthLoading } = useAuth();
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTotalTransactions = useCallback(async () => {
-    if (isAuthLoading) return;
+    // If userProfile is not yet loaded or is null, we can't fetch.
+    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
+    if (!userProfile) {
+      return;
+    }
+
+    const isDeveloper = userProfile.role === 'developer';
+    const collegeToFilterBy = collegeNameFilter || userProfile.collegeName;
 
     setIsLoading(true);
     setError(null);
     try {
-      let queries = [
-        Query.limit(0) // We only need the total count
-      ];
-
-      // If a collegeNameFilter is provided, use it.
-      // If user is a developer, they can see all transactions (collegeNameFilter would be undefined).
-      // If user is not a developer, filter by their collegeName if no explicit filter is provided.
-      if (collegeNameFilter) {
-        queries.push(Query.equal('collegeName', collegeNameFilter));
-      } else if (userProfile?.role !== 'developer' && userProfile?.collegeName) { // Corrected userType to role
-        queries.push(Query.equal('collegeName', userProfile.collegeName));
+      const queries = []; 
+      if (!isDeveloper && collegeToFilterBy) {
+        queries.push(Query.equal('collegeName', collegeToFilterBy));
       }
 
       const response = await databases.listDocuments(
@@ -43,16 +45,31 @@ export const useTotalTransactions = (collegeNameFilter?: string): TotalTransacti
       setTotalTransactions(response.total);
     } catch (err: any) {
       console.error("Error fetching total transactions:", err);
-      setError(err.message || "Failed to fetch total transactions.");
-      setTotalTransactions(0);
+      setError(err.message || "Failed to load total transactions for analytics.");
+      toast.error("Failed to load total transactions for analytics.");
     } finally {
       setIsLoading(false);
     }
-  }, [collegeNameFilter, userProfile?.collegeName, userProfile?.role, isAuthLoading]); // Added userProfile.role to dependencies
+  }, [collegeNameFilter, userProfile]);
 
   useEffect(() => {
+    if (isAuthLoading) {
+      setIsLoading(true);
+      setTotalTransactions(0); // Clear data while auth is loading
+      setError(null);
+      return;
+    }
+
+    if (userProfile === null) {
+      setIsLoading(false);
+      setTotalTransactions(0);
+      setError("User profile not loaded. Cannot fetch total transactions.");
+      return;
+    }
+
+    // If auth is done and userProfile is available, fetch data
     fetchTotalTransactions();
-  }, [fetchTotalTransactions]);
+  }, [fetchTotalTransactions, isAuthLoading, userProfile]);
 
   return { totalTransactions, isLoading, error, refetch: fetchTotalTransactions };
 };

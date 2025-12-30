@@ -1,64 +1,54 @@
 "use client";
 
-import React from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Loader2, Handshake } from "lucide-react"; // Import Handshake icon
+import { account } from "@/lib/appwrite"; // Import Appwrite account service
+import { useAuth } from "@/context/AuthContext"; // Import useAuth hook
 
-const IndexPage = () => {
-  const { user, userProfile, isVerified, loading, logout, addXp, updateUserProfile, incrementAmbassadorDeliveriesCount } = useAuth();
+const Index = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading } = useAuth(); // Use AuthContext
+  const [localLoading, setLocalLoading] = useState(true); // Local loading for splash screen delay
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background-dark text-foreground">
-        Loading...
-      </div>
-    );
-  }
+  useEffect(() => {
+    // If AuthContext is still loading, wait for it
+    if (isLoading) return;
 
-  if (!user) {
-    navigate('/auth');
-    return null;
-  }
+    // Once AuthContext has determined auth status, handle redirection
+    const timer = setTimeout(() => {
+      if (isAuthenticated) {
+        navigate("/home", { replace: true });
+      } else {
+        navigate("/auth", { replace: true });
+      }
+    }, 1500); // Simulate a loading delay even after auth check
 
-  const handleAddXp = async () => {
-    await addXp(10); // Example: Add 10 XP
-  };
+    return () => clearTimeout(timer);
+  }, [isLoading, isAuthenticated, navigate]);
 
-  const handleUpdateProfile = async () => {
-    await updateUserProfile({ firstName: "Updated", lastName: "User" }); // Corrected call
-  };
+  // This component will only render its content if AuthContext is done loading
+  // and after its own local loading delay.
+  // The global AuthProvider handles the initial full-screen loading.
+  // This local loading is just for the splash screen animation.
+  useEffect(() => {
+    const splashTimer = setTimeout(() => {
+      setLocalLoading(false);
+    }, 500); // Short delay for logo animation
+    return () => clearTimeout(splashTimer);
+  }, []);
 
-  const handleIncrementDeliveries = async () => {
-    await incrementAmbassadorDeliveriesCount();
-  };
 
   return (
-    <div className="min-h-screen bg-background-dark text-foreground p-8">
-      <h1 className="text-3xl font-bold mb-6 text-center">Welcome to Natpe🤝Thunai</h1>
-      <div className="max-w-2xl mx-auto bg-card p-6 rounded-lg shadow-lg border border-border-dark space-y-4">
-        <p className="text-lg">Hello, {userProfile?.firstName || user.name}!</p>
-        <p>Your email: {user.email}</p>
-        <p>College ID Verified: {isVerified ? 'Yes' : 'No'}</p>
-        <p>XP: {userProfile?.xp || 0}</p>
-        <p>Level: {userProfile?.level || 1}</p>
-        {userProfile?.userType === 'ambassador' && (
-          <p>Ambassador Deliveries: {userProfile?.ambassadorDeliveriesCount || 0}</p>
-        )}
-
-        <div className="flex flex-wrap gap-4 mt-6">
-          <Button onClick={handleAddXp}>Add 10 XP</Button>
-          <Button onClick={handleUpdateProfile}>Update Profile Name</Button>
-          {userProfile?.userType === 'ambassador' && (
-            <Button onClick={handleIncrementDeliveries}>Increment Deliveries</Button>
-          )}
-          <Button variant="destructive" onClick={logout}>Logout</Button>
-        </div>
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary to-background-dark text-primary-foreground">
+      <img src="/app-logo.png" alt="Natpe🤝Thunai Logo" className="h-24 w-24 rounded-full object-cover mb-4 animate-fade-in logo-animated" />
+      <p className="text-4xl font-extrabold tracking-tight text-secondary-neon flex items-center gap-2">
+        Natpe <Handshake className="h-8 w-8 text-[#00f3ff]" /> Thunai
+      </p>
+      <p className="text-lg text-foreground mt-2">Creating communities and fostering friendships</p>
+      {localLoading && <Loader2 className="h-8 w-8 animate-spin text-secondary-neon mt-6" />}
     </div>
   );
 };
 
-export default IndexPage;
+export default Index;
