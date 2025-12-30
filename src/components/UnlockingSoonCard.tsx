@@ -83,7 +83,7 @@ const UnlockingSoonCard = () => {
               <Button
                 key={4} // Index for the 5th item
                 variant="outline"
-                className="flex items-center justify-start text-foreground text-sm h-auto py-2 px-3 bg-secondary-background hover:bg-secondary-background/80 border-secondary-neon/30 hover:border-secondary-neon w-full sm:w-1/2"
+                className="flex items-center justify-center text-foreground text-sm h-auto py-2 px-3 bg-secondary-background hover:bg-secondary-background/80 border-secondary-neon/30 hover:border-secondary-neon w-full sm:w-1/2"
                 onClick={() => handleFeatureClick(upcomingFeaturesDetails[4])}
               >
                 <Lock className="h-4 w-4 mr-2 text-secondary-neon" /> {upcomingFeaturesDetails[4].name}
