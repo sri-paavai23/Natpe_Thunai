@@ -3,12 +3,13 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquareText, DollarSign, Star, X } from "lucide-react";
+import { Loader2, DollarSign, Star, X, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useServiceReviews } from "@/hooks/useServiceReviews";
 import { ServicePost } from "@/hooks/useServiceListings";
+import { useBargainRequests } from '@/hooks/useBargainRequests'; // NEW IMPORT
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ServicePaymentDialog from "./forms/ServicePaymentDialog";
@@ -28,21 +29,24 @@ const formatCategoryTitle = (categorySlug: string | undefined) => {
 
 const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   service,
-  onOpenBargainDialog, // This prop will no longer be used by the bargain button
+  onOpenBargainDialog,
   onOpenReviewDialog,
   isFoodOrWellnessCategory,
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [isBargainPaymentDialogOpen, setIsBargainPaymentDialogOpen] = useState(false); // NEW
-  const [bargainedService, setBargainedService] = useState<ServicePost | null>(null); // NEW
   
+  // NEW: Use Bargain Request Hook
+  // We check the status for this specific service ID
+  const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
+  const { status: currentBargainStatus } = getBargainStatusForProduct(service.$id);
+
   // Only call useServiceReviews if service.$id is valid
   const { averageRating, isLoading: isReviewsLoading, error: reviewsError, reviews: serviceReviews } = 
     service.$id ? useServiceReviews(service.$id) : { averageRating: 0, isLoading: false, error: null, reviews: [] };
   
-  const hasReviewed = false; // Simulate: In a real app, check if user has already reviewed this service
+  const hasReviewed = false; 
 
   const handleContactProvider = () => {
     if (!user) {
@@ -57,33 +61,66 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
     setIsPaymentDialogOpen(true);
   };
 
-  // NEW: Handle bargain button click
-  const handleBargainClick = () => {
+  // NEW: Handle Send Bargain Request (Logic adapted from ProductDetailsPage)
+  const handleSendBargainRequest = async () => {
     if (!user) {
-      toast.error("Please log in to bargain for a service.");
+      toast.error("Please log in to bargain.");
       navigate("/auth");
       return;
     }
     if (user.$id === service.posterId) {
-      toast.info("You are the provider of this service.");
+      toast.info("You cannot bargain on your own service.");
       return;
     }
 
-    const originalPrice = parseFloat(service.price.replace(/[^0-9.]+/g, "")); // Extract number from string
-    if (isNaN(originalPrice)) {
+    // Status checks
+    if (currentBargainStatus === 'pending') {
+      toast.info("You already have a pending bargain request for this service.");
+      return;
+    }
+    if (currentBargainStatus === 'denied') {
+      toast.info("Your previous bargain request was denied.");
+      return;
+    }
+
+    const priceString = service.price.replace(/[₹,]/g, '').split('/')[0].trim();
+    const originalAmount = parseFloat(priceString);
+
+    if (isNaN(originalAmount) || originalAmount <= 0) {
       toast.error("Invalid service price for bargaining.");
       return;
     }
-    const discountedPrice = originalPrice * 0.85; // 15% off
 
-    const updatedService: ServicePost = {
-      ...service,
-      price: discountedPrice.toFixed(2), // Format back to string with 2 decimal places
-      title: `${service.title} (Bargained - 15% off)` // Update title for clarity in dialog
-    };
-    setBargainedService(updatedService);
-    setIsBargainPaymentDialogOpen(true);
+    const discountRate = 0.15;
+    const requestedBargainAmount = originalAmount * (1 - discountRate);
+
+    try {
+      // We adapt the service object to match the expected structure of the hook
+      // ensuring we map 'posterId' to 'userId' as expected by the notification system
+      const bargainItem = {
+        $id: service.$id,
+        title: service.title,
+        userId: service.posterId, // Map posterId to userId for the hook
+        price: service.price,
+        imageUrl: "", // Services might not have images, pass empty or service.imageUrl if available
+        sellerName: service.posterName // Pass provider name
+      };
+
+      await sendBargainRequest(bargainItem as any, requestedBargainAmount);
+      // Toast handled in hook
+    } catch (error) {
+      console.error("Bargain request failed", error);
+    }
   };
+
+  const isBargainDisabled = 
+    user?.$id === service.posterId || 
+    currentBargainStatus === 'pending' || 
+    currentBargainStatus === 'denied';
+
+  // Calculate display price for button
+  const originalPriceVal = parseFloat(service.price.replace(/[₹,]/g, '').split('/')[0].trim());
+  const bargainPriceVal = (originalPriceVal * 0.85).toFixed(2);
 
   return (
     <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -146,33 +183,24 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
         </Dialog>
 
         {!isFoodOrWellnessCategory && (
-          // NEW: Bargain button now opens a dialog with the discounted price
-          <Dialog open={isBargainPaymentDialogOpen} onOpenChange={setIsBargainPaymentDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-                onClick={handleBargainClick}
-                disabled={user?.$id === service.posterId}
-              >
-                <DollarSign className="mr-2 h-4 w-4" /> Bargain (15% off)
-              </Button>
-            </DialogTrigger>
-            {bargainedService && ( // Only render content if bargainedService is available
-              <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-                <DialogHeader>
-                  <DialogTitle className="text-foreground">Pay for Bargained Service: {bargainedService.title}</DialogTitle>
-                </DialogHeader>
-                <ServicePaymentDialog
-                  service={bargainedService} // Pass the bargained service
-                  onPaymentInitiated={() => setIsBargainPaymentDialogOpen(false)}
-                  onCancel={() => setIsBargainPaymentDialogOpen(false)}
-                />
-              </DialogContent>
+          // NEW: Bargain Button Logic (Request based, not immediate payment)
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
+            onClick={handleSendBargainRequest}
+            disabled={isBargainDisabled}
+          >
+            {currentBargainStatus === 'pending' ? (
+                <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Pending...</>
+            ) : currentBargainStatus === 'denied' ? (
+                "Bargain Denied"
+            ) : (
+                <><MessageSquareText className="mr-2 h-4 w-4" /> Bargain (15% off)</>
             )}
-          </Dialog>
+          </Button>
         )}
+        
         {!hasReviewed && (
           <Button
             size="sm"
