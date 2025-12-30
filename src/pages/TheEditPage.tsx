@@ -15,7 +15,7 @@ const API_ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || "https://cloud.ap
 const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID;
 const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID; 
 const COLLECTION_ID = "affiliate_listings"; // Ensure this matches your Collection ID exactly
-const FUNCTION_ID = "generate_cuelink"; // Ensure this matches your Function ID exactly
+const FUNCTION_ID = "6953da45001e5ab7ad94"; // Ensure this matches your Function ID exactly
 
 // Initialize Appwrite
 const client = new Client().setEndpoint(API_ENDPOINT).setProject(PROJECT_ID);
