@@ -1,151 +1,272 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { account, databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query } from 'appwrite';
+import { account, databases, ID, Query, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
+import { Models } from 'appwrite';
+import { toast } from 'sonner';
+
+// Define UserProfile type based on your Appwrite collection structure
+export interface UserProfile extends Models.Document {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  collegeIdPhotoId?: string;
+  isCollegeIdVerified: boolean;
+  level: number;
+  xp: number;
+  userType: 'student' | 'staff' | 'merchant' | 'ambassador';
+  role: 'user' | 'developer'; // 'user' or 'developer'
+  ambassadorDeliveriesCount: number;
+  collegeId?: string; // Added collegeId
+  collegeName?: string; // Added collegeName
+  itemsListedToday?: number; // For DailyQuestCard
+  lastQuestCompletedDate?: string; // For DailyQuestCard
+  gender?: 'male' | 'female' | 'other' | 'prefer-not-to-say'; // For ProfileWidget
+  avatarStyle?: string; // For ProfileWidget
+  age?: number; // For age-gated content
+  mobileNumber?: string; // For ProfileDetailsPage
+  upiId?: string; // For ProfileDetailsPage
+  currentXp?: number; // For ProfileWidget (if different from xp)
+  maxXp?: number; // For ProfileWidget
+}
 
 interface AuthContextType {
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  currentUser: Models.User<Models.Preferences> | null;
-  userProfile: any | null; // Added userProfile
-  isVerified: boolean; // Added isVerified
+  user: Models.User<Models.Preferences> | null;
+  userProfile: UserProfile | null;
+  isVerified: boolean;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => Promise<void>;
-  // Placeholder functions to resolve TS errors
+  checkSession: () => Promise<void>;
   addXp: (amount: number) => Promise<void>;
-  updateUserProfile: (data: any) => Promise<void>;
-  recordMarketListing: (listingData: any) => Promise<void>;
+  updateUserProfile: (data: Partial<UserProfile>) => Promise<void>; // Updated signature
+  recordMarketListing: (listingType: 'product' | 'service' | 'errand' | 'cash_exchange' | 'collaborator') => Promise<void>;
   incrementAmbassadorDeliveriesCount: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<Models.User<Models.Preferences> | null>(null);
-  const [userProfile, setUserProfile] = useState<any | null>(null); // State for user profile
-  const [isVerified, setIsVerified] = useState(false); // State for verification status
+export const AuthContextProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    const checkUserSession = async () => {
-      setIsLoading(true);
-      try {
-        const user = await account.get();
-        setCurrentUser(user);
-        setIsAuthenticated(true);
-
-        // Fetch user profile
-        const profileResponse = await databases.listDocuments(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_USER_PROFILES_COLLECTION_ID,
-          [Query.equal('userId', user.$id)]
-        );
-        if (profileResponse.documents.length > 0) {
-          setUserProfile(profileResponse.documents[0]);
-          setIsVerified(profileResponse.documents[0].isVerified || false); // Assuming isVerified exists on profile
-        } else {
-          setUserProfile(null);
-          setIsVerified(false);
-        }
-
-      } catch (error) {
-        setCurrentUser(null);
-        setUserProfile(null);
-        setIsAuthenticated(false);
-        setIsVerified(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkUserSession();
-  }, []);
-
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
+  const fetchUserProfile = async (userId: string) => {
     try {
-      await account.createEmailPasswordSession(email, password);
-      const user = await account.get();
-      setCurrentUser(user);
-      setIsAuthenticated(true);
-
-      // Fetch user profile after login
-      const profileResponse = await databases.listDocuments(
+      const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
-        [Query.equal('userId', user.$id)]
+        [Query.equal('userId', userId)]
       );
-      if (profileResponse.documents.length > 0) {
-        setUserProfile(profileResponse.documents[0]);
-        setIsVerified(profileResponse.documents[0].isVerified || false);
+      if (response.documents.length > 0) {
+        const profile = response.documents[0] as unknown as UserProfile; // Cast to unknown first
+        setUserProfile(profile);
+        setIsVerified(profile.isCollegeIdVerified || false);
       } else {
         setUserProfile(null);
         setIsVerified(false);
       }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      setUserProfile(null);
+      setIsVerified(false);
+    }
+  };
 
+  const checkSession = async () => {
+    setLoading(true);
+    try {
+      const currentUser = await account.get();
+      setUser(currentUser);
+      await fetchUserProfile(currentUser.$id);
+    } catch (error) {
+      setUser(null);
+      setUserProfile(null);
+      setIsVerified(false);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      await account.createEmailPasswordSession(email, password);
+      await checkSession();
+      toast.success("Logged in successfully!");
+    } catch (error: any) {
+      toast.error(error.message || "Login failed.");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async (email: string, password: string, firstName: string, lastName: string) => {
+    setLoading(true);
+    try {
+      const newUser = await account.create(ID.unique(), email, password, `${firstName} ${lastName}`);
+      await account.createEmailPasswordSession(email, password);
+
+      // Create initial user profile
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_USER_PROFILES_COLLECTION_ID,
+        ID.unique(),
+        {
+          userId: newUser.$id,
+          firstName,
+          lastName,
+          email,
+          isCollegeIdVerified: false,
+          level: 1,
+          xp: 0,
+          userType: 'student', // Default user type
+          role: 'user', // Default role
+          ambassadorDeliveriesCount: 0,
+          // Add other default profile fields here
+          gender: 'prefer-not-to-say',
+          avatarStyle: 'lorelei',
+          age: 18, // Default age
+          mobileNumber: '',
+          upiId: '',
+          collegeId: '',
+          collegeName: '',
+          itemsListedToday: 0,
+          lastQuestCompletedDate: '',
+          currentXp: 0,
+          maxXp: 100,
+        }
+      );
+      await checkSession();
+      toast.success("Account created and logged in!");
+    } catch (error: any) {
+      toast.error(error.message || "Registration failed.");
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
+    setLoading(true);
     try {
       await account.deleteSession('current');
-      setCurrentUser(null);
+      setUser(null);
       setUserProfile(null);
-      setIsAuthenticated(false);
       setIsVerified(false);
+      toast.info("Logged out successfully.");
+    } catch (error: any) {
+      toast.error(error.message || "Logout failed.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // Placeholder implementations for new functions
   const addXp = async (amount: number) => {
-    console.log(`Adding ${amount} XP (placeholder)`);
-    // Implement actual XP logic here, e.g., update user profile in Appwrite
+    if (!userProfile || !user) {
+      toast.error("User not logged in or profile not found.");
+      return;
+    }
+    try {
+      const newXp = (userProfile.xp || 0) + amount;
+      // Implement level-up logic here if needed
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_USER_PROFILES_COLLECTION_ID,
+        userProfile.$id,
+        { xp: newXp }
+      );
+      setUserProfile(prev => prev ? { ...prev, xp: newXp } : null);
+      toast.success(`Gained ${amount} XP!`);
+    } catch (error: any) {
+      console.error("Error adding XP:", error);
+      toast.error("Failed to add XP.");
+    }
   };
 
-  const updateUserProfile = async (data: any) => {
-    console.log("Updating user profile (placeholder)", data);
-    // Implement actual profile update logic here
+  const updateUserProfile = async (data: Partial<UserProfile>) => { // Updated signature
+    if (!userProfile || !user) {
+      toast.error("User not logged in or profile not found.");
+      return;
+    }
+    try {
+      const updatedProfile = await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_USER_PROFILES_COLLECTION_ID,
+        userProfile.$id,
+        data
+      );
+      setUserProfile(updatedProfile as unknown as UserProfile); // Cast to unknown first
+      toast.success("Profile updated successfully!");
+    } catch (error: any) {
+      console.error("Error updating user profile:", error);
+      toast.error("Failed to update profile.");
+    }
   };
 
-  const recordMarketListing = async (listingData: any) => {
-    console.log("Recording market listing (placeholder)", listingData);
-    // Implement actual market listing recording logic here
+  const recordMarketListing = async (listingType: 'product' | 'service' | 'errand' | 'cash_exchange' | 'collaborator') => {
+    if (!userProfile || !user) {
+      toast.error("User not logged in or profile not found.");
+      return;
+    }
+    // Placeholder for recording market listings.
+    // This would typically involve updating a counter or a list in the user's profile
+    // or a separate collection. For now, just a toast.
+    toast.info(`Recorded a new ${listingType} listing.`);
+    // Example: addXp(10); // Grant XP for listing
   };
 
   const incrementAmbassadorDeliveriesCount = async () => {
-    console.log("Incrementing ambassador deliveries count (placeholder)");
-    // Implement actual ambassador deliveries count logic here
+    if (!userProfile || !user || userProfile.userType !== 'ambassador') {
+      toast.error("Only ambassadors can increment delivery count.");
+      return;
+    }
+    try {
+      const newCount = (userProfile.ambassadorDeliveriesCount || 0) + 1;
+      await databases.updateDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_USER_PROFILES_COLLECTION_ID,
+        userProfile.$id,
+        { ambassadorDeliveriesCount: newCount }
+      );
+      setUserProfile(prev => prev ? { ...prev, ambassadorDeliveriesCount: newCount } : null);
+      toast.success("Ambassador delivery count incremented!");
+    } catch (error: any) {
+      console.error("Error incrementing ambassador deliveries:", error);
+      toast.error("Failed to increment ambassador deliveries.");
+    }
   };
 
-  return (
-    <AuthContext.Provider value={{
-      isAuthenticated,
-      isLoading,
-      currentUser,
-      userProfile,
-      isVerified,
-      login,
-      logout,
-      addXp,
-      updateUserProfile,
-      recordMarketListing,
-      incrementAmbassadorDeliveriesCount,
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    user,
+    userProfile,
+    isVerified,
+    loading,
+    login,
+    register,
+    logout,
+    checkSession,
+    addXp,
+    updateUserProfile,
+    recordMarketListing,
+    incrementAmbassadorDeliveriesCount,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth must be used within an AuthContextProvider');
   }
   return context;
 };

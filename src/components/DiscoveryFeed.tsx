@@ -1,72 +1,105 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import { Product } from "@/lib/mockData"; // Import Product interface
-import ProductListingCard from "@/components/ProductListingCard";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
-import { useMarketListings } from '@/hooks/useMarketListings'; // Import the new hook
+import React, { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useMarketListings } from '@/hooks/useMarketListings';
+import { Product, filterProducts } from '@/lib/utils'; // Import Product interface and filterProducts
+import ProductCard from './ProductCard'; // Corrected import
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from "@/components/ui/button"; // Corrected import
 
-// Mock function for developer deletion (kept for developer role functionality)
-const mockDeveloperDelete = (productId: string) => {
-  console.log(`Developer deleting product: ${productId}`);
-  // In a real app, this would call an API endpoint or Appwrite function
-};
+interface DiscoveryFeedProps {
+  onDeveloperDelete?: (productId: string) => Promise<void>;
+}
 
-const DiscoveryFeed: React.FC = () => {
-  const { userProfile } = useAuth();
-  const { products: listings, isLoading, error } = useMarketListings(); // useMarketListings already filters by collegeName internally
+const DiscoveryFeed: React.FC<DiscoveryFeedProps> = ({ onDeveloperDelete }) => {
+  const { userProfile, loading: isAuthLoading } = useAuth();
+  const { products, isLoading, error, refetch } = useMarketListings();
+  const [activeTab, setActiveTab] = useState('all');
 
-  // Determine developer status
-  const isDeveloper = userProfile?.role === "developer";
+  const isDeveloper = userProfile?.role === 'developer'; // Corrected userType to role
 
-  if (isLoading) {
+  if (isAuthLoading || isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-        {[...Array(6)].map((_, i) => (
-          <Skeleton key={i} className="h-64 w-full rounded-lg" />
-        ))}
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-10 w-10 animate-spin text-primary-blue" />
       </div>
     );
   }
-  
+
   if (error) {
     return (
-      <div className="p-4">
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Error Loading Feed</AlertTitle>
-          <AlertDescription>
-            Failed to load listings from the database: {error}
-          </AlertDescription>
-        </Alert>
+      <div className="text-destructive text-center p-4">
+        <p>Error loading listings: {error}</p>
+        <Button onClick={refetch} className="mt-2">Retry</Button>
       </div>
     );
   }
 
-  if (listings.length === 0) {
-    return (
-      <div className="p-4">
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>No Listings Found</AlertTitle>
-          <AlertDescription>
-            It looks like there are no products available right now for your college.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  const items = filterProducts(products, activeTab);
+
+  // Mock developer delete function if not provided
+  const mockDeveloperDelete = async (productId: string) => {
+    toast.info(`Developer delete action for product ${productId} (mocked).`);
+    // In a real scenario, this would call an Appwrite function or direct database delete
+    // and then refetch listings.
+    refetch();
+  };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-      {listings.map((listing) => (
-        <ProductListingCard
-          key={listing.$id}
-          product={{ ...listing, isDeveloper: isDeveloper }} // Inject developer status for card actions
-          onDeveloperDelete={isDeveloper ? mockDeveloperDelete : undefined}
-        />
-      ))}
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 bg-background-dark border border-border-dark">
+          <TabsTrigger value="all" className="text-foreground data-[state=active]:bg-primary-blue data-[state=active]:text-primary-foreground">All</TabsTrigger>
+          <TabsTrigger value="sell" className="text-foreground data-[state=active]:bg-primary-blue data-[state=active]:text-primary-foreground">Sell</TabsTrigger>
+          <TabsTrigger value="rent" className="text-foreground data-[state=active]:bg-primary-blue data-[state=active]:text-primary-foreground">Rent</TabsTrigger>
+        </TabsList>
+        <TabsContent value="all">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {items.length === 0 ? (
+              <p className="col-span-full text-center text-muted-foreground">No listings found.</p>
+            ) : (
+              items.map((listing) => (
+                <ProductCard
+                  key={listing.$id}
+                  product={{ ...listing, isDeveloper: isDeveloper }} // Inject developer status for card actions
+                  onDeveloperDelete={isDeveloper ? (onDeveloperDelete || mockDeveloperDelete) : undefined}
+                />
+              ))
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="sell">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filterProducts(items, 'sell').length === 0 ? (
+              <p className="col-span-full text-center text-muted-foreground">No items for sale found.</p>
+            ) : (
+              filterProducts(items, 'sell').map((listing) => (
+                <ProductCard
+                  key={listing.$id}
+                  product={{ ...listing, isDeveloper: isDeveloper }}
+                  onDeveloperDelete={isDeveloper ? (onDeveloperDelete || mockDeveloperDelete) : undefined}
+                />
+              ))
+            )}
+          </div>
+        </TabsContent>
+        <TabsContent value="rent">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filterProducts(items, 'rent').length === 0 ? (
+              <p className="col-span-full text-center text-muted-foreground">No items for rent found.</p>
+            ) : (
+              filterProducts(items, 'rent').map((listing) => (
+                <ProductCard
+                  key={listing.$id}
+                  product={{ ...listing, isDeveloper: isDeveloper }}
+                  onDeveloperDelete={isDeveloper ? (onDeveloperDelete || mockDeveloperDelete) : undefined}
+                />
+              ))
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

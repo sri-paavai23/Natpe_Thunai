@@ -1,100 +1,145 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import {
-  Home,
-  ShoppingCart,
-  Utensils,
-  DollarSign,
-  Briefcase,
-  Bike,
-  Users,
-  Trophy,
-  MessageSquare,
-  UserPlus,
-  Flag,
-  Building2,
-  Search,
-  LayoutDashboard, // New icon for Merchant Dashboard
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+  Home,
+  ShoppingCart,
+  Briefcase,
+  Users,
+  Utensils,
+  MessageSquare,
+  Trophy,
+  Handshake,
+  DollarSign,
+  PackageSearch,
+  ShieldAlert,
+  GraduationCap,
+  UserCog,
+  Building2,
+  BellRing,
+  PlusCircle,
+  QrCode,
+  Info,
+  Mail,
+  BookOpen,
+  ClipboardList,
+  MapPin,
+  Calendar,
+  Clock,
+  ListTodo,
+  Megaphone,
+  Lightbulb,
+  Heart,
+  Gift,
+  Wallet,
+  Banknote,
+  Coins,
+  Receipt,
+  History,
+  Settings,
+  LogOut,
+  LogIn,
+  UserPlus,
+  User as UserIcon,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from "@/lib/appwrite";
 import { Query } from "appwrite";
+import { toast } from "sonner";
 
-interface NavLinkProps {
-  to: string;
+interface SidebarLink {
+  title: string;
+  href: string;
   icon: React.ElementType;
-  label: string;
-  currentPath: string;
+  roles?: ('user' | 'developer' | 'staff' | 'merchant' | 'ambassador')[];
+  userTypes?: ('student' | 'staff' | 'merchant' | 'ambassador')[];
 }
 
-const NavLink: React.FC<NavLinkProps> = ({ to, icon: Icon, label, currentPath }) => {
-  const isActive = currentPath === to;
-  return (
-    <Link
-      to={to}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary",
-        isActive && "bg-muted text-primary"
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </Link>
-  );
-};
+const mainLinks: SidebarLink[] = [
+  { title: "Home", href: "/", icon: Home },
+  { title: "Marketplace", href: "/market", icon: ShoppingCart },
+  { title: "Freelance", href: "/freelance", icon: Briefcase },
+  { title: "Short-Term Needs", href: "/errands", icon: ListTodo },
+  { title: "Collaborators", href: "/collaborators", icon: Users },
+  { title: "Food & Wellness", href: "/food-wellness", icon: Utensils },
+  { title: "Cash Exchange", href: "/cash-exchange", icon: Banknote },
+  { title: "Tournaments", href: "/tournaments", icon: Trophy },
+  { title: "Lost & Found", href: "/lost-found", icon: PackageSearch },
+  { title: "Ambassador Program", href: "/ambassador", icon: Megaphone },
+  { title: "Tracking", href: "/tracking", icon: History },
+  { title: "Profile", href: "/profile", icon: UserIcon },
+];
+
+const developerLinks: SidebarLink[] = [
+  { title: "Developer Dashboard", href: "/developer-dashboard", icon: UserCog, roles: ['developer'] },
+  { title: "Canteen Management", href: "/canteen-management", icon: Building2, roles: ['developer', 'staff'] },
+  { title: "Reports", href: "/reports", icon: ShieldAlert, roles: ['developer'] },
+  { title: "Developer Chat", href: "/developer-chat", icon: MessageSquare, roles: ['developer'] },
+];
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const currentPath = location.pathname;
-  const { currentUser, userProfile } = useAuth(); // Use currentUser and userProfile from AuthContext
+  const { user, userProfile, loading } = useAuth(); // Corrected 'currentUser' to 'user' and 'loading'
 
-  const isMerchant = userProfile?.userType === 'merchant';
+  const filteredLinks = [...mainLinks, ...developerLinks].filter(link => {
+    if (!link.roles && !link.userTypes) return true; // Link visible to all if no specific roles/userTypes
+    if (!userProfile) return false; // Hide if no user profile
+
+    const hasRole = link.roles ? link.roles.includes(userProfile.role) : true;
+    const hasUserType = link.userTypes ? link.userTypes.includes(userProfile.userType) : true;
+
+    return hasRole && hasUserType;
+  });
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-sidebar sm:flex">
-      <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-        <Link to="/" className="flex items-center gap-2 font-semibold text-sidebar-foreground">
-          <img src="/app-logo.png" alt="Natpe Thunai Logo" className="h-6 w-6" />
-          <span className="">Natpe Thunai</span>
+    <div className="hidden md:flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground">
+      <div className="flex h-16 items-center justify-center border-b border-sidebar-border px-4">
+        <Link to="/" className="flex items-center gap-2 font-semibold text-lg text-sidebar-primary">
+          <img src="/app-logo.png" alt="Natpe Thunai Logo" className="h-8 w-8" />
+          Natpe🤝Thunai
         </Link>
       </div>
       <ScrollArea className="flex-1 py-4">
-        <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
-          <NavLink to="/" icon={Home} label="Dashboard" currentPath={currentPath} />
-          <NavLink to="/exchange" icon={ShoppingCart} label="Exchange" currentPath={currentPath} />
-          <NavLink to="/food-and-wellness" icon={Utensils} label="Food & Wellness" currentPath={currentPath} />
-          <NavLink to="/canteen" icon={Utensils} label="Canteen" currentPath={currentPath} />
-          <NavLink to="/cash-exchange" icon={DollarSign} label="Cash Exchange" currentPath={currentPath} />
-          <NavLink to="/services" icon={Briefcase} label="Services" currentPath={currentPath} />
-          <NavLink to="/errands" icon={Bike} label="Errands" currentPath={currentPath} />
-          <NavLink to="/collaborators" icon={Users} label="Collaborators" currentPath={currentPath} />
-          <NavLink to="/tournaments" icon={Trophy} label="Tournaments" currentPath={currentPath} />
-          <NavLink to="/developer-messages" icon={MessageSquare} label="Developer Messages" currentPath={currentPath} />
-          <NavLink to="/ambassador-applications" icon={UserPlus} label="Ambassador Applications" currentPath={currentPath} />
-          <NavLink to="/reports" icon={Flag} label="Reports" currentPath={currentPath} />
-          <NavLink to="/missing-colleges" icon={Building2} label="Missing Colleges" currentPath={currentPath} />
-          <NavLink to="/lost-and-found" icon={Search} label="Lost & Found" currentPath={currentPath} />
-          
-          {isMerchant && (
-            <>
-              <Separator className="my-4" />
-              <NavLink to="/merchant/dashboard" icon={LayoutDashboard} label="Merchant Dashboard" currentPath={currentPath} />
-            </>
-          )}
+        <nav className="grid items-start px-4 text-sm font-medium">
+          {filteredLinks.map((link) => (
+            <Link
+              key={link.href}
+              to={link.href}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-sidebar-primary",
+                currentPath === link.href ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground"
+              )}
+            >
+              <link.icon className="h-4 w-4" />
+              {link.title}
+            </Link>
+          ))}
         </nav>
       </ScrollArea>
-      <div className="mt-auto p-4 border-t">
-        <Button variant="secondary" className="w-full">
-          Settings
-        </Button>
+      <div className="mt-auto p-4 border-t border-sidebar-border">
+        {loading ? (
+          <div className="flex justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-sidebar-primary" />
+          </div>
+        ) : user ? (
+          <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:text-sidebar-primary" asChild>
+            <Link to="/auth">
+              <LogOut className="h-4 w-4 mr-2" /> Logout
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="ghost" className="w-full justify-start text-sidebar-foreground hover:text-sidebar-primary" asChild>
+            <Link to="/auth">
+              <LogIn className="h-4 w-4 mr-2" /> Login
+            </Link>
+          </Button>
+        )}
       </div>
-    </aside>
+    </div>
   );
 };
 

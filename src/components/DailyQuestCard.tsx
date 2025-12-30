@@ -1,114 +1,92 @@
-"use client";
-
-import React, { useState, useEffect } from "react";
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ScrollText, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
-import { isToday } from "date-fns";
+import { useAuth } from '@/context/AuthContext';
+import { Loader2, Trophy, CheckCircle } from 'lucide-react';
+import { isToday, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 
-const DAILY_QUEST_TARGET = 2; // List 2 items
-const DAILY_QUEST_XP_REWARD = 50;
-const DAILY_QUEST_COINS_REWARD = 100; // Assuming coins are a separate reward
+const DailyQuestCard: React.FC = () => {
+  const { user, userProfile, loading, addXp, updateUserProfile } = useAuth();
 
-const DailyQuestCard = () => {
-  const [isQuestDialogOpen, setIsQuestDialogOpen] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
-  const { userProfile, addXp, updateUserProfile } = useAuth();
+  const itemsListedToday = userProfile?.itemsListedToday ?? 0; // Corrected property access
+  const lastQuestCompletedDate = userProfile?.lastQuestCompletedDate ? parseISO(userProfile.lastQuestCompletedDate) : null; // Corrected property access
 
-  const itemsListedToday = userProfile?.itemsListedToday ?? 0;
-  const lastQuestCompletedDate = userProfile?.lastQuestCompletedDate ? new Date(userProfile.lastQuestCompletedDate) : null;
+  const isQuestCompletedToday = lastQuestCompletedDate ? isToday(lastQuestCompletedDate) : false;
+  const canClaimReward = itemsListedToday >= 1 && !isQuestCompletedToday;
 
-  const isQuestCompleted = itemsListedToday >= DAILY_QUEST_TARGET;
-  const isQuestClaimedToday = lastQuestCompletedDate && isToday(lastQuestCompletedDate);
-  const canClaimReward = isQuestCompleted && !isQuestClaimedToday; // Corrected variable name
-
-  const handleViewQuest = () => {
-    setIsQuestDialogOpen(true);
-  };
-  
   const handleClaimReward = async () => {
-    if (!userProfile || !addXp || !updateUserProfile) {
-      toast.error("User profile not loaded or functions unavailable.");
+    if (!userProfile || !user) {
+      toast.error("You must be logged in to claim rewards.");
       return;
     }
+
     if (!canClaimReward) {
-      toast.info("You've already claimed your daily quest reward! Come back tomorrow."); // Polite message
+      toast.info("You haven't completed the daily quest yet or already claimed it today.");
       return;
     }
 
-    setIsClaiming(true);
     try {
-      await addXp(DAILY_QUEST_XP_REWARD); // Reward XP
-      // In a real app, you'd also add coins to a separate balance
-      
+      await addXp(20); // Reward 20 XP for completing the daily quest
       // Update user profile to mark quest as claimed today and reset items listed
-      await updateUserProfile(userProfile.$id, {
+      await updateUserProfile({ // Corrected call signature
         lastQuestCompletedDate: new Date().toISOString(),
-        itemsListedToday: 0, // Reset for the next quest
+        itemsListedToday: 0, // Reset for the next day
       });
-
-      toast.success(`Quest completed! +${DAILY_QUEST_XP_REWARD} XP and ${DAILY_QUEST_COINS_REWARD} Coins claimed.`);
-      setIsQuestDialogOpen(false);
-    } catch (error: any) {
+      toast.success("Daily quest reward claimed! +20 XP!");
+    } catch (error) {
       console.error("Error claiming daily quest reward:", error);
-      toast.error(error.message || "Failed to claim reward.");
-    } finally {
-      setIsClaiming(false);
+      toast.error("Failed to claim daily quest reward.");
     }
   };
 
-  return (
-    <>
-      <Card className="bg-card text-card-foreground shadow-lg border-border">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-            <ScrollText className="h-5 w-5 text-secondary-neon" /> Daily Quest
-          </CardTitle>
+  if (loading) {
+    return (
+      <Card className="bg-card border-border-dark text-foreground">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">Daily Quest</CardTitle>
         </CardHeader>
-        <CardContent className="p-4 pt-0 flex flex-col items-start">
-          <p className="text-sm text-muted-foreground mb-3">Complete a quest today to earn XP and rewards!</p>
-          <Button onClick={handleViewQuest} className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            View Quest
-          </Button>
+        <CardContent className="flex items-center justify-center h-24">
+          <Loader2 className="h-8 w-8 animate-spin text-primary-blue" />
         </CardContent>
       </Card>
+    );
+  }
 
-      <Dialog open={isQuestDialogOpen} onOpenChange={setIsQuestDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Today's Daily Quest</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Here's what you need to do to earn your rewards!
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-4">
-            <p className="text-foreground font-medium">Quest: List {DAILY_QUEST_TARGET} items on The Exchange market.</p>
-            <p className="text-sm text-muted-foreground">Reward: +{DAILY_QUEST_XP_REWARD} XP, {DAILY_QUEST_COINS_REWARD} Coins</p>
-            <p className="text-sm text-muted-foreground">
-              Status: <span className="font-semibold">
-                {isQuestClaimedToday ? "Claimed Today!" : (isQuestCompleted ? "Completed!" : `In Progress (${itemsListedToday}/${DAILY_QUEST_TARGET})`)}
-              </span>
-            </p>
+  if (!user) {
+    return null; // Or a message indicating login is required
+  }
+
+  return (
+    <Card className="bg-card border-border-dark text-foreground">
+      <CardHeader>
+        <CardTitle className="text-lg font-semibold flex items-center">
+          <Trophy className="h-5 w-5 mr-2 text-secondary-neon" /> Daily Quest
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          List at least one item in the marketplace to earn 20 XP.
+        </p>
+        <p className="text-sm">
+          Items listed today: <span className="font-bold text-primary-blue-light">{itemsListedToday}</span>
+        </p>
+        {isQuestCompletedToday ? (
+          <div className="flex items-center text-green-500">
+            <CheckCircle className="h-5 w-5 mr-2" />
+            <span>Quest completed for today!</span>
           </div>
-          <Button 
-            onClick={handleClaimReward} 
-            className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-            disabled={!canClaimReward || isClaiming}
+        ) : (
+          <Button
+            onClick={handleClaimReward}
+            disabled={!canClaimReward}
+            className="w-full bg-secondary-neon hover:bg-secondary-neon-dark text-primary-blue"
           >
-            {isClaiming ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Claiming...
-              </>
-            ) : (
-              "Claim Reward"
-            )}
+            {canClaimReward ? 'Claim Reward' : 'Complete Quest to Claim'}
           </Button>
-        </DialogContent>
-      </Dialog>
-    </>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

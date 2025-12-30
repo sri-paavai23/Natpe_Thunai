@@ -1,22 +1,8 @@
-"use client";
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
 import { Query } from 'appwrite';
-
-interface Product {
-  $id: string;
-  title: string;
-  description: string;
-  price: number;
-  type: 'sell' | 'rent';
-  status: 'available' | 'sold' | 'rented';
-  sellerId: string;
-  servedCollegeIds: string[];
-  imageUrl?: string;
-  sellerName?: string;
-}
+import { Product } from '@/lib/utils'; // Import Product interface
 
 interface MarketListingsState {
   products: Product[];
@@ -26,65 +12,46 @@ interface MarketListingsState {
 }
 
 export const useMarketListings = (): MarketListingsState => {
-  const { userProfile, isLoading: isAuthLoading } = useAuth();
+  const { userProfile, loading: isAuthLoading } = useAuth(); // Corrected 'isLoading' to 'loading'
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refetchTrigger, setRefetchTrigger] = useState(0);
 
-  const refetch = () => setRefetchTrigger(prev => prev + 1);
+  const fetchProducts = useCallback(async () => {
+    if (isAuthLoading) return;
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      let queries = [
+        Query.orderDesc('$createdAt'),
+        Query.limit(100) // Limit to 100 products for now
+      ];
+
+      // Filter by collegeName if user is not a developer and has a collegeName
+      if (userProfile?.role !== 'developer' && userProfile?.collegeName) { // Corrected userType to role, added collegeName
+        queries.push(Query.equal('collegeName', userProfile.collegeName));
+      }
+
+      const response = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_PRODUCTS_COLLECTION_ID,
+        queries
+      );
+
+      setProducts(response.documents as unknown as Product[]); // Cast to unknown first
+    } catch (err: any) {
+      console.error("Error fetching market listings:", err);
+      setError(err.message || "Failed to fetch market listings.");
+      setProducts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userProfile?.collegeName, userProfile?.role, isAuthLoading]); // Added userProfile.role to dependencies
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      if (isAuthLoading) return;
-
-      setIsLoading(true);
-      setError(null);
-      try {
-        const queries = [Query.equal('status', 'available')];
-
-        if (userProfile && userProfile.collegeId) {
-          queries.push(Query.search('servedCollegeIds', userProfile.collegeId));
-        }
-
-        const response = await databases.listDocuments(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_PRODUCTS_COLLECTION_ID,
-          queries
-        );
-
-        const productsWithSellerNames = await Promise.all(
-          response.documents.map(async (productDoc) => {
-            const product = productDoc as unknown as Product;
-            try {
-              const sellerProfileResponse = await databases.listDocuments(
-                APPWRITE_DATABASE_ID,
-                APPWRITE_USER_PROFILES_COLLECTION_ID,
-                [Query.equal('userId', product.sellerId), Query.limit(1)]
-              );
-              if (sellerProfileResponse.documents.length > 0) {
-                const sellerProfile = sellerProfileResponse.documents[0];
-                product.sellerName = sellerProfile.merchantName || `${sellerProfile.firstName} ${sellerProfile.lastName}`;
-              }
-            } catch (profileError) {
-              console.warn(`Could not fetch seller profile for product ${product.$id}:`, profileError);
-              product.sellerName = "Unknown Seller";
-            }
-            return product;
-          })
-        );
-
-        setProducts(productsWithSellerNames);
-      } catch (err: any) {
-        console.error("Failed to fetch market listings:", err);
-        setError(err.message || "Failed to load market listings.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchProducts();
-  }, [userProfile, isAuthLoading, refetchTrigger]);
+  }, [fetchProducts]);
 
-  return { products, isLoading, error, refetch };
+  return { products, isLoading, error, refetch: fetchProducts };
 };

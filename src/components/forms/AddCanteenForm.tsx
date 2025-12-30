@@ -1,34 +1,31 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
 interface AddCanteenFormProps {
   onSubmit: (canteenName: string, collegeId: string) => Promise<void>;
-  onCancel: () => void;
-  loading: boolean;
+  onClose: () => void;
 }
 
-const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onCancel, loading }) => {
-  const { userProfile } = useAuth(); // NEW: Use useAuth hook
-  const [canteenName, setCanteenName] = useState("");
+const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onClose }) => {
+  const [canteenName, setCanteenName] = useState('');
+  const { userProfile } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userProfile?.collegeId) {
+    if (!userProfile?.collegeId) { // Corrected property access
       toast.error("Your college information is missing. Cannot add canteen.");
       return;
     }
-    await onSubmit(canteenName, userProfile.collegeId);
+    await onSubmit(canteenName, userProfile.collegeId); // Corrected property access
+    onClose();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-4 border rounded-lg bg-background">
-      <h3 className="text-xl font-bold">Add New Canteen</h3>
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="canteenName">Canteen Name</Label>
         <Input
@@ -36,16 +33,13 @@ const AddCanteenForm: React.FC<AddCanteenFormProps> = ({ onSubmit, onCancel, loa
           value={canteenName}
           onChange={(e) => setCanteenName(e.target.value)}
           required
-          disabled={loading}
         />
       </div>
       <div className="flex justify-end space-x-2">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={loading}>
-          {loading ? "Adding..." : "Add Canteen"}
-        </Button>
+        <Button type="submit">Add Canteen</Button>
       </div>
     </form>
   );
