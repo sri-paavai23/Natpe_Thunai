@@ -173,8 +173,8 @@ const PostTournamentForm: React.FC<PostTournamentFormProps> = ({ onTournamentPos
 
         // Generate UPI deep link
         // IMPORTANT: Replace with your actual developer UPI ID and name
-        const developerUpiId = "yourdeveloperupi@bank"; 
-        const developerName = "Tournament Organizers"; 
+        const developerUpiId = "8903480105@superyes"; 
+        const developerName = "Natpe-Thunai"; 
         const transactionNote = encodeURIComponent(`Commission for ${data.name}`);
         const upiLink = `upi://pay?pa=${developerUpiId}&pn=${developerName}&am=${commission.toFixed(2)}&cu=INR&tn=${transactionNote}`;
 
