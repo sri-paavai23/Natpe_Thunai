@@ -67,7 +67,7 @@ const UnlockingSoonCard = () => {
             Exciting new features are on their way to enhance your campus experience! Click to learn more.
           </p>
           <div className="grid grid-cols-2 gap-2">
-            {upcomingFeaturesDetails.map((feature, index) => (
+            {upcomingFeaturesDetails.slice(0, 4).map((feature, index) => (
               <Button
                 key={index}
                 variant="outline"
@@ -78,6 +78,18 @@ const UnlockingSoonCard = () => {
               </Button>
             ))}
           </div>
+          {upcomingFeaturesDetails.length > 4 && (
+            <div className="flex justify-center mt-2">
+              <Button
+                key={4} // Index for the 5th item
+                variant="outline"
+                className="flex items-center justify-start text-foreground text-sm h-auto py-2 px-3 bg-secondary-background hover:bg-secondary-background/80 border-secondary-neon/30 hover:border-secondary-neon w-full sm:w-1/2"
+                onClick={() => handleFeatureClick(upcomingFeaturesDetails[4])}
+              >
+                <Lock className="h-4 w-4 mr-2 text-secondary-neon" /> {upcomingFeaturesDetails[4].name}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
