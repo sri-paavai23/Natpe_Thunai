@@ -66,6 +66,7 @@ const CanteenManagerWidget = () => {
     try {
       await updateCanteen(selectedCanteenId, { isOpen: checked });
       toast.success(`${selectedCanteen?.name} is now ${checked ? "Open" : "Closed"}!`);
+      refetch(); // Refresh data to update UI
     } catch (e) {
       // Error handled in hook
     } finally {
@@ -82,6 +83,7 @@ const CanteenManagerWidget = () => {
       );
       await updateCanteen(selectedCanteenId, { items: newItems });
       toast.success("Item availability updated!");
+      refetch(); // Refresh data to update UI
     } catch (e) {
       // Error handled in hook
     } finally {
@@ -102,6 +104,7 @@ const CanteenManagerWidget = () => {
       toast.success(`"${newItemName.trim()}" added to the menu!`);
       setNewItemName("");
       setIsAddingItem(false);
+      refetch(); // Refresh data to update UI
     } catch (e) {
       // Error handled in hook
     } finally {
@@ -117,6 +120,7 @@ const CanteenManagerWidget = () => {
       const newItems = selectedCanteen.items.filter((_, i) => i !== index);
       await updateCanteen(selectedCanteenId, { items: newItems });
       toast.info(`"${removedItemName}" removed from the menu.`);
+      refetch(); // Refresh data to update UI
     } catch (e) {
       // Error handled in hook
     } finally {
