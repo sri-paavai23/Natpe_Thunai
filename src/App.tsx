@@ -36,7 +36,7 @@ import FreelancePage from "./pages/FreelancePage";
 import ErrandsPage from "./pages/ErrandsPage";
 import ShortTermNeedsPage from "./pages/ShortTermNeedsPage";
 import FoodWellnessPage from "./pages/FoodWellnessPage";
-import TheEditPage from "./pages/TicketBookingPage";
+import TheEditPage from "./pages/TheEditPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import PostJobPage from "./pages/PostJobPage";
 import AmbassadorProgramPage from "./pages/AmbassadorProgramPage";
