@@ -4,19 +4,15 @@ import React, { useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Soup, HeartPulse, ShieldCheck, PlusCircle, Utensils, Loader2, MessageSquareText, X, Info } from "lucide-react"; // NEW: Import Info icon
+import { Soup, ShieldCheck, PlusCircle, Utensils, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostServiceForm from "@/components/forms/PostServiceForm";
-import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
+import { useServiceListings } from "@/hooks/useServiceListings";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
-import FoodOfferingCard from "@/components/FoodOfferingCard";
 import FoodCustomRequestsList from "@/components/FoodCustomRequestsList";
-// import DeletionInfoMessage from "@/components/DeletionInfoMessage"; // REMOVED: DeletionInfoMessage component
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // NEW: Import AlertTitle
-import { Link } from "react-router-dom"; // NEW: Import Link for the message
 
 // Service categories specific to this page
 const OFFERING_CATEGORIES = ["homemade-meals", "wellness-remedies"];
@@ -35,13 +31,10 @@ const CUSTOM_REQUEST_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
-
 const FoodWellnessPage = () => {
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
+  const { user, userProfile } = useAuth();
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isPostCustomOrderDialogOpen, setIsPostCustomOrderDialogOpen] = useState(false);
-  const [showOfferingFormInfoAlert, setShowOfferingFormInfoAlert] = useState(true); // State for dismissible alert
-  const [showCustomOrderFormInfoAlert, setShowCustomOrderFormInfoAlert] = useState(true); // State for dismissible alert
   
   // Fetch all food/wellness related posts for the user's college
   const { services: allPosts, isLoading, error } = useServiceListings(undefined); 
@@ -141,10 +134,7 @@ const FoodWellnessPage = () => {
             <p className="text-sm text-muted-foreground">
               Post your homemade food or wellness remedies for your college peers to order.
             </p>
-            <Dialog open={isPostServiceDialogOpen} onOpenChange={(open) => {
-              setIsPostServiceDialogOpen(open);
-              if (open) setShowOfferingFormInfoAlert(true); // Reset alert visibility when dialog opens
-            }}>
+            <Dialog open={isPostServiceDialogOpen} onOpenChange={setIsPostServiceDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
                   <PlusCircle className="mr-2 h-4 w-4" /> Post New Offering
@@ -153,29 +143,12 @@ const FoodWellnessPage = () => {
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
                 <DialogHeader className="relative">
                   <DialogTitle className="text-foreground">Post New Food/Wellness Offering</DialogTitle>
-                  {/* Removed the explicit close button here as requested */}
                 </DialogHeader>
                 {/* Scroll pane for dialog content */}
-                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
-                  {showOfferingFormInfoAlert && ( // Conditionally render dismissible alert
-                    <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-2">
-                        <Info className="h-4 w-4 text-blue-500 mt-1" />
-                        <div>
-                          <AlertTitle className="font-semibold text-blue-600 dark:text-blue-400">Important Listing Information</AlertTitle>
-                          <AlertDescription className="text-sm space-y-1 mt-1">
-                            <p>Fill out the details to post your food or wellness offering.</p>
-                            <p>Once a listing or service is posted, it cannot be deleted by yourself.</p>
-                            <p>If you need to remove or modify your post, please contact the developers directly via the <Link to="/profile" className="text-secondary-neon hover:underline">"Chat with Developers"</Link> section in your profile.</p>
-                          </AlertDescription>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => setShowOfferingFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100 -mt-1">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </Alert>
-                  )}
-                  {/* REMOVED: DeletionInfoMessage component */}
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                  
+                  {/* FIXED: Removed the duplicate manual Alert here. PostServiceForm handles the information display. */}
+                  
                   <PostServiceForm 
                     onSubmit={handlePostService} 
                     onCancel={() => setIsPostServiceDialogOpen(false)} 
@@ -186,14 +159,11 @@ const FoodWellnessPage = () => {
                     contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
                     ambassadorMessagePlaceholder="e.g., Deliver to Block A, Room 101 by 7 PM"
                   />
-                </div> {/* END: Scroll pane */}
+                </div>
               </DialogContent>
             </Dialog>
 
-            <Dialog open={isPostCustomOrderDialogOpen} onOpenChange={(open) => {
-              setIsPostCustomOrderDialogOpen(open);
-              if (open) setShowCustomOrderFormInfoAlert(true); // Reset alert visibility when dialog opens
-            }}>
+            <Dialog open={isPostCustomOrderDialogOpen} onOpenChange={setIsPostCustomOrderDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-2">
                   <Utensils className="mr-2 h-4 w-4" /> Request Custom Order
@@ -202,29 +172,12 @@ const FoodWellnessPage = () => {
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
                 <DialogHeader className="relative">
                   <DialogTitle className="text-foreground">Request Custom Food/Remedy</DialogTitle>
-                  {/* Removed the explicit close button here as requested */}
                 </DialogHeader>
                 {/* Scroll pane for dialog content */}
-                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
-                  {showCustomOrderFormInfoAlert && ( // Conditionally render dismissible alert
-                    <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-2">
-                        <Info className="h-4 w-4 text-blue-500 mt-1" />
-                        <div>
-                          <AlertTitle className="font-semibold text-blue-600 dark:text-blue-400">Important Listing Information</AlertTitle>
-                          <AlertDescription className="text-sm space-y-1 mt-1">
-                            <p>Describe the custom food or remedy you need.</p>
-                            <p>Once a request is posted, it cannot be deleted by yourself.</p>
-                            <p>If you need to remove or modify your request, please contact the developers directly via the <Link to="/profile" className="text-secondary-neon hover:underline">"Chat with Developers"</Link> section in your profile.</p>
-                          </AlertDescription>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => setShowCustomOrderFormInfoAlert(false)} className="text-blue-800 hover:bg-blue-100 -mt-1">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </Alert>
-                  )}
-                  {/* REMOVED: DeletionInfoMessage component */}
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                  
+                  {/* FIXED: Removed the duplicate manual Alert here. */}
+                  
                   <PostServiceForm 
                     onSubmit={handlePostCustomOrder} 
                     onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
@@ -237,7 +190,7 @@ const FoodWellnessPage = () => {
                     contactPlaceholder="e.g., +91 9876543210 or @your_telegram_id"
                     ambassadorMessagePlaceholder="e.g., Pick up from my room, Block B, Room 205"
                   />
-                </div> {/* END: Scroll pane */}
+                </div>
               </DialogContent>
             </Dialog>
 
