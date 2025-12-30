@@ -1,11 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query } from 'appwrite';
-import { toast } from 'sonner';
-import { Product } from '@/lib/mockData';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
+import { Query } from 'appwrite';
+
+interface Product {
+  $id: string;
+  title: string;
+  description: string;
+  price: number;
+  type: 'sell' | 'rent';
+  status: 'available' | 'sold' | 'rented';
+  sellerId: string;
+  servedCollegeIds: string[];
+  imageUrl?: string;
+  sellerName?: string;
+}
 
 interface MarketListingsState {
   products: Product[];
@@ -19,125 +30,61 @@ export const useMarketListings = (): MarketListingsState => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
 
-  const fetchProducts = useCallback(async () => {
-    // If userProfile is not yet loaded or is null, we can't fetch products.
-    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
-    if (!userProfile) {
-      return;
-    }
-
-    const isDeveloper = userProfile.role === 'developer';
-    const collegeToFilterBy = userProfile.collegeName;
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      const queries = [
-        Query.orderDesc('$createdAt'),
-        Query.equal('status', 'available'),
-      ];
-      if (!isDeveloper) {
-        queries.push(Query.equal('collegeName', collegeToFilterBy));
-      }
-
-      const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_PRODUCTS_COLLECTION_ID,
-        queries
-      );
-      
-      const productsWithSellerInfo = await Promise.all(
-        (response.documents as unknown as Product[]).map(async (product) => {
-          try {
-            const sellerProfileResponse = await databases.listDocuments(
-              APPWRITE_DATABASE_ID,
-              APPWRITE_USER_PROFILES_COLLECTION_ID,
-              [Query.equal('userId', product.userId), Query.limit(1)] // Changed to product.userId
-            );
-            const sellerProfile = sellerProfileResponse.documents[0] as any;
-            return {
-              ...product,
-              sellerLevel: sellerProfile?.level ?? 1,
-            };
-          } catch (sellerError) {
-            console.warn(`Could not fetch profile for seller ${product.userId}:`, sellerError); // Changed to product.userId
-            return { ...product, sellerLevel: 1 };
-          }
-        })
-      );
-
-      setProducts(productsWithSellerInfo);
-    } catch (err: any) {
-      console.error("Error fetching market listings:", err);
-      setError(err.message || "Failed to load market listings.");
-      toast.error("Failed to load market listings.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userProfile]); // Dependencies for useCallback are correct
+  const refetch = () => setRefetchTrigger(prev => prev + 1);
 
   useEffect(() => {
-    if (isAuthLoading) {
+    const fetchProducts = async () => {
+      if (isAuthLoading) return;
+
       setIsLoading(true);
-      setProducts([]); // Clear products while auth is loading
       setError(null);
-      return;
-    }
+      try {
+        const queries = [Query.equal('status', 'available')];
 
-    if (userProfile === null) {
-      setIsLoading(false);
-      setProducts([]);
-      setError("User profile not loaded. Cannot fetch market listings.");
-      return;
-    }
-
-    // If auth is done and userProfile is available, fetch products
-    fetchProducts();
-
-    // Setup real-time subscriptions
-    const isDeveloper = userProfile.role === 'developer';
-    const collegeToFilterBy = userProfile.collegeName;
-
-    // Only subscribe if there's a valid college to filter by, or if it's a developer viewing all
-    if (!isDeveloper && !collegeToFilterBy) return;
-
-    const unsubscribeProducts = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_PRODUCTS_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as Product;
-
-        // Filter real-time updates by collegeName if not a developer
-        if (!isDeveloper && payload.collegeName !== collegeToFilterBy) {
-            return;
+        if (userProfile && userProfile.collegeId) {
+          queries.push(Query.search('servedCollegeIds', userProfile.collegeId));
         }
 
-        // For any product update (create, update, delete), refetch to ensure sellerLevel and sorting are correct.
-        // This is simpler than trying to merge/update locally with seller profile data.
-        fetchProducts();
-      }
-    );
+        const response = await databases.listDocuments(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_PRODUCTS_COLLECTION_ID,
+          queries
+        );
 
-    const unsubscribeUserProfiles = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_USER_PROFILES_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as any;
-        if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          // If a user profile is updated, and that user is a seller of an existing product, refetch products.
-          // This ensures sellerLevel badges are up-to-date.
-          const isSellerOfExistingProduct = products.some(p => p.userId === payload.userId); // Changed to userId
-          if (isSellerOfExistingProduct) {
-            fetchProducts();
-          }
-        }
-      }
-    );
+        const productsWithSellerNames = await Promise.all(
+          response.documents.map(async (productDoc) => {
+            const product = productDoc as unknown as Product;
+            try {
+              const sellerProfileResponse = await databases.listDocuments(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_USER_PROFILES_COLLECTION_ID,
+                [Query.equal('userId', product.sellerId), Query.limit(1)]
+              );
+              if (sellerProfileResponse.documents.length > 0) {
+                const sellerProfile = sellerProfileResponse.documents[0];
+                product.sellerName = sellerProfile.merchantName || `${sellerProfile.firstName} ${sellerProfile.lastName}`;
+              }
+            } catch (profileError) {
+              console.warn(`Could not fetch seller profile for product ${product.$id}:`, profileError);
+              product.sellerName = "Unknown Seller";
+            }
+            return product;
+          })
+        );
 
-    return () => {
-      unsubscribeProducts();
-      unsubscribeUserProfiles();
+        setProducts(productsWithSellerNames);
+      } catch (err: any) {
+        console.error("Failed to fetch market listings:", err);
+        setError(err.message || "Failed to load market listings.");
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [fetchProducts, isAuthLoading, userProfile]);
 
-  return { products, isLoading, error, refetch: fetchProducts };
+    fetchProducts();
+  }, [userProfile, isAuthLoading, refetchTrigger]);
+
+  return { products, isLoading, error, refetch };
 };

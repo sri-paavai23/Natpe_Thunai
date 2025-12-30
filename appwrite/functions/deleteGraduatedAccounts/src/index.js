@@ -1,7 +1,7 @@
 const sdk = require('node-appwrite');
 
 module.exports = async function (req, res) {
-  const client = new new sdk.Client()
+  const client = new sdk.Client()
     .setEndpoint(process.env.APPWRITE_ENDPOINT)
     .setProject(process.env.APPWRITE_PROJECT_ID)
     .setKey(process.env.APPWRITE_API_KEY);
@@ -37,8 +37,8 @@ module.exports = async function (req, res) {
       }
 
       for (const profile of profilesResponse.documents) {
-        // Skip developers and staff accounts
-        if (profile.role === 'developer' || profile.userType === 'staff') {
+        // Skip developers, staff, and merchant accounts from graduation protocol
+        if (profile.role === 'developer' || profile.userType === 'staff' || profile.userType === 'merchant') {
           console.log(`Skipping account ${profile.userId} (Role: ${profile.role}, Type: ${profile.userType}) from graduation protocol.`);
           continue;
         }

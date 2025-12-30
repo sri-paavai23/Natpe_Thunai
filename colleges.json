@@ -1,1 +1,14 @@
-DYAD_ATTACHMENT_0
+{
+  "colleges": [
+    { "id": "college1", "name": "Anna University" },
+    { "id": "college2", "name": "VIT Vellore" },
+    { "id": "college3", "name": "SRM Institute of Science and Technology" },
+    { "id": "college4", "name": "PSG College of Technology" },
+    { "id": "college5", "name": "SSN College of Engineering" },
+    { "id": "college6", "name": "Loyola College, Chennai" },
+    { "id": "college7", "name": "Madras Christian College" },
+    { "id": "college8", "name": "Stella Maris College" },
+    { "id": "college9", "name": "Presidency College, Chennai" },
+    { "id": "college10", "name": "Ethiraj College for Women" }
+  ]
+}

@@ -1,76 +1,45 @@
 "use client";
 
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Package, Users, Utensils } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
-import { useMarketListings } from '@/hooks/useMarketListings'; // Import existing hook
-import { useTotalUsers } from '@/hooks/useTotalUsers'; // NEW IMPORT
-import { useFoodOrdersAnalytics } from '@/hooks/useFoodOrdersAnalytics'; // NEW IMPORT
-import { useTotalTransactions } from '@/hooks/useTotalTransactions'; // NEW IMPORT
-import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton for loading states
-import { useAuth } from "@/context/AuthContext"; // NEW: Import useAuth
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/context/AuthContext';
+import { useTotalUsers } from '@/hooks/useTotalUsers';
+import { useMarketListings } from '@/hooks/useMarketListings';
+import { useFoodOrdersAnalytics } from '@/hooks/useFoodOrdersAnalytics';
+import { useTotalTransactions } from '@/hooks/useTotalTransactions';
 
 const AnalyticsCard = () => {
   const { userProfile } = useAuth(); // NEW: Get userProfile to access collegeName
   // Determine the collegeName to pass to hooks. If developer, pass undefined to fetch all.
-  const collegeNameForAnalytics = userProfile?.role === 'developer' ? undefined : userProfile?.collegeName;
+  const collegeNameFilter = userProfile?.userType === 'developer' ? undefined : userProfile?.collegeId;
 
-  // Pass collegeNameForAnalytics to the hooks
-  const { products, isLoading: isLoadingListings, error: listingsError } = useMarketListings(); // useMarketListings already filters internally based on userProfile.role
-  const { totalUsers, isLoading: isLoadingUsers, error: usersError } = useTotalUsers(collegeNameForAnalytics);
-  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders, error: foodOrdersError } = useFoodOrdersAnalytics(collegeNameForAnalytics);
-  const { totalTransactions, isLoading: isLoadingTransactions, error: transactionsError } = useTotalTransactions(collegeNameForAnalytics);
-
-  const isLoadingAny = isLoadingListings || isLoadingUsers || isLoadingFoodOrders || isLoadingTransactions;
-  const hasError = listingsError || usersError || foodOrdersError || transactionsError;
+  const { totalUsers, isLoading: isLoadingUsers } = useTotalUsers(collegeNameFilter);
+  const { products, isLoading: isLoadingListings } = useMarketListings();
+  const { foodOrdersLastWeek, isLoading: isLoadingFoodOrders } = useFoodOrdersAnalytics(collegeNameFilter);
+  const { totalTransactions, isLoading: isLoadingTransactions } = useTotalTransactions(collegeNameFilter);
 
   return (
-    <Card className="bg-card text-card-foreground shadow-lg border-border">
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-secondary-neon" /> Campus Analytics
-        </CardTitle>
+    <Card className="col-span-full lg:col-span-2">
+      <CardHeader>
+        <CardTitle>Overall Analytics</CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <p className="text-sm text-muted-foreground mb-3">Real-time insights into your college's activity.</p>
-        {hasError ? (
-          <div className="text-center text-destructive py-4">
-            <p>Error loading analytics data.</p>
-            <p className="text-xs">{listingsError || usersError || foodOrdersError || transactionsError}</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
-              <div className="flex items-center text-sm font-medium text-foreground">
-                <Package className="h-4 w-4 mr-2 text-blue-500" /> Listings
-              </div>
-              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{products.length}</p>}
-              <p className="text-xs text-muted-foreground">Total Exchange Items</p>
-            </div>
-            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
-              <div className="flex items-center text-sm font-medium text-foreground">
-                <Users className="h-4 w-4 mr-2 text-purple-500" /> Users
-              </div>
-              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{totalUsers}</p>}
-              <p className="text-xs text-muted-foreground">Total Registered</p>
-            </div>
-            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
-              <div className="flex items-center text-sm font-medium text-foreground">
-                <Utensils className="h-4 w-4 mr-2 text-red-500" /> Food Orders
-              </div>
-              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{foodOrdersLastWeek}</p>}
-              <p className="text-xs text-muted-foreground">Last 7 Days</p>
-            </div>
-            <div className="space-y-1 p-2 border border-border rounded-md bg-background">
-              <div className="flex items-center text-sm font-medium text-foreground">
-                <TrendingUp className="h-4 w-4 mr-2 text-green-500" /> Transactions
-              </div>
-              {isLoadingAny ? <Skeleton className="h-6 w-1/2 mt-1" /> : <p className="text-2xl font-bold text-secondary-neon">{totalTransactions}</p>}
-              <p className="text-xs text-muted-foreground">Total Completed</p>
-            </div>
-          </div>
-        )}
+      <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
+          <p className="text-2xl font-bold">{isLoadingUsers ? '...' : totalUsers}</p>
+          <p className="text-sm text-muted-foreground">Total Users</p>
+        </div>
+        <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
+          <p className="text-2xl font-bold">{isLoadingListings ? '...' : products.length}</p>
+          <p className="text-sm text-muted-foreground">Active Listings</p>
+        </div>
+        <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
+          <p className="text-2xl font-bold">{isLoadingFoodOrders ? '...' : foodOrdersLastWeek}</p>
+          <p className="text-sm text-muted-foreground">Food Orders (Last 7 Days)</p>
+        </div>
+        <div className="flex flex-col items-center justify-center p-4 border rounded-lg">
+          <p className="text-2xl font-bold">{isLoadingTransactions ? '...' : totalTransactions}</p>
+          <p className="text-sm text-muted-foreground">Total Transactions</p>
+        </div>
       </CardContent>
     </Card>
   );
