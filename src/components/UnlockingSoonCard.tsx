@@ -37,6 +37,12 @@ const upcomingFeaturesDetails: FeatureDetail[] = [
     popupContent:
       "Forget those spammy 20-minute surveys that disqualify you at the last second. The Vault is built different. We are securing direct partnerships with cutting-edge AI companies and top-tier brands for high-value 'Micro-Missions.' Think training a next-gen voice AI using your local dialect, or getting paid to review an unreleased product prototype before it hits the market. These are quick, genuine tasks with real payouts. No fluff. Just straight value for your time. Access is currently restricted.",
   },
+  {
+    name: "Merchant Connect",
+    popupTitle: "Your Campus, Connected.",
+    popupContent:
+      "Imagine your favorite local shops and eateries, right at your fingertips. Merchant Connect is bringing nearby businesses directly into your campus ecosystem. Merchants will gain a special role, allowing them to create exclusive listings in the Exchange tab—think unique student deals or campus-specific services. Plus, they'll be able to post daily food offerings in the Food & Wellness tab, making it easier than ever to discover delicious meals and support local businesses. Get ready for a whole new level of campus convenience!",
+  },
 ];
 
 const UnlockingSoonCard = () => {
