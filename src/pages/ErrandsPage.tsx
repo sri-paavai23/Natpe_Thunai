@@ -9,12 +9,13 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PostErrandForm from "@/components/forms/PostErrandForm";
 import { useErrandListings, ErrandPost } from "@/hooks/useErrandListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID,APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_ERRANDS_COLLECTION_ID, APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import * as z from "zod";
-import DeletionInfoMessage from "@/components/DeletionInfoMessage";
-import { Alert, AlertDescription } from "@/components/ui/alert"; // NEW: Import Alert components
+// DeletionInfoMessage import removed to prevent duplication if it's in the form, 
+// or you can keep the import if you need to use it elsewhere, but we won't render it here.
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Errand types specific to this page
 const ERRAND_TYPES = ["note-writing", "small-job", "delivery"];
@@ -26,23 +27,22 @@ const STANDARD_ERRAND_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
-// Define the Zod schema for the PostErrandForm data (copied from PostErrandForm.tsx)
+// Define the Zod schema
 const ErrandFormSchema = z.object({
   title: z.string().min(2, { message: "Title must be at least 2 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
   type: z.string().min(1, { message: "Please select an errand type." }),
-  otherTypeDescription: z.string().optional(), // For 'other' type
+  otherTypeDescription: z.string().optional(),
   compensation: z.string().min(2, { message: "Compensation details are required." }),
   deadline: z.date().optional(),
   contact: z.string().min(5, { message: "Contact information is required." }),
 });
 
-
 const ErrandsPage = () => {
   const { user, userProfile } = useAuth();
   const [isPostErrandDialogOpen, setIsPostErrandDialogOpen] = useState(false);
   const [preselectedErrandType, setPreselectedErrandType] = useState<string | undefined>(undefined);
-  const [showErrandFormInfoAlert, setShowErrandFormInfoAlert] = useState(true); // NEW: State for dismissible alert
+  const [showErrandFormInfoAlert, setShowErrandFormInfoAlert] = useState(true);
   
   // Fetch only standard errands for the user's college
   const { errands: postedErrands, isLoading, error } = useErrandListings(ERRAND_TYPES);
@@ -57,11 +57,11 @@ const ErrandsPage = () => {
 
   const handleErrandClick = (errandType: string) => {
     setPreselectedErrandType(errandType);
-    setIsPostErrandDialogOpen(true); // Open the dialog
-    setShowErrandFormInfoAlert(true); // Reset alert visibility when dialog opens
+    setIsPostErrandDialogOpen(true);
+    setShowErrandFormInfoAlert(true);
   };
 
-  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => { // Correctly type data
+  const handlePostErrand = async (data: z.infer<typeof ErrandFormSchema>) => {
     if (!user || !userProfile) {
       toast.error("You must be logged in to post an errand.");
       return;
@@ -70,14 +70,14 @@ const ErrandsPage = () => {
     try {
       const newErrandData = {
         ...data,
-        // If type is 'other' and otherTypeDescription is empty, use otherTypeDescription as the actual type
+        // If type is 'other', use otherTypeDescription as the actual type
         type: data.type === 'other' && data.otherTypeDescription 
               ? data.otherTypeDescription 
               : data.type,
-        deadline: data.deadline ? data.deadline.toISOString() : null, // Convert Date to ISO string
+        deadline: data.deadline ? data.deadline.toISOString() : null,
         posterId: user.$id,
         posterName: user.name,
-        collegeName: userProfile.collegeName, // Ensure collegeName is explicitly added
+        collegeName: userProfile.collegeName,
       };
 
       await databases.createDocument(
@@ -89,7 +89,7 @@ const ErrandsPage = () => {
       
       toast.success(`Your errand "${data.title}" has been posted!`);
       setIsPostErrandDialogOpen(false);
-      setPreselectedErrandType(undefined); // Clear preselected type after posting
+      setPreselectedErrandType(undefined);
     } catch (e: any) {
       console.error("Error posting errand:", e);
       toast.error(e.message || "Failed to post errand listing.");
@@ -137,11 +137,10 @@ const ErrandsPage = () => {
               <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
                 <DialogHeader className="relative">
                   <DialogTitle className="text-foreground">Post New Campus Errand</DialogTitle>
-                  {/* Removed the explicit close button here as requested */}
                 </DialogHeader>
-                {/* NEW: Scroll pane for dialog content */}
-                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2"> {/* Adjust height as needed */}
-                  {showErrandFormInfoAlert && ( // NEW: Conditionally render dismissible alert
+                
+                <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+                  {showErrandFormInfoAlert && (
                     <Alert className="bg-blue-50 border-blue-200 text-blue-800 flex items-center justify-between mb-4">
                       <AlertDescription>
                         Fill out the details to post your errand for college peers.
@@ -151,7 +150,9 @@ const ErrandsPage = () => {
                       </Button>
                     </Alert>
                   )}
-                  <DeletionInfoMessage />
+                  
+                  {/* FIXED: Removed <DeletionInfoMessage /> here because it is already inside PostErrandForm */}
+                  
                   <PostErrandForm 
                     onSubmit={handlePostErrand} 
                     onCancel={() => {
@@ -161,7 +162,7 @@ const ErrandsPage = () => {
                     typeOptions={STANDARD_ERRAND_OPTIONS}
                     initialType={preselectedErrandType}
                   />
-                </div> {/* END: Scroll pane */}
+                </div>
               </DialogContent>
             </Dialog>
             {isAgeGated && (
