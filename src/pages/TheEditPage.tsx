@@ -76,13 +76,21 @@ const TheEditPage = () => {
       );
       
       const data = JSON.parse(result.responseBody);
+      
+      // --- MODIFIED DEBUGGING SECTION ---
       if (data.ok) {
         window.open(data.cuelink, "_blank");
       } else {
-        toast.error("Deal link generation failed.");
+        // Log the REAL error from the server to the console
+        console.error("SERVER ERROR:", data.error); 
+        // Show the specific error on screen
+        toast.error(`Failed: ${data.error || "Unknown Error"}`); 
       }
-    } catch (err) {
-      toast.error("Server connection issue.");
+      // ----------------------------------
+
+    } catch (err: any) {
+      console.error("Execution Error:", err);
+      toast.error(`Connection Error: ${err.message}`);
     } finally {
       setActiveGen(null);
     }
