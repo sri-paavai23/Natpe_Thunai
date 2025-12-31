@@ -29,9 +29,13 @@ export const APPWRITE_CHAT_MESSAGES_COLLECTION_ID = import.meta.env.VITE_APPWRIT
 
 const client = new Client();
 
+// Replace the bottom part of your appwrite.ts with this:
+
+const client = new Client();
+
 client
-  .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-  .setProject(APPWRITE_PROJECT_ID);
+  .setEndpoint('https://cloud.appwrite.io/v1') // Hardcoded Global Endpoint
+  .setProject('676c8c49003463a5ef59');         // REPLACE THIS with your actual Project ID string
 
 export const account = new Account(client);
 export const databases = new Databases(client);
