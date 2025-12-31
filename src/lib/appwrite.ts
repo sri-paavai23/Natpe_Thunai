@@ -35,7 +35,7 @@ const client = new Client();
 
 client
   .setEndpoint('https://cloud.appwrite.io/v1') // Hardcoded Global Endpoint
-  .setProject('676c8c49003463a5ef59');         // REPLACE THIS with your actual Project ID string
+  .setProject('690f3ae200352dd0534a');         // REPLACE THIS with your actual Project ID string
 
 export const account = new Account(client);
 export const databases = new Databases(client);
