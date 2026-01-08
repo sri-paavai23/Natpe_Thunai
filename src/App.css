@@ -1,42 +1,65 @@
+/* App.css - Refined for Natpe Thunai */
+
+/* 1. Reset Root for Full-Screen Mobile Experience */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  /* Reset text-align so components control their own layout */
+  text-align: left; 
+  /* Ensure it uses the theme variables defined in globals.css */
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* 2. Global Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent; /* Removes blue highlight on mobile tap */
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* 3. Themed Text Selection (Glowing Green) */
+::selection {
+  background-color: hsl(var(--accent)); /* Neon Green from your theme */
+  color: black; /* High contrast text */
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+/* 4. Custom Cyber Scrollbars (Webkit) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary)); /* Emerald Green on hover */
+}
+
+/* 5. Utility: Hide Scrollbar (Useful for horizontal card lists) */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 6. Optional: Prevent text selection on interactive elements for 'App-like' feel */
+button, 
+a, 
 .card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+  user-select: none;
 }
