@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
+// FIXED: Import from your local component, NOT next-themes
+import { useTheme } from "@/components/theme-provider"; 
 import { useNavigate, Link } from "react-router-dom";
 import DeveloperChatbox from "@/components/DeveloperChatbox";
 import { useAuth } from "@/context/AuthContext";
-import GraduationMeter from "@/components/GraduationMeter"; // NEW: Import GraduationMeter
+import GraduationMeter from "@/components/GraduationMeter";
 
 const ProfilePage = () => {
   const { theme, setTheme } = useTheme();
@@ -29,7 +30,6 @@ const ProfilePage = () => {
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">My Zone (Profile)</h1>
       <div className="max-w-md mx-auto space-y-6">
-        {/* NEW: Graduation Meter */}
         <GraduationMeter />
 
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleProfileSectionClick("/profile/details", "User Profile")}>
@@ -40,6 +40,7 @@ const ProfilePage = () => {
             <p className="text-muted-foreground">Manage verification badges, view your rating, and track your Level/XP progress.</p>
           </CardContent>
         </Card>
+        
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleProfileSectionClick("/profile/wallet", "Wallet & Payments")}>
           <CardHeader className="p-0 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground">Wallet & Payments</CardTitle>
@@ -48,16 +49,22 @@ const ProfilePage = () => {
             <p className="text-muted-foreground">Manage your wallet, payment methods, and view your dynamic commission policy.</p>
           </CardContent>
         </Card>
+
+        {/* DARK MODE TOGGLE */}
         <div className="bg-card p-4 rounded-lg shadow-md border border-border flex items-center justify-between">
           <Label htmlFor="dark-mode" className="text-foreground text-xl font-semibold">Dark Mode</Label>
           <Switch
             id="dark-mode"
+            // Logic: Check if theme is exactly dark
             checked={theme === "dark"}
+            // Logic: Toggle between 'dark' and 'light'
             onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
             className="data-[state=checked]:bg-secondary-neon data-[state=unchecked]:bg-muted-foreground"
           />
         </div>
+
         <DeveloperChatbox />
+        
         {isDeveloper && (
           <Link to="/developer-dashboard">
             <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow">
@@ -70,6 +77,7 @@ const ProfilePage = () => {
             </Card>
           </Link>
         )}
+        
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleProfileSectionClick("/profile/policies", "Policies")}>
           <CardHeader className="p-0 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground">Policies</CardTitle>
@@ -78,6 +86,7 @@ const ProfilePage = () => {
             <p className="text-muted-foreground">Links to app policies, terms of service, and privacy statements.</p>
           </CardContent>
         </Card>
+        
         <Button
           onClick={logout}
           className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
