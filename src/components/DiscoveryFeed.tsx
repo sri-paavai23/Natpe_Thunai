@@ -6,12 +6,12 @@ import ProductListingCard from "@/components/ProductListingCard";
 import ServiceListingCard from "@/components/ServiceListingCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Compass } from "lucide-react";
 import { useMarketListings } from '@/hooks/useMarketListings';
 import { useServiceListings } from '@/hooks/useServiceListings';
 import { Button } from "@/components/ui/button";
 
-const ITEMS_PER_PAGE = 4;
+const ITEMS_PER_PAGE = 6; // Increased slightly to fill grid better
 
 const DiscoveryFeed: React.FC = () => {
   const { userProfile } = useAuth();
@@ -32,7 +32,6 @@ const DiscoveryFeed: React.FC = () => {
     const allItems = [...taggedProducts, ...taggedServices];
 
     // Sort by creation date (Newest first)
-    // FIX: Cast 'a' and 'b' to 'any' to bypass TypeScript error regarding $createdAt
     return allItems.sort((a: any, b: any) => 
       new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
     );
@@ -49,23 +48,29 @@ const DiscoveryFeed: React.FC = () => {
   const handleNext = () => {
     if (currentPage < totalPages) {
       setCurrentPage(prev => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Scroll to the top of the feed section, not the whole page
+      document.getElementById('discovery-feed-top')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
   const handlePrev = () => {
     if (currentPage > 1) {
       setCurrentPage(prev => prev - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      document.getElementById('discovery-feed-top')?.scrollIntoView({ behavior: 'smooth' });
     }
   };
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-64 w-full rounded-lg" />
-        ))}
+      <div className="space-y-4 p-4">
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+           <Compass className="h-6 w-6 text-secondary-neon" /> Discovery Feed
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-72 w-full rounded-lg" />
+            ))}
+        </div>
       </div>
     );
   }
@@ -84,7 +89,10 @@ const DiscoveryFeed: React.FC = () => {
 
   if (combinedFeed.length === 0) {
     return (
-      <div className="p-4">
+      <div className="p-4 space-y-4">
+        <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+           <Compass className="h-6 w-6 text-secondary-neon" /> Discovery Feed
+        </h2>
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>No Listings Found</AlertTitle>
@@ -97,11 +105,19 @@ const DiscoveryFeed: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-6 p-4" id="discovery-feed-top">
+      {/* Title */}
+      <div className="flex items-center gap-2 mb-2">
+        <Compass className="h-6 w-6 text-secondary-neon" />
+        <h2 className="text-2xl font-bold text-foreground">Discovery Feed</h2>
+      </div>
+
       {/* Feed Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* 'items-start' ensures cards don't stretch weirdly if one is very short */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
         {currentItems.map((item: any) => (
-          <React.Fragment key={item.$id}>
+          <div key={item.$id} className="h-full w-full"> 
+            {/* The wrapper div ensures the grid cell is filled, allowing cards to maintain their natural height */}
             {item.feedType === 'product' ? (
               <ProductListingCard
                 product={item}
@@ -114,7 +130,7 @@ const DiscoveryFeed: React.FC = () => {
                 onOpenReviewDialog={() => {}}
               />
             )}
-          </React.Fragment>
+          </div>
         ))}
       </div>
 
