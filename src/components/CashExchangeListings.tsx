@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MapPin, Clock, ArrowRight, CheckCircle, Loader2, AlertTriangle } from "lucide-react";
+import { MapPin, Clock, ArrowRight, CheckCircle, Loader2, AlertTriangle, Handshake } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -39,6 +39,20 @@ const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, i
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Helper to determine button text based on listing type
+  const getActionButtonText = (listingType: string) => {
+    switch (listingType) {
+      case "request":
+        return "Contribute (I have Cash)";
+      case "offer":
+        return "Accept (I need Cash)";
+      case "group-contribution":
+        return "Join Contribution";
+      default:
+        return "View Details";
+    }
+  };
+
   const handleActionClick = (listing: Listing) => {
     if (!user) {
       toast.error("Please log in to participate.");
@@ -57,7 +71,8 @@ const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, i
 
     setIsProcessing(true);
     try {
-      // 1. Update the listing status to "Accepted"
+      // 1. Update the listing status to "Accepted" ONLY if it's a 1-on-1 exchange.
+      // Group contributions usually stay open for multiple people.
       if (selectedListing.type !== 'group-contribution') {
         await databases.updateDocument(
           APPWRITE_DATABASE_ID,
@@ -68,32 +83,32 @@ const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, i
       }
 
       // 2. Create a Transaction Record for the Tracking Page
-      // This is the "Notification" that appears in the user's tracking tab
+      // This acts as the "Notification" for the poster
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
         ID.unique(),
         {
-          productId: selectedListing.$id,
+          productId: selectedListing.$id, // Reference to the exchange ID
           productTitle: `Cash Exchange: ${selectedListing.type === 'request' ? 'Request' : 'Offer'}`,
           amount: selectedListing.amount,
-          buyerId: user.$id, // The person accepting (You)
+          buyerId: user.$id, // The contributor (You)
           buyerName: user.name,
-          sellerId: selectedListing.posterId, // The original poster (They will get the notification)
+          sellerId: selectedListing.posterId, // The poster (Who gets notified)
           sellerName: selectedListing.posterName,
-          status: "meeting_scheduled", // Special status for tracking page logic
+          status: "meeting_scheduled", // This status triggers the blue badge in Tracking
           type: "cash-exchange",
           collegeName: selectedListing.collegeName,
           ambassadorDelivery: false,
-          ambassadorMessage: `Meeting at ${selectedListing.meetingLocation} @ ${selectedListing.meetingTime}`
+          ambassadorMessage: `Meeting scheduled at ${selectedListing.meetingLocation} @ ${selectedListing.meetingTime}`
         }
       );
 
-      toast.success("Exchange accepted! The poster has been notified in their Tracking page.");
+      toast.success("Contribution sent! The poster has been notified in their Tracking page.");
       setIsConfirmDialogOpen(false);
     } catch (error: any) {
-      console.error("Error accepting exchange:", error);
-      toast.error("Failed to accept exchange.");
+      console.error("Error processing contribution:", error);
+      toast.error("Failed to process contribution.");
     } finally {
       setIsProcessing(false);
     }
@@ -120,6 +135,7 @@ const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, i
       {listings.map((listing) => (
         <Card key={listing.$id} className="bg-background border border-border hover:border-secondary-neon/50 transition-colors">
           <CardContent className="p-4">
+            {/* Header: User Info & Date */}
             <div className="flex justify-between items-start mb-2">
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
@@ -138,19 +154,22 @@ const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, i
               </Badge>
             </div>
 
+            {/* Amount & Status */}
             <div className="flex justify-between items-center my-3">
               <span className="text-2xl font-bold text-foreground">₹{listing.amount}</span>
-              {listing.status === "Open" ? (
+              {listing.status === "Open" || listing.status === "Group Contribution" ? (
                 <Badge variant="outline" className="text-green-500 border-green-500">Open</Badge>
               ) : (
                 <Badge variant="secondary">{listing.status}</Badge>
               )}
             </div>
 
+            {/* Notes */}
             <p className="text-sm text-muted-foreground mb-4 bg-muted/50 p-2 rounded-md italic">
               "{listing.notes}"
             </p>
 
+            {/* Location & Time */}
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
               <div className="flex items-center gap-1">
                 <MapPin className="h-3 w-3" /> {listing.meetingLocation}
@@ -160,38 +179,52 @@ const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, i
               </div>
             </div>
 
-            {user?.$id !== listing.posterId && listing.status === "Open" && (
+            {/* ACTION BUTTON - Only visible if not own post and status is Open */}
+            {user?.$id !== listing.posterId && (listing.status === "Open" || listing.status === "Group Contribution") && (
               <Button 
-                className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
+                className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-semibold shadow-sm"
                 onClick={() => handleActionClick(listing)}
               >
-                {listing.type === 'request' ? 'I have Cash (Help)' : 'I need Cash (Accept)'} <ArrowRight className="ml-2 h-4 w-4" />
+                <Handshake className="mr-2 h-4 w-4" /> 
+                {getActionButtonText(listing.type)}
               </Button>
+            )}
+
+            {/* Own Post Indicator */}
+            {user?.$id === listing.posterId && (
+              <div className="w-full text-center text-xs text-muted-foreground py-2 border-t border-dashed border-border mt-2">
+                (This is your post)
+              </div>
             )}
           </CardContent>
         </Card>
       ))}
 
+      {/* Confirmation Dialog */}
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
         <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-secondary-neon" /> Confirm Exchange
+              <CheckCircle className="h-5 w-5 text-secondary-neon" /> Confirm Contribution
             </DialogTitle>
             <DialogDescription className="text-muted-foreground pt-2">
               <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-md mb-3 text-yellow-600 dark:text-yellow-400 text-xs">
-                <span className="font-bold flex items-center gap-1 mb-1"><AlertTriangle className="h-3 w-3" /> Important:</span>
-                This is strictly a <strong>Physical-to-Digital</strong> or <strong>Digital-to-Physical</strong> exchange. 
-                <br/>
-                Do NOT lend money. Ensure you meet in a public place.
+                <span className="font-bold flex items-center gap-1 mb-1"><AlertTriangle className="h-3 w-3" /> Safety First:</span>
+                Ensure you meet <strong>{selectedListing?.posterName}</strong> in a public place (e.g., Campus Canteen, Library).
               </div>
-              You are agreeing to meet <strong>{selectedListing?.posterName}</strong> at <strong>{selectedListing?.meetingLocation}</strong> around <strong>{selectedListing?.meetingTime}</strong>.
+              <p className="mb-2">
+                You are about to {selectedListing?.type === 'request' ? 'provide cash to' : 'receive cash from'} <strong>{selectedListing?.posterName}</strong>.
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm bg-muted p-2 rounded">
+                 <span>📍 {selectedListing?.meetingLocation}</span>
+                 <span>⏰ {selectedListing?.meetingTime}</span>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsConfirmDialogOpen(false)} disabled={isProcessing}>Cancel</Button>
             <Button onClick={handleConfirmAction} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground">
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm & Notify"}
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm & Notify Poster"}
             </Button>
           </DialogFooter>
         </DialogContent>
