@@ -63,7 +63,7 @@ const DailyQuestCard = () => {
 
   // --- Helper: Check if a specific quest is already claimed today ---
   const isQuestClaimed = (questId: string): boolean => {
-    // FIX: Cast to 'any' to bypass TS error until AuthContext is updated
+    // Cast to 'any' to bypass TS error until AuthContext is updated
     const profile = userProfile as any;
     if (!profile?.claimedQuests) return false;
     
@@ -91,7 +91,6 @@ const DailyQuestCard = () => {
     try {
       await addXp(quest.xpReward);
       
-      // FIX: Cast to 'any' to access claimedQuests
       const profile = userProfile as any;
       const currentClaimedQuests = profile.claimedQuests || {};
       
@@ -100,8 +99,8 @@ const DailyQuestCard = () => {
         [quest.id]: new Date().toISOString()
       };
 
-      // FIX: Cast object to 'any' so we can send 'claimedQuests' to update function
-      await updateUserProfile({
+      // FIX: Added userProfile.$id as the first argument
+      await updateUserProfile(userProfile.$id, {
         claimedQuests: updatedClaimedQuests
       } as any);
 
