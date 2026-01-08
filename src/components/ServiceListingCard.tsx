@@ -3,13 +3,13 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, DollarSign, Star, X, MessageSquareText } from "lucide-react";
+import { Loader2, Star, X, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useServiceReviews } from "@/hooks/useServiceReviews";
 import { ServicePost } from "@/hooks/useServiceListings";
-import { useBargainRequests } from '@/hooks/useBargainRequests'; // NEW IMPORT
+import { useBargainRequests } from '@/hooks/useBargainRequests';
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import ServicePaymentDialog from "./forms/ServicePaymentDialog";
@@ -21,7 +21,6 @@ interface ServiceListingCardProps {
   isFoodOrWellnessCategory: boolean;
 }
 
-// Helper function to format category slug into readable title
 const formatCategoryTitle = (categorySlug: string | undefined) => {
   if (!categorySlug || categorySlug === "all") return "All Service Listings";
   return categorySlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -37,16 +36,19 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   const { user } = useAuth();
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   
-  // NEW: Use Bargain Request Hook
-  // We check the status for this specific service ID
+  // Bargain Request Hook
   const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
   const { status: currentBargainStatus } = getBargainStatusForProduct(service.$id);
 
-  // Only call useServiceReviews if service.$id is valid
   const { averageRating, isLoading: isReviewsLoading, error: reviewsError, reviews: serviceReviews } = 
     service.$id ? useServiceReviews(service.$id) : { averageRating: 0, isLoading: false, error: null, reviews: [] };
   
   const hasReviewed = false; 
+
+  // Price Calculation Logic
+  const isBargainAccepted = currentBargainStatus === 'accepted';
+  const originalPriceVal = parseFloat(service.price.replace(/[₹,]/g, '').split('/')[0].trim());
+  const bargainPriceVal = (originalPriceVal * 0.85).toFixed(2);
 
   const handleContactProvider = () => {
     if (!user) {
@@ -61,7 +63,6 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
     setIsPaymentDialogOpen(true);
   };
 
-  // NEW: Handle Send Bargain Request (Logic adapted from ProductDetailsPage)
   const handleSendBargainRequest = async () => {
     if (!user) {
       toast.error("Please log in to bargain.");
@@ -73,41 +74,38 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
       return;
     }
 
-    // Status checks
     if (currentBargainStatus === 'pending') {
-      toast.info("You already have a pending bargain request for this service.");
+      toast.info("You already have a pending bargain request.");
       return;
     }
     if (currentBargainStatus === 'denied') {
       toast.info("Your previous bargain request was denied.");
       return;
     }
+    if (isBargainAccepted) {
+        toast.info("Bargain already accepted! Proceed to contact provider.");
+        return;
+    }
 
-    const priceString = service.price.replace(/[₹,]/g, '').split('/')[0].trim();
-    const originalAmount = parseFloat(priceString);
-
-    if (isNaN(originalAmount) || originalAmount <= 0) {
+    if (isNaN(originalPriceVal) || originalPriceVal <= 0) {
       toast.error("Invalid service price for bargaining.");
       return;
     }
 
     const discountRate = 0.15;
-    const requestedBargainAmount = originalAmount * (1 - discountRate);
+    const requestedBargainAmount = originalPriceVal * (1 - discountRate);
 
     try {
-      // We adapt the service object to match the expected structure of the hook
-      // ensuring we map 'posterId' to 'userId' as expected by the notification system
       const bargainItem = {
         $id: service.$id,
         title: service.title,
-        userId: service.posterId, // Map posterId to userId for the hook
+        userId: service.posterId, 
         price: service.price,
-        imageUrl: "", // Services might not have images, pass empty or service.imageUrl if available
-        sellerName: service.posterName // Pass provider name
+        imageUrl: "", 
+        sellerName: service.posterName 
       };
 
       await sendBargainRequest(bargainItem as any, requestedBargainAmount);
-      // Toast handled in hook
     } catch (error) {
       console.error("Bargain request failed", error);
     }
@@ -118,17 +116,28 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
     currentBargainStatus === 'pending' || 
     currentBargainStatus === 'denied';
 
-  // Calculate display price for button
-  const originalPriceVal = parseFloat(service.price.replace(/[₹,]/g, '').split('/')[0].trim());
-  const bargainPriceVal = (originalPriceVal * 0.85).toFixed(2);
-
   return (
     <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center">
       <div>
         <h3 className="font-semibold text-foreground">{service.title}</h3>
         <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
-        <p className="text-xs text-muted-foreground mt-1">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p>
-        <p className="text-xs text-muted-foreground">Posted by: {service.posterName}</p>
+        
+        {/* UPDATED PRICE DISPLAY LOGIC */}
+        <div className="mt-1">
+            {isBargainAccepted ? (
+                <p className="text-xs flex items-center gap-2">
+                    <span className="text-muted-foreground line-through decoration-destructive">{service.price}</span>
+                    <span className="font-bold text-green-500 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
+                        ₹{bargainPriceVal}
+                    </span>
+                    <span className="text-[10px] text-green-600 font-medium">(Bargain Accepted)</span>
+                </p>
+            ) : (
+                <p className="text-xs text-muted-foreground">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p>
+            )}
+        </div>
+
+        <p className="text-xs text-muted-foreground mt-1">Posted by: {service.posterName}</p>
         <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
         
         <div className="flex items-center gap-2 mt-2">
@@ -163,11 +172,14 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
           <DialogTrigger asChild>
             <Button 
               size="sm" 
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className={cn(
+                  "text-primary-foreground hover:bg-primary/90 transition-all",
+                  isBargainAccepted ? "bg-green-600 hover:bg-green-700 ring-2 ring-green-400 ring-offset-1" : "bg-primary"
+              )}
               onClick={handleContactProvider}
               disabled={user?.$id === service.posterId}
             >
-              Contact Provider
+              {isBargainAccepted ? "Pay Now (Discounted)" : "Contact Provider"}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
@@ -175,15 +187,16 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
               <DialogTitle className="text-foreground">Pay for Service: {service.title}</DialogTitle>
             </DialogHeader>
             <ServicePaymentDialog
-              service={service}
+              // Pass the modified service object if bargain accepted to ensure payment dialog sees the lower price
+              service={isBargainAccepted ? { ...service, price: bargainPriceVal } : service}
               onPaymentInitiated={() => setIsPaymentDialogOpen(false)}
               onCancel={() => setIsPaymentDialogOpen(false)}
             />
           </DialogContent>
         </Dialog>
 
-        {!isFoodOrWellnessCategory && (
-          // NEW: Bargain Button Logic (Request based, not immediate payment)
+        {/* Hide Bargain Button if Accepted */}
+        {!isFoodOrWellnessCategory && !isBargainAccepted && (
           <Button
             size="sm"
             variant="outline"
