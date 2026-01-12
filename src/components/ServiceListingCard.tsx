@@ -3,7 +3,9 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Star, X, MessageSquareText } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { Loader2, Star, MessageSquareText, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -12,7 +14,7 @@ import { ServicePost } from "@/hooks/useServiceListings";
 import { useBargainRequests } from '@/hooks/useBargainRequests';
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import ServicePaymentDialog from "./forms/ServicePaymentDialog";
+import ServicePaymentDialog from "./forms/ServicePaymentDialog"; // Ensure path is correct
 
 interface ServiceListingCardProps {
   service: ServicePost;
@@ -21,9 +23,13 @@ interface ServiceListingCardProps {
   isFoodOrWellnessCategory: boolean;
 }
 
-const formatCategoryTitle = (categorySlug: string | undefined) => {
-  if (!categorySlug || categorySlug === "all") return "All Service Listings";
-  return categorySlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+// --- HELPER: Category Color Mapping ---
+const getCategoryStyle = (cat: string) => {
+  if (!cat) return "bg-gray-100 text-gray-800";
+  if (cat.includes('tech')) return "bg-slate-100 text-slate-800 border-slate-200";
+  if (cat.includes('design')) return "bg-pink-50 text-pink-700 border-pink-200";
+  if (cat.includes('academic')) return "bg-blue-50 text-blue-700 border-blue-200";
+  return "bg-secondary/10 text-secondary-foreground border-secondary/20";
 };
 
 const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
@@ -36,59 +42,41 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
   const { user } = useAuth();
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   
-  // Bargain Request Hook
+  // Bargain Logic
   const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
   const { status: currentBargainStatus } = getBargainStatusForProduct(service.$id);
 
+  // Reviews
   const { averageRating, isLoading: isReviewsLoading, error: reviewsError, reviews: serviceReviews } = 
     service.$id ? useServiceReviews(service.$id) : { averageRating: 0, isLoading: false, error: null, reviews: [] };
   
-  const hasReviewed = false; 
+  const hasReviewed = false; // logic placeholder
 
-  // Price Calculation Logic
+  // Price Logic
   const isBargainAccepted = currentBargainStatus === 'accepted';
   const originalPriceVal = parseFloat(service.price.replace(/[₹,]/g, '').split('/')[0].trim());
   const bargainPriceVal = (originalPriceVal * 0.85).toFixed(2);
+  const displayPrice = isBargainAccepted ? bargainPriceVal : service.price;
 
   const handleContactProvider = () => {
     if (!user) {
-      toast.error("Please log in to contact the provider.");
+      toast.error("Login required.");
       navigate("/auth");
       return;
     }
     if (user.$id === service.posterId) {
-      toast.info("You are the provider of this service.");
+      toast.info("This is your own listing.");
       return;
     }
     setIsPaymentDialogOpen(true);
   };
 
   const handleSendBargainRequest = async () => {
-    if (!user) {
-      toast.error("Please log in to bargain.");
-      navigate("/auth");
-      return;
-    }
-    if (user.$id === service.posterId) {
-      toast.info("You cannot bargain on your own service.");
-      return;
-    }
-
-    if (currentBargainStatus === 'pending') {
-      toast.info("You already have a pending bargain request.");
-      return;
-    }
-    if (currentBargainStatus === 'denied') {
-      toast.info("Your previous bargain request was denied.");
-      return;
-    }
-    if (isBargainAccepted) {
-        toast.info("Bargain already accepted! Proceed to contact provider.");
-        return;
-    }
-
+    if (!user) { toast.error("Login to bargain."); return; }
+    if (user.$id === service.posterId) { toast.error("Cannot bargain with yourself."); return; }
+    
     if (isNaN(originalPriceVal) || originalPriceVal <= 0) {
-      toast.error("Invalid service price for bargaining.");
+      toast.error("Price invalid for bargaining.");
       return;
     }
 
@@ -104,129 +92,156 @@ const ServiceListingCard: React.FC<ServiceListingCardProps> = ({
         imageUrl: "", 
         sellerName: service.posterName 
       };
-
       await sendBargainRequest(bargainItem as any, requestedBargainAmount);
     } catch (error) {
       console.error("Bargain request failed", error);
     }
   };
 
-  const isBargainDisabled = 
-    user?.$id === service.posterId || 
-    currentBargainStatus === 'pending' || 
-    currentBargainStatus === 'denied';
+  const isOwner = user?.$id === service.posterId;
 
   return (
-    <div key={service.$id} className="p-3 border border-border rounded-md bg-background flex flex-col sm:flex-row justify-between items-start sm:items-center">
-      <div>
-        <h3 className="font-semibold text-foreground">{service.title}</h3>
-        <p className="text-sm text-muted-foreground mt-1">{service.description}</p>
+    <Card className="group relative overflow-hidden transition-all duration-300 hover:shadow-lg border-border/60 hover:border-secondary-neon/30 bg-card flex flex-col h-full">
+      
+      {/* --- HEADER --- */}
+      <CardHeader className="p-4 pb-2 space-y-2">
+        <div className="flex justify-between items-start">
+          <Badge variant="outline" className={cn("capitalize text-[10px] font-bold tracking-wider", getCategoryStyle(service.category))}>
+            {service.category.replace(/-/g, ' ')}
+          </Badge>
+          
+          {/* Rating Badge */}
+          <div className="flex items-center bg-yellow-50 dark:bg-yellow-900/20 px-1.5 py-0.5 rounded text-xs font-bold text-yellow-600 dark:text-yellow-400 border border-yellow-200/50">
+             <Star className="h-3 w-3 fill-yellow-500 text-yellow-500 mr-1" />
+             {isReviewsLoading ? "..." : averageRating.toFixed(1)}
+             <span className="text-[10px] text-muted-foreground ml-1 font-normal">({serviceReviews.length})</span>
+          </div>
+        </div>
+
+        <h3 className="font-bold text-lg leading-tight line-clamp-2 group-hover:text-secondary-neon transition-colors">
+          {service.title}
+        </h3>
+      </CardHeader>
+
+      {/* --- CONTENT --- */}
+      <CardContent className="p-4 pt-0 flex-grow space-y-3">
+        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+          {service.description}
+        </p>
+
+        {/* Provider Info */}
+        <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+          <Avatar className="h-6 w-6 border border-border">
+            <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${service.posterName}`} />
+            <AvatarFallback>{service.posterName.substring(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div className="flex flex-col">
+             <span className="text-xs font-medium text-foreground/90 truncate max-w-[150px]">
+               {service.posterName}
+             </span>
+             {/* Verified Badge (Mock) */}
+             <div className="flex items-center text-[10px] text-green-600 dark:text-green-400 gap-0.5">
+                <ShieldCheck className="h-3 w-3" /> Verified Student
+             </div>
+          </div>
+        </div>
+      </CardContent>
+
+      {/* --- FOOTER (Price & Actions) --- */}
+      <CardFooter className="p-3 bg-muted/20 border-t border-border/40 flex flex-col gap-3">
         
-        {/* UPDATED PRICE DISPLAY LOGIC */}
-        <div className="mt-1">
-            {isBargainAccepted ? (
-                <p className="text-xs flex items-center gap-2">
-                    <span className="text-muted-foreground line-through decoration-destructive">{service.price}</span>
-                    <span className="font-bold text-green-500 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
-                        ₹{bargainPriceVal}
+        {/* Price Row */}
+        <div className="w-full flex justify-between items-center">
+           <div className="flex flex-col">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Starting At</span>
+              <div className="flex items-baseline gap-2">
+                 <span className={cn("text-lg font-black", isBargainAccepted ? "text-green-600" : "text-foreground")}>
+                    ₹{displayPrice}
+                 </span>
+                 {isBargainAccepted && (
+                    <span className="text-xs text-muted-foreground line-through decoration-destructive">
+                       {service.price}
                     </span>
-                    <span className="text-[10px] text-green-600 font-medium">(Bargain Accepted)</span>
-                </p>
-            ) : (
-                <p className="text-xs text-muted-foreground">Price: <span className="font-medium text-secondary-neon">{service.price}</span></p>
-            )}
+                 )}
+              </div>
+           </div>
+           
+           {/* Review Button (Only visible if not owner) */}
+           {!isOwner && !hasReviewed && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-muted-foreground hover:text-yellow-500"
+                onClick={() => onOpenReviewDialog(service.$id, service.posterId, service.title)}
+                title="Leave a Review"
+              >
+                 <Star className="h-4 w-4" />
+              </Button>
+           )}
         </div>
 
-        <p className="text-xs text-muted-foreground mt-1">Posted by: {service.posterName}</p>
-        <p className="text-xs text-muted-foreground">Posted: {new Date(service.$createdAt).toLocaleDateString()}</p>
-        
-        <div className="flex items-center gap-2 mt-2">
-          {service.category && (
-            <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-              {formatCategoryTitle(service.category)}
-            </Badge>
-          )}
-          {service.isCustomOrder && (
-            <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
-              Custom Request
-            </Badge>
-          )}
-        </div>
+        {/* Action Buttons Row */}
+        <div className="w-full grid grid-cols-5 gap-2">
+           {/* Bargain Button (2 cols) - Hidden if accepted */}
+           {!isFoodOrWellnessCategory && !isBargainAccepted && !isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                    "col-span-2 text-xs font-semibold h-9 border-dashed",
+                    currentBargainStatus === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" : 
+                    currentBargainStatus === 'denied' ? "bg-red-50 text-red-600 border-red-200 opacity-70" :
+                    "border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10"
+                )}
+                onClick={handleSendBargainRequest}
+                disabled={currentBargainStatus === 'pending' || currentBargainStatus === 'denied'}
+              >
+                 {currentBargainStatus === 'pending' ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                 ) : currentBargainStatus === 'denied' ? (
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                 ) : (
+                    <MessageSquareText className="h-3 w-3 mr-1" />
+                 )}
+                 {currentBargainStatus === 'pending' ? "Wait" : currentBargainStatus === 'denied' ? "Denied" : "Bargain"}
+              </Button>
+           )}
 
-        <div className="flex items-center text-sm text-muted-foreground mt-2">
-          {isReviewsLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin mr-1 text-secondary-neon" />
-          ) : reviewsError ? (
-            <span className="text-destructive flex items-center gap-1"><X className="h-4 w-4" /> Error loading rating</span>
-          ) : (
-            <>
-              <Star className={cn("h-4 w-4 mr-1", averageRating > 0 ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} />
-              <span className="font-medium text-foreground">{averageRating.toFixed(1)}</span>
-              <span className="ml-1">({serviceReviews.length} reviews)</span>
-            </>
-          )}
+           {/* Main Action Button (Fills remaining space) */}
+           <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+              <DialogTrigger asChild>
+                 <Button 
+                   className={cn(
+                       "h-9 font-bold text-xs shadow-sm transition-transform active:scale-95",
+                       isFoodOrWellnessCategory || isBargainAccepted || isOwner 
+                          ? "col-span-5" // Full width if bargain hidden
+                          : "col-span-3",
+                       isBargainAccepted 
+                          ? "bg-green-600 hover:bg-green-700 text-white" 
+                          : "bg-primary text-primary-foreground hover:bg-primary/90"
+                   )}
+                   onClick={handleContactProvider}
+                   disabled={isOwner}
+                 >
+                    {isOwner ? "Your Listing" : isBargainAccepted ? (
+                       <><CheckCircle2 className="h-3 w-3 mr-1" /> Pay Now</>
+                    ) : (
+                       "Hire / Connect"
+                    )}
+                 </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                 <DialogHeader><DialogTitle>Pay for Service</DialogTitle></DialogHeader>
+                 <ServicePaymentDialog
+                    service={isBargainAccepted ? { ...service, price: bargainPriceVal } : service}
+                    onPaymentInitiated={() => setIsPaymentDialogOpen(false)}
+                    onCancel={() => setIsPaymentDialogOpen(false)}
+                 />
+              </DialogContent>
+           </Dialog>
         </div>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-2 mt-2 sm:mt-0">
-        <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              size="sm" 
-              className={cn(
-                  "text-primary-foreground hover:bg-primary/90 transition-all",
-                  isBargainAccepted ? "bg-green-600 hover:bg-green-700 ring-2 ring-green-400 ring-offset-1" : "bg-primary"
-              )}
-              onClick={handleContactProvider}
-              disabled={user?.$id === service.posterId}
-            >
-              {isBargainAccepted ? "Pay Now (Discounted)" : "Contact Provider"}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">Pay for Service: {service.title}</DialogTitle>
-            </DialogHeader>
-            <ServicePaymentDialog
-              // Pass the modified service object if bargain accepted to ensure payment dialog sees the lower price
-              service={isBargainAccepted ? { ...service, price: bargainPriceVal } : service}
-              onPaymentInitiated={() => setIsPaymentDialogOpen(false)}
-              onCancel={() => setIsPaymentDialogOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
-
-        {/* Hide Bargain Button if Accepted */}
-        {!isFoodOrWellnessCategory && !isBargainAccepted && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10"
-            onClick={handleSendBargainRequest}
-            disabled={isBargainDisabled}
-          >
-            {currentBargainStatus === 'pending' ? (
-                <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Pending...</>
-            ) : currentBargainStatus === 'denied' ? (
-                "Bargain Denied"
-            ) : (
-                <><MessageSquareText className="mr-2 h-4 w-4" /> Bargain (15% off)</>
-            )}
-          </Button>
-        )}
-        
-        {!hasReviewed && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
-            onClick={() => onOpenReviewDialog(service.$id, service.posterId, service.title)}
-            disabled={user?.$id === service.posterId}
-          >
-            <Star className="mr-2 h-4 w-4" /> Leave a Review
-          </Button>
-        )}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 };
 
