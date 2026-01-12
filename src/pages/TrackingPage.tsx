@@ -19,13 +19,16 @@ import { Models, Query } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
 
 // --- INTERFACES ---
-interface BaseTrackingItem {
+
+export interface BaseTrackingItem {
   id: string;
   description: string;
   date: string;
   status: string;
   isUserProvider: boolean; // True if user is Seller/Chef/Provider
   timestamp: number; // For sorting
+  ambassadorDelivery?: boolean; // Added to base to solve property access error
+  ambassadorMessage?: string;   // Added to base
 }
 
 export interface MarketTransactionItem extends BaseTrackingItem {
@@ -34,9 +37,10 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   amount: number;
   sellerName: string;
   buyerName: string;
+  sellerId: string; // Added
+  buyerId: string;  // Added
+  netSellerAmount?: number; // Added
   collegeName: string;
-  ambassadorDelivery?: boolean;
-  ambassadorMessage?: string;
   appwriteStatus: string;
 }
 
@@ -46,12 +50,15 @@ export interface FoodOrderItem extends BaseTrackingItem {
   totalAmount: number;
   providerName: string;
   buyerName: string;
+  providerId: string; // Added
+  buyerId: string;    // Added
   deliveryLocation: string;
   quantity: number;
   orderStatus: FoodOrder["status"];
+  collegeName: string;
 }
 
-type TrackingItem = MarketTransactionItem | FoodOrderItem;
+export type TrackingItem = MarketTransactionItem | FoodOrderItem;
 
 // --- UTILS ---
 const mapAppwriteStatusToTrackingStatus = (status: string): string => {
@@ -71,7 +78,6 @@ const mapAppwriteStatusToTrackingStatus = (status: string): string => {
 };
 
 // --- COMPONENT: STATUS STEPPER ---
-// Visualizes the progress of an order
 const StatusStepper = ({ status, type }: { status: string, type: string }) => {
   let steps = [];
   let currentStep = 0;
@@ -83,7 +89,6 @@ const StatusStepper = ({ status, type }: { status: string, type: string }) => {
     };
     currentStep = statusMap[status] ?? 0;
   } else {
-    // Generic Market Flow
     steps = ["Initiated", "Active", "Delivered", "Completed"];
     const statusMap: Record<string, number> = {
       "Payment Pending": 0, "Processing": 1, "Active": 1, "Delivered": 2, "Completed": 3
@@ -256,9 +261,13 @@ const TrackingPage = () => {
         amount: doc.amount,
         sellerName: doc.sellerName,
         buyerName: doc.buyerName,
+        sellerId: doc.sellerId, // Fixed: Added missing prop
+        buyerId: doc.buyerId,   // Fixed: Added missing prop
+        netSellerAmount: doc.netSellerAmount, // Fixed: Added missing prop
         isUserProvider: doc.sellerId === user.$id,
         collegeName: doc.collegeName,
-        ambassadorDelivery: doc.ambassadorDelivery
+        ambassadorDelivery: doc.ambassadorDelivery,
+        ambassadorMessage: doc.ambassadorMessage
       } as MarketTransactionItem));
 
     } catch (e) {
@@ -284,9 +293,14 @@ const TrackingPage = () => {
       totalAmount: order.totalAmount,
       providerName: order.providerName,
       buyerName: order.buyerName,
+      providerId: order.providerId, // Fixed
+      buyerId: order.buyerId,       // Fixed
       isUserProvider: order.providerId === user?.$id,
       quantity: order.quantity,
-      deliveryLocation: order.deliveryLocation
+      deliveryLocation: order.deliveryLocation,
+      collegeName: order.collegeName,
+      ambassadorDelivery: order.ambassadorDelivery,
+      ambassadorMessage: order.ambassadorMessage
     } as FoodOrderItem));
 
     const combined = [...transactions, ...foodItems].sort((a, b) => b.timestamp - a.timestamp);
@@ -302,7 +316,6 @@ const TrackingPage = () => {
   const handleAction = async (action: string, id: string) => {
     try {
         if(action === "confirm_food" || action === "update_food") {
-            // Find current status to determine next
             const order = foodOrders.find(o => o.$id === id);
             let nextStatus = "Confirmed";
             if(order?.status === "Confirmed") nextStatus = "Preparing";
@@ -313,7 +326,7 @@ const TrackingPage = () => {
         } 
         else if (action === "confirm_delivery_food") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, id, { status: "Delivered" });
-            toast.success("Bon appétit! Order marked delivered.");
+            toast.success("Order marked delivered.");
         }
         else if (action === "complete_exchange") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "completed" });
@@ -321,7 +334,7 @@ const TrackingPage = () => {
         }
         else if (action === "confirm_delivery_market") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "seller_confirmed_delivery" });
-            toast.success("Delivery Confirmed! Payout processing.");
+            toast.success("Delivery Confirmed!");
         }
         refreshData();
     } catch (e) {
@@ -342,7 +355,7 @@ const TrackingPage = () => {
                 <h1 className="text-3xl font-black italic tracking-tight text-foreground">
                     ACTIVITY<span className="text-secondary-neon">LOG</span>
                 </h1>
-                <p className="text-xs text-muted-foreground font-medium">Track payments, orders, and gigs.</p>
+                <p className="text-xs text-muted-foreground font-medium">Track orders, deliveries, and gigs.</p>
             </div>
             <Button variant="outline" size="sm" onClick={refreshData} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh"}
@@ -350,10 +363,10 @@ const TrackingPage = () => {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="active" onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-4 bg-muted/50 p-1">
                 <TabsTrigger value="active" className="text-xs font-bold data-[state=active]:bg-background data-[state=active]:text-secondary-neon data-[state=active]:shadow-sm">
-                    <Activity className="h-4 w-4 mr-2" /> Live Activities ({activeItems.length})
+                    <Activity className="h-4 w-4 mr-2" /> Live ({activeItems.length})
                 </TabsTrigger>
                 <TabsTrigger value="history" className="text-xs font-bold data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
                     <History className="h-4 w-4 mr-2" /> History
@@ -366,7 +379,7 @@ const TrackingPage = () => {
                 ) : (
                     <div className="text-center py-12 border border-dashed border-border rounded-xl">
                         <Clock className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-50" />
-                        <p className="text-muted-foreground">No active orders right now.</p>
+                        <p className="text-muted-foreground">No active activities.</p>
                     </div>
                 )}
             </TabsContent>
@@ -377,7 +390,7 @@ const TrackingPage = () => {
                 ) : (
                     <div className="text-center py-12 border border-dashed border-border rounded-xl">
                         <History className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-50" />
-                        <p className="text-muted-foreground">No history yet.</p>
+                        <p className="text-muted-foreground">History is empty.</p>
                     </div>
                 )}
             </TabsContent>
