@@ -1,143 +1,147 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from '@/lib/appwrite';
-import { Models, Query } from 'appwrite';
-import { toast } from 'sonner';
-import { Product } from '@/lib/mockData';
-import { useAuth } from '@/context/AuthContext';
+import React, { useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ProductListingCard from "@/components/ProductListingCard";
+import { Product } from "@/lib/mockData";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from '@/lib/utils';
+import { ShoppingBag, Tag, Clock, Gift, Dumbbell, Box, SearchX } from "lucide-react";
 
-interface MarketListingsState {
+// Helper function to filter products by type AND search query
+const filterProducts = (products: Product[], type: Product['type'] | 'all', query: string): Product[] => {
+  let filtered = products;
+
+  // 1. Filter by Type
+  if (type !== 'all') {
+    if (type === 'gift') {
+      // Include both 'gift' and 'gift-request'
+      filtered = products.filter(p => p.type === 'gift' || p.type === 'gift-request');
+    } else {
+      filtered = products.filter(p => p.type === type);
+    }
+  }
+
+  // 2. Filter by Search Query
+  if (query) {
+    const q = query.toLowerCase();
+    filtered = filtered.filter(p => 
+      p.title.toLowerCase().includes(q) || 
+      p.description.toLowerCase().includes(q) ||
+      (p.category && p.category.toLowerCase().includes(q))
+    );
+  }
+
+  return filtered;
+};
+
+interface MarketTabsProps {
+  initialTab?: Product['type'] | 'all';
   products: Product[];
   isLoading: boolean;
   error: string | null;
-  refetch: () => void;
+  searchQuery: string;
 }
 
-export const useMarketListings = (): MarketListingsState => {
-  const { userProfile, isLoading: isAuthLoading } = useAuth();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const MarketTabs: React.FC<MarketTabsProps> = ({ 
+    initialTab = 'all',
+    products,
+    isLoading,
+    error,
+    searchQuery
+}) => {
+  const [activeTab, setActiveTab] = useState<Product['type'] | 'all'>(initialTab);
 
-  const fetchProducts = useCallback(async () => {
-    // If userProfile is not yet loaded or is null, we can't fetch products.
-    // The useEffect below will handle setting isLoading to false and error if userProfile is null.
-    if (!userProfile) {
-      return;
+  const items = filterProducts(products, activeTab, searchQuery);
+
+  const tabConfig = [
+    { value: "all", label: "All Items", icon: ShoppingBag },
+    { value: "sell", label: "For Sale", icon: Tag },
+    { value: "rent", label: "Rentals", icon: Clock },
+    { value: "gift", label: "Gifts & Crafts", icon: Gift },
+    { value: "sports", label: "Sports Gear", icon: Dumbbell },
+  ];
+
+  const renderContent = () => {
+    // LOADING
+    if (isLoading) {
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 py-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="flex flex-col space-y-3 bg-card border border-border/40 rounded-xl p-3 h-full">
+               <Skeleton className="h-32 w-full rounded-lg bg-muted/50" />
+               <div className="space-y-2 px-1">
+                 <Skeleton className="h-4 w-3/4 rounded bg-muted/60" />
+                 <Skeleton className="h-3 w-full rounded bg-muted/40" />
+                 <Skeleton className="h-3 w-1/2 rounded bg-muted/40" />
+               </div>
+               <div className="mt-auto pt-2 flex justify-between items-center px-1">
+                  <Skeleton className="h-4 w-16 rounded bg-muted/50" />
+                  <Skeleton className="h-8 w-20 rounded bg-muted/50" />
+               </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    // ERROR
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center py-12 text-destructive bg-destructive/5 rounded-xl border border-destructive/20">
+                <SearchX className="h-10 w-10 mb-2" />
+                <p>Error loading listings: {error}</p>
+            </div>
+        );
     }
 
-    const isDeveloper = userProfile.role === 'developer';
-    const collegeToFilterBy = userProfile.collegeName;
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      const queries = [
-        Query.orderDesc('$createdAt'),
-        Query.equal('status', 'available'),
-      ];
-      if (!isDeveloper) {
-        queries.push(Query.equal('collegeName', collegeToFilterBy));
-      }
-
-      const response = await databases.listDocuments(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_PRODUCTS_COLLECTION_ID,
-        queries
+    // EMPTY (No Listings)
+    if (items.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="bg-muted/30 p-6 rounded-full mb-4">
+                <Box className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">
+                {searchQuery ? `No results for "${searchQuery}"` : "No listings found"}
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-xs mt-1">
+                {searchQuery ? "Try checking your spelling or use different keywords." : "This category is currently empty. Be the first to list something!"}
+            </p>
+        </div>
       );
+    }
+
+    // LISTINGS GRID
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 py-2 animate-in fade-in zoom-in-95 duration-300">
+        {items.map((product) => (
+          <ProductListingCard key={product.$id} product={product} />
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Product['type'] | 'all')} className="w-full space-y-6">
+      <TabsList className="flex w-full justify-start overflow-x-auto bg-transparent p-0 gap-2 scrollbar-hide">
+        {tabConfig.map((tab) => (
+            <TabsTrigger 
+                key={tab.value} 
+                value={tab.value} 
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-border bg-card data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:border-secondary-neon data-[state=active]:shadow-md transition-all duration-300 min-w-max hover:bg-muted"
+            >
+                <tab.icon className="h-4 w-4" />
+                <span className="text-xs font-bold">{tab.label}</span>
+            </TabsTrigger>
+        ))}
+      </TabsList>
       
-      const productsWithSellerInfo = await Promise.all(
-        (response.documents as unknown as Product[]).map(async (product) => {
-          try {
-            const sellerProfileResponse = await databases.listDocuments(
-              APPWRITE_DATABASE_ID,
-              APPWRITE_USER_PROFILES_COLLECTION_ID,
-              [Query.equal('userId', product.userId), Query.limit(1)] // Changed to product.userId
-            );
-            const sellerProfile = sellerProfileResponse.documents[0] as any;
-            return {
-              ...product,
-              sellerLevel: sellerProfile?.level ?? 1,
-            };
-          } catch (sellerError) {
-            console.warn(`Could not fetch profile for seller ${product.userId}:`, sellerError); // Changed to product.userId
-            return { ...product, sellerLevel: 1 };
-          }
-        })
-      );
-
-      setProducts(productsWithSellerInfo);
-    } catch (err: any) {
-      console.error("Error fetching market listings:", err);
-      setError(err.message || "Failed to load market listings.");
-      toast.error("Failed to load market listings.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [userProfile]); // Dependencies for useCallback are correct
-
-  useEffect(() => {
-    if (isAuthLoading) {
-      setIsLoading(true);
-      setProducts([]); // Clear products while auth is loading
-      setError(null);
-      return;
-    }
-
-    if (userProfile === null) {
-      setIsLoading(false);
-      setProducts([]);
-      setError("User profile not loaded. Cannot fetch market listings.");
-      return;
-    }
-
-    // If auth is done and userProfile is available, fetch products
-    fetchProducts();
-
-    // Setup real-time subscriptions
-    const isDeveloper = userProfile.role === 'developer';
-    const collegeToFilterBy = userProfile.collegeName;
-
-    // Only subscribe if there's a valid college to filter by, or if it's a developer viewing all
-    if (!isDeveloper && !collegeToFilterBy) return;
-
-    const unsubscribeProducts = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_PRODUCTS_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as unknown as Product;
-
-        // Filter real-time updates by collegeName if not a developer
-        if (!isDeveloper && payload.collegeName !== collegeToFilterBy) {
-            return;
-        }
-
-        // For any product update (create, update, delete), refetch to ensure sellerLevel and sorting are correct.
-        // This is simpler than trying to merge/update locally with seller profile data.
-        fetchProducts();
-      }
-    );
-
-    const unsubscribeUserProfiles = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_USER_PROFILES_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as any;
-        if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          // If a user profile is updated, and that user is a seller of an existing product, refetch products.
-          // This ensures sellerLevel badges are up-to-date.
-          const isSellerOfExistingProduct = products.some(p => p.userId === payload.userId); // Changed to userId
-          if (isSellerOfExistingProduct) {
-            fetchProducts();
-          }
-        }
-      }
-    );
-
-    return () => {
-      unsubscribeProducts();
-      unsubscribeUserProfiles();
-    };
-  }, [fetchProducts, isAuthLoading, userProfile]);
-
-  return { products, isLoading, error, refetch: fetchProducts };
+      <TabsContent value={activeTab} className="mt-0 min-h-[300px]">
+        {renderContent()}
+      </TabsContent>
+    </Tabs>
+  );
 };
+
+export default MarketTabs;
