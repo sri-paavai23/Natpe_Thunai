@@ -8,9 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle, HelpCircle } from "lucide-react";
+import { Brain, CheckCircle, XCircle, MapPin, IndianRupee, Image as ImageIcon, HelpCircle, AlertCircle, Dumbbell } from "lucide-react";
 import { usePriceAnalysis } from "@/hooks/usePriceAnalysis";
 import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 interface SportsGearListingFormProps {
   onSubmit: (product: {
@@ -18,6 +19,7 @@ interface SportsGearListingFormProps {
     price: string;
     description: string;
     condition: string;
+    location: string;
     imageUrl: string;
     ambassadorDelivery: boolean;
     ambassadorMessage: string;
@@ -30,168 +32,95 @@ const SportsGearListingForm: React.FC<SportsGearListingFormProps> = ({ onSubmit,
   const [priceValue, setPriceValue] = useState("");
   const [description, setDescription] = useState("");
   const [condition, setCondition] = useState("");
+  const [location, setLocation] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  const {
-    isPriceAnalyzed,
-    isPriceReasonable,
-    aiSuggestion,
-    aiLoading,
-    analyzePrice,
-    resetAnalysis,
-  } = usePriceAnalysis();
-
-  const handleAnalyzePriceClick = () => {
-    analyzePrice(title, priceValue, condition);
-  };
+  const { isPriceAnalyzed, isPriceReasonable, aiSuggestion, aiLoading, analyzePrice, resetAnalysis } = usePriceAnalysis();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !priceValue || !description || !condition) {
-      toast.error("Please fill in all required fields.");
+    if (!title || !priceValue || !description || !condition || !location) {
+      toast.error("All fields required.");
       return;
     }
-    if (!isPriceAnalyzed) {
-      toast.error("Please analyze the price before creating the listing.");
-      return;
-    }
-    if (!isPriceReasonable) {
-      toast.error("The price is outside the reasonable range. Please adjust or confirm you understand.");
-      return;
-    }
+    if (!isPriceAnalyzed) { toast.error("Check price first."); return; }
 
-    const finalImageUrl = imageUrl.trim() || "/app-logo.png";
-
-    onSubmit({ title, price: `₹${priceValue}`, description, condition, imageUrl: finalImageUrl, ambassadorDelivery, ambassadorMessage });
-    setTitle("");
-    setPriceValue("");
-    setDescription("");
-    setCondition("");
-    setImageUrl("");
-    setAmbassadorDelivery(false);
-    setAmbassadorMessage("");
-    resetAnalysis();
+    onSubmit({ 
+        title, 
+        price: `₹${priceValue}`, 
+        description, 
+        condition, 
+        location,
+        imageUrl: imageUrl.trim() || "/app-logo.png", 
+        ambassadorDelivery, 
+        ambassadorMessage 
+    });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="title" className="text-foreground">Title</Label>
-        <Input
-          id="title"
-          type="text"
-          placeholder="e.g., Cricket Bat"
-          value={title}
-          onChange={(e) => { setTitle(e.target.value); resetAnalysis(); }}
-          required
-          className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-        />
-      </div>
-      <div>
-        <Label htmlFor="price" className="text-foreground">Price</Label>
-        <Input
-          id="price"
-          type="number"
-          placeholder="e.g., 1500"
-          value={priceValue}
-          onChange={(e) => { setPriceValue(e.target.value); resetAnalysis(); }}
-          required
-          min="1"
-          className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-        />
-      </div>
-      <div>
-        <Label htmlFor="description" className="text-foreground">Description</Label>
-        <Textarea
-          id="description"
-          placeholder="Describe your sports gear..."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-          className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-        />
-      </div>
-      <div>
-        <Label htmlFor="condition" className="text-foreground">Condition</Label>
-        <Select value={condition} onValueChange={(value) => { setCondition(value); resetAnalysis(); }} required>
-          <SelectTrigger className="w-full bg-input text-foreground border-border focus:ring-ring focus:border-ring">
-            <SelectValue placeholder="Select condition" />
-          </SelectTrigger>
-          <SelectContent className="bg-popover text-popover-foreground border-border">
-            <SelectItem value="new">New</SelectItem>
-            <SelectItem value="used-like-new">Used - Like New</SelectItem>
-            <SelectItem value="used-good">Used - Good</SelectItem>
-            <SelectItem value="used-fair">Used - Fair</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <div className="flex items-center justify-between">
-          <Label htmlFor="imageUrl" className="text-foreground">Image URL (Optional)</Label>
-          <Link to="/help/image-to-url" className="text-xs text-secondary-neon hover:underline flex items-center gap-1">
-            <HelpCircle className="h-3 w-3" /> How to get URL?
-          </Link>
-        </div>
-        <Input
-          id="imageUrl"
-          type="text"
-          placeholder="e.g., https://example.com/image.jpg (Defaults to app logo)"
-          value={imageUrl}
-          onChange={(e) => setImageUrl(e.target.value)}
-          className="bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-        />
-        <p className="text-xs text-muted-foreground mt-1">If left empty, the app logo will be used as a placeholder.</p>
+    <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      
+      <div className="space-y-1.5">
+        <Label className="text-foreground font-semibold flex items-center gap-2"><Dumbbell className="h-4 w-4 text-secondary-neon"/> Gear Name</Label>
+        <Input placeholder="e.g. Cricket Bat (Willow), Badminton Racket" value={title} onChange={(e) => { setTitle(e.target.value); resetAnalysis(); }} className="h-12 bg-secondary/5 border-border" />
       </div>
 
-      <AmbassadorDeliveryOption
-        ambassadorDelivery={ambassadorDelivery}
-        setAmbassadorDelivery={setAmbassadorDelivery}
-        ambassadorMessage={ambassadorMessage}
-        setAmbassadorMessage={setAmbassadorMessage}
-      />
-
-      {/* AI Price Analysis Section */}
-      <div className="space-y-2 border-t border-border pt-4 mt-4">
-        <Button
-          type="button"
-          onClick={handleAnalyzePriceClick}
-          disabled={aiLoading || !title || !priceValue || !condition}
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          {aiLoading ? (
-            <>
-              <Brain className="mr-2 h-4 w-4 animate-pulse" /> Analyzing Price...
-            </>
-          ) : (
-            <>
-              <Brain className="mr-2 h-4 w-4" /> Analyze Price
-            </>
-          )}
-        </Button>
-        {isPriceAnalyzed && (
-          <div className={`p-3 rounded-md text-sm ${isPriceReasonable ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"}`}>
-            <div className="flex items-center gap-2 font-semibold">
-              {isPriceReasonable ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-              <span>Price Status: {isPriceReasonable ? "Reasonable" : "Potentially Unreasonable"}</span>
-            </div>
-            {aiSuggestion && <p className="mt-1">{aiSuggestion}</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-foreground font-semibold">Price</Label>
+          <div className="relative">
+            <IndianRupee className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input type="number" placeholder="1500" value={priceValue} onChange={(e) => { setPriceValue(e.target.value); resetAnalysis(); }} className="pl-9 h-11 bg-secondary/5 border-border" />
           </div>
-        )}
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-foreground font-semibold">Condition</Label>
+          <Select value={condition} onValueChange={(v) => { setCondition(v); resetAnalysis(); }}>
+            <SelectTrigger className="h-11 bg-secondary/5 border-border"><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="new">Brand New</SelectItem>
+              <SelectItem value="used-like-new">Like New</SelectItem>
+              <SelectItem value="used-good">Good</SelectItem>
+              <SelectItem value="used-fair">Fair / Functional</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-          disabled={!isPriceReasonable || aiLoading}
-        >
-          Create Listing
-        </Button>
+      {/* AI Check */}
+      <div className={cn("rounded-lg border p-3", isPriceAnalyzed ? (isPriceReasonable ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20") : "bg-muted/30 border-dashed")}>
+        <div className="flex justify-between items-center">
+            <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1"><Brain className="h-3 w-3" /> System Check</h4>
+            <Button type="button" variant="ghost" size="sm" onClick={() => analyzePrice(title, priceValue, condition)} disabled={aiLoading || !title || !priceValue} className="h-6 text-xs text-secondary-neon p-0 hover:bg-transparent">{aiLoading ? "Scanning..." : "Check"}</Button>
+        </div>
+        {isPriceAnalyzed && <p className="text-xs mt-1 text-foreground/90">{aiSuggestion}</p>}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-foreground font-semibold">Meeting Spot</Label>
+        <div className="relative">
+            <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="e.g. Sports Ground, Basketball Court" value={location} onChange={(e) => setLocation(e.target.value)} className="pl-9 h-11 bg-secondary/5 border-border" />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-foreground font-semibold">Specs / Description</Label>
+        <Textarea placeholder="Weight, brand, size, grip condition..." value={description} onChange={(e) => setDescription(e.target.value)} className="bg-secondary/5 border-border min-h-[80px]" />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex justify-between"><Label className="text-foreground font-semibold">Image URL</Label><Link to="/help/image-to-url" className="text-[10px] text-secondary-neon hover:underline">Help</Link></div>
+        <Input placeholder="https://..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="h-11 bg-secondary/5 border-border" />
+      </div>
+
+      <AmbassadorDeliveryOption ambassadorDelivery={ambassadorDelivery} setAmbassadorDelivery={setAmbassadorDelivery} ambassadorMessage={ambassadorMessage} setAmbassadorMessage={setAmbassadorMessage} />
+
+      <div className="flex gap-3 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1 h-11">Cancel</Button>
+        <Button type="submit" className="flex-[2] h-11 bg-secondary-neon text-primary-foreground font-bold" disabled={!isPriceReasonable && isPriceAnalyzed}>Post Gear</Button>
       </div>
     </form>
   );
