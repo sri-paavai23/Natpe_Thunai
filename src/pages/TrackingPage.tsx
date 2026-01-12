@@ -1,66 +1,34 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { 
   Truck, DollarSign, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
-  AlertTriangle, Eye, ShieldCheck, XCircle, PackageCheck
+  AlertTriangle, Eye, ShieldCheck, XCircle, MessageCircle, Send, Wallet
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, storage, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, APPWRITE_COLLEGE_ID_BUCKET_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Query } from "appwrite";
+import { Query, ID, Models } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
+import { DEVELOPER_UPI_ID } from "@/lib/config"; // Ensure this exists
 
-// --- CLOUDINARY CONFIGURATION ---
-const CLOUD_NAME = "dpusuqjvo";
-const UPLOAD_PRESET = "natpe_thunai_preset"; 
-
-const uploadToCloudinary = async (file: File): Promise<string> => {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", UPLOAD_PRESET);
-
-  try {
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-      method: "POST",
-      body: formData,
-    });
-    
-    if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error?.message || "Image upload failed");
-    }
-    
-    const data = await res.json();
-    return data.secure_url; 
-  } catch (error: any) {
-    console.error("Cloudinary Upload Error:", error);
-    throw new Error(error.message || "Upload failed");
-  }
-};
+// --- CONSTANTS ---
+// Replace with your actual Collection ID for chat messages
+const APPWRITE_CHAT_MESSAGES_COLLECTION_ID = "chat_messages"; 
 
 // --- INTERFACES ---
-export interface BaseTrackingItem {
+export interface MarketTransactionItem {
   id: string;
-  description: string;
-  date: string;
-  status: string; // Ensure this exists on Base
-  isUserProvider: boolean;
-  timestamp: number;
-  ambassadorDelivery?: boolean;
-  ambassadorMessage?: string;
-}
-
-export interface MarketTransactionItem extends BaseTrackingItem {
-  type: "Transaction" | "Cash Exchange" | "Service" | "Rental";
+  type: "Transaction" | "Cash Exchange" | "Service" | "Rental" | "Errand" | "Collaboration";
   productId?: string;
   productTitle: string;
   amount: number;
@@ -68,16 +36,20 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   buyerName: string;
   sellerId: string;
   buyerId: string;
+  status: string;
   appwriteStatus: string;
+  date: string;
+  timestamp: number;
+  isUserProvider: boolean;
   
-  // Handshake Props
+  // Handshake & Chat Props
   handoverEvidenceUrl?: string;
   returnEvidenceUrl?: string;
   isDisputed?: boolean;
-  disputeReason?: string;
+  ambassadorDelivery?: boolean;
 }
 
-export interface FoodOrderItem extends BaseTrackingItem {
+export interface FoodOrderItem {
     id: string;
     type: "Food Order";
     offeringTitle: string;
@@ -86,116 +58,219 @@ export interface FoodOrderItem extends BaseTrackingItem {
     buyerName: string;
     quantity: number;
     orderStatus: FoodOrder["status"];
+    date: string;
+    timestamp: number;
+    isUserProvider: boolean;
     providerId: string;
     buyerId: string;
 }
 
 type TrackingItem = MarketTransactionItem | FoodOrderItem;
 
+interface ChatMessage {
+    $id: string;
+    senderId: string;
+    senderName: string;
+    text: string;
+    $createdAt: string;
+}
+
 // --- UTILS ---
 const mapAppwriteStatusToTrackingStatus = (status: string): string => {
   const map: Record<string, string> = {
+    "negotiating": "Negotiating",
     "initiated": "Payment Pending",
     "payment_confirmed_to_developer": "Processing",
-    "commission_deducted": "Handover Pending",
-    "active": "In Use / Active",
-    "seller_confirmed_delivery": "Delivered",
+    "commission_deducted": "Active / In Progress",
+    "active": "Active",
+    "seller_confirmed_delivery": "Work Delivered",
     "meeting_scheduled": "Meeting Set",
     "completed": "Completed",
     "failed": "Cancelled",
-    "disputed": "Disputed / Damage Reported"
+    "disputed": "Disputed"
   };
-  return map[status] || "Pending";
+  return map[status] || status;
 };
 
-// --- COMPONENT: EVIDENCE MODAL ---
-const EvidenceModal = ({ 
-  isOpen, onClose, title, onUpload, isUploading, viewOnlyUrl 
+// --- COMPONENT: CHAT SHEET (The Interaction Hub) ---
+const ChatSheet = ({ 
+    item, 
+    currentUser 
 }: { 
-  isOpen: boolean; onClose: () => void; title: string; onUpload?: (file: File) => void; isUploading?: boolean; viewOnlyUrl?: string; 
+    item: MarketTransactionItem, 
+    currentUser: any 
 }) => {
-  const [file, setFile] = useState<File | null>(null);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [newMessage, setNewMessage] = useState("");
+    const [loadingChat, setLoadingChat] = useState(true);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Camera className="h-5 w-5 text-secondary-neon" /> {title}
-          </DialogTitle>
-          <DialogDescription>{viewOnlyUrl ? "Proof of condition." : "Take a clear photo to avoid disputes."}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-input rounded-xl bg-muted/20 min-h-[200px]">
-          {viewOnlyUrl ? (
-            <img src={viewOnlyUrl} alt="Evidence" className="max-h-[300px] rounded-md object-contain" />
-          ) : (
-            <>
-              {file ? (
-                <div className="relative w-full">
-                  <img src={URL.createObjectURL(file)} alt="Preview" className="max-h-[250px] w-full object-contain rounded-md" />
-                  <Button size="sm" variant="destructive" className="absolute top-2 right-2 h-7 px-2" onClick={() => setFile(null)}><XCircle className="h-4 w-4" /></Button>
+    // Fetch Messages
+    const fetchMessages = useCallback(async () => {
+        try {
+            const res = await databases.listDocuments(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_CHAT_MESSAGES_COLLECTION_ID,
+                [
+                    Query.equal("transactionId", item.id),
+                    Query.orderAsc("$createdAt")
+                ]
+            );
+            setMessages(res.documents as unknown as ChatMessage[]);
+        } catch (e) {
+            console.error("Chat load error", e);
+        } finally {
+            setLoadingChat(false);
+        }
+    }, [item.id]);
+
+    // Send Message
+    const handleSendMessage = async () => {
+        if (!newMessage.trim()) return;
+        try {
+            await databases.createDocument(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_CHAT_MESSAGES_COLLECTION_ID,
+                ID.unique(),
+                {
+                    transactionId: item.id,
+                    senderId: currentUser.$id,
+                    senderName: currentUser.name,
+                    text: newMessage,
+                    timestamp: new Date().toISOString()
+                }
+            );
+            setNewMessage("");
+            fetchMessages(); // Optimistic update ideally, but fetch for now
+        } catch (e) {
+            toast.error("Failed to send message");
+        }
+    };
+
+    // Realtime Subscription
+    useEffect(() => {
+        fetchMessages();
+        const unsubscribe = databases.client.subscribe(
+            `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CHAT_MESSAGES_COLLECTION_ID}.documents`,
+            (response) => {
+                if (response.events.includes("databases.*.collections.*.documents.*.create")) {
+                    const payload = response.payload as any;
+                    if (payload.transactionId === item.id) {
+                        setMessages(prev => [...prev, payload]);
+                    }
+                }
+            }
+        );
+        return () => unsubscribe();
+    }, [fetchMessages, item.id]);
+
+    // Auto-scroll
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8 gap-2 border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10">
+                    <MessageCircle className="h-4 w-4" /> Chat & Discuss
+                </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[100%] sm:w-[400px] flex flex-col h-full p-0">
+                <SheetHeader className="p-4 border-b border-border bg-muted/20">
+                    <SheetTitle className="flex items-center gap-2 text-base">
+                        {item.type === 'Service' ? <BriefcaseIcon /> : <ShoppingBag className="h-4 w-4" />}
+                        {item.productTitle}
+                    </SheetTitle>
+                    <p className="text-xs text-muted-foreground">
+                        Talking with {item.isUserProvider ? item.buyerName : item.sellerName}
+                    </p>
+                </SheetHeader>
+
+                {/* Messages Area */}
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-background">
+                    {loadingChat ? (
+                        <div className="flex justify-center py-4"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
+                    ) : messages.length === 0 ? (
+                        <div className="text-center text-muted-foreground text-sm py-10 opacity-50">
+                            Start the conversation...<br/>Discuss requirements or negotiate price.
+                        </div>
+                    ) : (
+                        messages.map((msg) => {
+                            const isMe = msg.senderId === currentUser.$id;
+                            return (
+                                <div key={msg.$id} className={cn("flex flex-col max-w-[80%]", isMe ? "ml-auto items-end" : "mr-auto items-start")}>
+                                    <div className={cn("px-3 py-2 rounded-lg text-sm", isMe ? "bg-secondary-neon text-primary-foreground rounded-br-none" : "bg-muted text-foreground rounded-bl-none")}>
+                                        {msg.text}
+                                    </div>
+                                    <span className="text-[9px] text-muted-foreground mt-1 px-1">
+                                        {new Date(msg.$createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </span>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
-              ) : (
-                <label className="cursor-pointer flex flex-col items-center gap-3 py-6 w-full hover:bg-muted/30 transition-colors rounded-lg">
-                  <Camera className="h-8 w-8 text-secondary-neon" />
-                  <span className="text-sm">Click to Capture</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files && setFile(e.target.files[0])} />
-                </label>
-              )}
-            </>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-          {!viewOnlyUrl && onUpload && (
-            <Button onClick={() => file && onUpload(file)} disabled={!file || isUploading} className="bg-secondary-neon text-primary-foreground font-bold">
-              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Evidence"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+
+                {/* Input Area */}
+                <div className="p-3 border-t border-border bg-card">
+                    <form 
+                        onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                        className="flex gap-2"
+                    >
+                        <Input 
+                            value={newMessage} 
+                            onChange={(e) => setNewMessage(e.target.value)} 
+                            placeholder="Type a message..." 
+                            className="flex-1"
+                        />
+                        <Button type="submit" size="icon" className="bg-secondary-neon text-primary-foreground">
+                            <Send className="h-4 w-4" />
+                        </Button>
+                    </form>
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
 };
 
 // --- COMPONENT: TRACKING CARD ---
-const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (action: string, id: string, payload?: any) => void }) => {
-  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
-  const [evidenceMode, setEvidenceMode] = useState<"upload_handover" | "upload_return" | "view_handover">("view_handover");
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleEvidenceUpload = async (file: File) => {
-    setIsUploading(true);
-    try {
-      const fileUrl = await uploadToCloudinary(file);
-      
-      const actionType = evidenceMode === "upload_handover" ? "upload_handover_evidence" : "report_damage_with_evidence";
-      onAction(actionType, item.id, { url: fileUrl });
-      setShowEvidenceModal(false);
-    } catch (e: any) {
-      toast.error(`Upload failed: ${e.message}`);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
+const TrackingCard = ({ item, onAction, currentUser }: { item: TrackingItem, onAction: (action: string, id: string, payload?: any) => void, currentUser: any }) => {
+  
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
-  const requiresHandshake = item.type === "Rental"; 
-
+  
+  // Icon Helper
   const getIcon = () => {
     switch (item.type) {
       case "Rental": return <Clock className="h-5 w-5 text-purple-500" />;
+      case "Service": 
+      case "Errand": return <Handshake className="h-5 w-5 text-indigo-500" />;
       case "Transaction": return <ShoppingBag className="h-5 w-5 text-blue-500" />;
       case "Food Order": return <Utensils className="h-5 w-5 text-orange-500" />;
       default: return <Activity className="h-5 w-5 text-gray-500" />;
     }
   };
 
+  // Payment Link Generator
+  const handlePayment = () => {
+      if(!marketItem) return;
+      // Note: In a real app, integrate a Gateway. Here we use UPI Intent for P2P.
+      // Payment goes to DEVELOPER first (Escrow), then released to Seller later.
+      const note = `Payment for ${marketItem.type}: ${marketItem.productTitle}`;
+      const upiLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiEscrow&am=${marketItem.amount}&tn=${encodeURIComponent(note)}`;
+      window.open(upiLink, '_blank');
+      
+      // Simulate "Payment Initiated" for UX (In real app, wait for webhook)
+      onAction("mark_paid_by_buyer", item.id);
+  };
+
   return (
-    <Card className={cn("border-l-4 transition-all bg-card shadow-sm mb-4 group hover:shadow-md", 
+    <Card className={cn("border-l-4 transition-all bg-card shadow-sm mb-4", 
       item.isUserProvider ? "border-l-secondary-neon" : "border-l-blue-500",
-      marketItem?.isDisputed && "border-l-destructive border-destructive/50 bg-destructive/5"
+      marketItem?.isDisputed && "border-l-destructive"
     )}>
       <CardContent className="p-4">
         {/* Header */}
@@ -210,92 +285,72 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
             </div>
           </div>
           <Badge variant="outline" className={cn("text-[9px] font-bold uppercase tracking-wider py-1", marketItem?.isDisputed ? "bg-red-500 text-white border-none" : "bg-muted")}>
-            {marketItem?.isDisputed ? "Disputed" : item.status}
+            {item.status}
           </Badge>
         </div>
 
-        {/* --- HANDSHAKE UI (Rentals Only) --- */}
-        {requiresHandshake && marketItem && (
-          <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3 animate-in fade-in">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pb-1">
-                <span className={cn(marketItem.handoverEvidenceUrl ? "text-green-500 font-bold" : "")}>1. Proof</span>
-                <div className="h-[1px] flex-1 bg-border mx-2" />
-                <span className={cn(marketItem.appwriteStatus === 'active' ? "text-blue-500 font-bold" : "")}>2. Active</span>
-                <div className="h-[1px] flex-1 bg-border mx-2" />
-                <span className={cn(marketItem.status.includes('Completed') ? "text-green-500 font-bold" : "")}>3. Done</span>
+        {/* --- MARKET / SERVICE / ERRAND LOGIC --- */}
+        {marketItem && (
+          <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3">
+            
+            <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Amount: <b className="text-foreground">₹{marketItem.amount}</b></span>
+                {marketItem.appwriteStatus === 'negotiating' && <span className="text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded text-[10px]">Price Negotiable</span>}
             </div>
 
-            <div className="flex items-center gap-3">
-                <div className={cn("flex-1 p-2 rounded border text-xs flex items-center justify-between", marketItem.handoverEvidenceUrl ? "bg-green-500/10 border-green-500/20" : "bg-card border-dashed")}>
-                    <div className="flex items-center gap-2">
-                        <ShieldCheck className={cn("h-4 w-4", marketItem.handoverEvidenceUrl ? "text-green-600" : "text-muted-foreground")} />
-                        <span className="font-medium">Condition Proof</span>
-                    </div>
-                    {marketItem.handoverEvidenceUrl ? (
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEvidenceMode("view_handover"); setShowEvidenceModal(true); }}>
-                            <Eye className="h-3 w-3 text-green-600" />
-                        </Button>
-                    ) : (
-                        <span className="text-[9px] italic text-muted-foreground">Required</span>
-                    )}
-                </div>
-            </div>
+            {/* ACTION AREA */}
+            <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                
+                {/* 1. Chat Button (Always visible for active/negotiating) */}
+                {marketItem.appwriteStatus !== 'completed' && marketItem.appwriteStatus !== 'cancelled' && (
+                    <ChatSheet item={marketItem} currentUser={currentUser} />
+                )}
 
-            {/* Handshake Actions */}
-            {item.isUserProvider && !marketItem.handoverEvidenceUrl && (marketItem.appwriteStatus === 'commission_deducted' || marketItem.appwriteStatus === 'initiated') && (
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-bold" onClick={() => { setEvidenceMode("upload_handover"); setShowEvidenceModal(true); }}>
-                    <Camera className="h-3 w-3 mr-2" /> Upload Handover Proof
-                </Button>
-            )}
-
-            {!item.isUserProvider && marketItem.handoverEvidenceUrl && marketItem.appwriteStatus !== 'active' && !marketItem.appwriteStatus.includes('completed') && (
-                <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 h-9 text-xs" onClick={() => { setEvidenceMode("view_handover"); setShowEvidenceModal(true); }}>View Proof</Button>
-                    <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-bold" onClick={() => onAction("accept_handover", item.id, { type: item.type })}>
-                        <Handshake className="h-3 w-3 mr-2" /> Accept & Start
+                {/* 2. Payment Button (Buyer Side - Only when Negotiating or Initiated) */}
+                {!item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
+                    <Button className="h-8 flex-1 bg-green-600 hover:bg-green-700 text-white gap-2" onClick={handlePayment}>
+                        <Wallet className="h-4 w-4" /> Pay Now
                     </Button>
-                </div>
-            )}
+                )}
 
-            {item.isUserProvider && marketItem.appwriteStatus === 'active' && (
-                <div className="space-y-2 pt-2 border-t border-border/50">
-                    <p className="text-[10px] text-center text-muted-foreground">Rental complete? Verify return.</p>
-                    <div className="flex gap-2">
-                        <Button variant="destructive" className="flex-1 h-9 text-xs" onClick={() => { setEvidenceMode("upload_return"); setShowEvidenceModal(true); }}>
-                            <AlertTriangle className="h-3 w-3 mr-2" /> Report Damage
-                        </Button>
-                        <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-bold" onClick={() => onAction("confirm_completion", item.id)}>
-                            <CheckCircle className="h-3 w-3 mr-2" /> All Good
-                        </Button>
-                    </div>
-                </div>
-            )}
+                {/* 3. Provider Actions */}
+                {item.isUserProvider && (
+                    <>
+                        {/* Start Work (After payment) */}
+                        {marketItem.appwriteStatus === 'payment_confirmed_to_developer' && (
+                            <Button className="h-8 flex-1 bg-blue-600 text-white" onClick={() => onAction("start_work", item.id)}>
+                                <CheckCircle className="h-4 w-4 mr-2" /> Start Work
+                            </Button>
+                        )}
+                        {/* Deliver Work */}
+                        {marketItem.appwriteStatus === 'active' && (
+                            <Button className="h-8 flex-1 bg-purple-600 text-white" onClick={() => onAction("deliver_work", item.id)}>
+                                <PackageCheck className="h-4 w-4 mr-2" /> Mark Done
+                            </Button>
+                        )}
+                    </>
+                )}
+
+                {/* 4. Buyer Confirm Receipt */}
+                {!item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
+                    <Button className="h-8 flex-1 bg-green-600 text-white" onClick={() => onAction("complete_transaction", item.id)}>
+                        <CheckCircle className="h-4 w-4 mr-2" /> Confirm & Release Funds
+                    </Button>
+                )}
+            </div>
+
+            {/* Status Hint Text */}
+            <div className="text-[10px] text-center text-muted-foreground italic">
+                {marketItem.appwriteStatus === 'negotiating' && "Chat to finalize details. Pay to start."}
+                {marketItem.appwriteStatus === 'payment_confirmed_to_developer' && "Payment held in escrow. Provider can start."}
+                {marketItem.appwriteStatus === 'active' && "Work in progress..."}
+                {marketItem.appwriteStatus === 'seller_confirmed_delivery' && "Work delivered. Please verify and confirm."}
+            </div>
+
           </div>
         )}
 
-        {/* --- SIMPLE FLOW UI (Sales - No Evidence) --- */}
-        {!requiresHandshake && marketItem && !marketItem.status.includes('Completed') && (
-            <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
-                {item.isUserProvider && (marketItem.appwriteStatus === 'commission_deducted' || marketItem.appwriteStatus === 'initiated') && (
-                    <Button className="bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-bold" onClick={() => onAction("mark_delivered", item.id)}>
-                        <PackageCheck className="h-3 w-3 mr-2" /> Mark Delivered
-                    </Button>
-                )}
-                {!item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
-                    <Button className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-bold" onClick={() => onAction("confirm_receipt_sale", item.id, { productId: marketItem.productId })}>
-                        <CheckCircle className="h-3 w-3 mr-2" /> Confirm Receipt
-                    </Button>
-                )}
-                {item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
-                    <span className="text-xs text-muted-foreground italic">Waiting for buyer confirmation...</span>
-                )}
-                {!item.isUserProvider && marketItem.appwriteStatus === 'initiated' && (
-                    <span className="text-xs text-muted-foreground italic">Waiting for seller to deliver...</span>
-                )}
-            </div>
-        )}
-
-        {/* --- FOOD ORDER ACTIONS --- */}
+        {/* --- FOOD ORDER ACTIONS (Simple Flow) --- */}
         {item.type === "Food Order" && !item.status.includes("Delivered") && (
              <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
                 {item.isUserProvider ? (
@@ -312,21 +367,9 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
              </div>
         )}
 
-        {/* Modals & Footer */}
-        {showEvidenceModal && marketItem && (
-            <EvidenceModal
-                isOpen={showEvidenceModal}
-                onClose={() => setShowEvidenceModal(false)}
-                title={evidenceMode.includes('upload') ? "Upload Proof" : "View Proof"}
-                onUpload={handleEvidenceUpload}
-                isUploading={isUploading}
-                viewOnlyUrl={evidenceMode === 'view_handover' ? marketItem.handoverEvidenceUrl : undefined}
-            />
-        )}
-
-        <div className="flex justify-between items-center text-[10px] text-muted-foreground/70 mt-3 pt-2 border-t border-border/30">
-           <span>Role: {item.isUserProvider ? "Seller" : "Buyer"}</span>
-           <span className="font-mono opacity-50">ID: {item.id.substring(0, 6)}</span>
+        <div className="flex justify-between items-center text-[10px] text-muted-foreground/70 mt-2">
+           <span>{item.isUserProvider ? "You are Provider" : "You are Client"}</span>
+           <span className="font-mono">ID: {item.id.substring(0, 6)}</span>
         </div>
       </CardContent>
     </Card>
@@ -352,7 +395,7 @@ const TrackingPage = () => {
 
       const transactions = response.documents.map((doc: any) => ({
         id: doc.$id,
-        type: doc.type === 'product' ? 'Transaction' : 'Rental', 
+        type: doc.type === 'service' ? 'Service' : doc.type === 'errand' ? 'Errand' : doc.type === 'product' ? 'Transaction' : 'Rental', 
         productId: doc.productId,
         productTitle: doc.productTitle,
         description: doc.productTitle,
@@ -389,8 +432,6 @@ const TrackingPage = () => {
         date: new Date(o.$createdAt).toLocaleDateString(), 
         quantity: o.quantity, 
         deliveryLocation: o.deliveryLocation,
-        ambassadorDelivery: o.ambassadorDelivery,
-        ambassadorMessage: o.ambassadorMessage
       } as FoodOrderItem));
 
       setItems([...transactions, ...foodItems].sort((a, b) => b.timestamp - a.timestamp));
@@ -403,56 +444,32 @@ const TrackingPage = () => {
   // --- ACTIONS ---
   const handleAction = async (action: string, id: string, payload?: any) => {
     try {
-        // --- HANDSHAKE ACTIONS (Rentals Only) ---
-        if (action === "upload_handover_evidence") {
+        // Payment Flow
+        if (action === "mark_paid_by_buyer") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                handoverEvidenceUrl: payload.url
+                status: "payment_confirmed_to_developer" // Escrow holding
             });
-            toast.success("Proof uploaded. Ask buyer to accept.");
+            toast.success("Payment initiated. Waiting for confirmation.");
         }
-        else if (action === "accept_handover") {
+        else if (action === "start_work") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                status: "active"
+                status: "active" // Active work
             });
-            toast.success("Rental started!");
+            toast.success("Work started!");
         }
-        else if (action === "report_damage_with_evidence") {
-            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                status: "disputed", isDisputed: true, returnEvidenceUrl: payload.url
-            });
-            toast.error("Dispute reported.");
-        }
-
-        // --- SIMPLE SALE ACTIONS (Transactions) ---
-        else if (action === "mark_delivered") {
+        else if (action === "deliver_work") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
                 status: "seller_confirmed_delivery"
             });
-            toast.success("Marked as Delivered.");
+            toast.success("Work marked as delivered.");
         }
-        else if (action === "confirm_receipt_sale") {
+        else if (action === "complete_transaction") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
                 status: "completed"
             });
-            if (payload?.productId) {
-                try {
-                    await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, payload.productId);
-                    toast.success("Transaction Complete! Listing removed.");
-                } catch (delError) { console.error("Listing delete failed", delError); }
-            } else {
-                toast.success("Transaction Complete!");
-            }
+            toast.success("Transaction Complete! Funds released.");
         }
-
-        // --- GENERIC COMPLETION (Rentals) ---
-        else if (action === "confirm_completion") {
-            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                status: "completed"
-            });
-            toast.success("Rental Closed.");
-        }
-
-        // --- FOOD ACTIONS ---
+        // Food
         else if (action === "food_update") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, id, {
                 status: payload.status
@@ -462,7 +479,6 @@ const TrackingPage = () => {
         
         refreshData();
     } catch (e) {
-        console.error(e);
         toast.error("Action failed.");
     }
   };
@@ -484,12 +500,12 @@ const TrackingPage = () => {
             </TabsList>
             <TabsContent value="all" className="space-y-4 pt-4">
                  {items.filter(i => !i.status.includes('Completed') && i.status !== 'Cancelled' && !(i as any).isDisputed).map(item => (
-                    <TrackingCard key={item.id} item={item} onAction={handleAction} />
+                    <TrackingCard key={item.id} item={item} onAction={handleAction} currentUser={user} />
                 ))}
             </TabsContent>
             <TabsContent value="history" className="space-y-4 pt-4">
                  {items.filter(i => i.status.includes('Completed') || i.status === 'Cancelled' || (i as any).isDisputed).map(item => (
-                    <TrackingCard key={item.id} item={item} onAction={handleAction} />
+                    <TrackingCard key={item.id} item={item} onAction={handleAction} currentUser={user} />
                 ))}
             </TabsContent>
         </Tabs>
@@ -498,5 +514,14 @@ const TrackingPage = () => {
     </div>
   );
 };
+
+// Simple Icon for Service
+const BriefcaseIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+);
+
+const PackageCheck = ({className}:{className?:string}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22v-9"/><path d="m9 12 2 2 4-4"/></svg>
+);
 
 export default TrackingPage;
