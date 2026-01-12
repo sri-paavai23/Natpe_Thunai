@@ -13,16 +13,15 @@ import {
   AlertTriangle, Eye, ShieldCheck, XCircle, PackageCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Query } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
 
 // --- CLOUDINARY CONFIGURATION ---
-// Cloud Name extracted from your URL: dpusuqjvo
 const CLOUD_NAME = "dpusuqjvo";
-const UPLOAD_PRESET = "natpe_thunai_preset"; // You MUST create this in Cloudinary Dashboard
+const UPLOAD_PRESET = "natpe_thunai_preset"; 
 
 const uploadToCloudinary = async (file: File): Promise<string> => {
   const formData = new FormData();
@@ -41,7 +40,7 @@ const uploadToCloudinary = async (file: File): Promise<string> => {
     }
     
     const data = await res.json();
-    return data.secure_url; // Returns the HTTPS URL
+    return data.secure_url; 
   } catch (error: any) {
     console.error("Cloudinary Upload Error:", error);
     throw new Error(error.message || "Upload failed");
@@ -49,8 +48,18 @@ const uploadToCloudinary = async (file: File): Promise<string> => {
 };
 
 // --- INTERFACES ---
-export interface MarketTransactionItem {
+export interface BaseTrackingItem {
   id: string;
+  description: string;
+  date: string;
+  status: string; // Ensure this exists on Base
+  isUserProvider: boolean;
+  timestamp: number;
+  ambassadorDelivery?: boolean;
+  ambassadorMessage?: string;
+}
+
+export interface MarketTransactionItem extends BaseTrackingItem {
   type: "Transaction" | "Cash Exchange" | "Service" | "Rental";
   productId?: string;
   productTitle: string;
@@ -59,22 +68,16 @@ export interface MarketTransactionItem {
   buyerName: string;
   sellerId: string;
   buyerId: string;
-  status: string;
   appwriteStatus: string;
-  date: string;
-  timestamp: number;
-  isUserProvider: boolean;
   
   // Handshake Props
   handoverEvidenceUrl?: string;
   returnEvidenceUrl?: string;
   isDisputed?: boolean;
   disputeReason?: string;
-  ambassadorDelivery?: boolean;
-  ambassadorMessage?: string;
 }
 
-export interface FoodOrderItem {
+export interface FoodOrderItem extends BaseTrackingItem {
     id: string;
     type: "Food Order";
     offeringTitle: string;
@@ -83,13 +86,8 @@ export interface FoodOrderItem {
     buyerName: string;
     quantity: number;
     orderStatus: FoodOrder["status"];
-    date: string;
-    timestamp: number;
-    isUserProvider: boolean;
     providerId: string;
     buyerId: string;
-    ambassadorDelivery?: boolean;
-    ambassadorMessage?: string;
 }
 
 type TrackingItem = MarketTransactionItem | FoodOrderItem;
@@ -183,7 +181,7 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
 
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
-  const requiresHandshake = item.type === "Rental"; // ONLY Rentals get Handshake logic
+  const requiresHandshake = item.type === "Rental"; 
 
   const getIcon = () => {
     switch (item.type) {
@@ -219,7 +217,6 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
         {/* --- HANDSHAKE UI (Rentals Only) --- */}
         {requiresHandshake && marketItem && (
           <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3 animate-in fade-in">
-            {/* Status Steps */}
             <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pb-1">
                 <span className={cn(marketItem.handoverEvidenceUrl ? "text-green-500 font-bold" : "")}>1. Proof</span>
                 <div className="h-[1px] flex-1 bg-border mx-2" />
@@ -228,7 +225,6 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
                 <span className={cn(marketItem.status.includes('Completed') ? "text-green-500 font-bold" : "")}>3. Done</span>
             </div>
 
-            {/* Evidence Row */}
             <div className="flex items-center gap-3">
                 <div className={cn("flex-1 p-2 rounded border text-xs flex items-center justify-between", marketItem.handoverEvidenceUrl ? "bg-green-500/10 border-green-500/20" : "bg-card border-dashed")}>
                     <div className="flex items-center gap-2">
@@ -415,7 +411,6 @@ const TrackingPage = () => {
             toast.success("Proof uploaded. Ask buyer to accept.");
         }
         else if (action === "accept_handover") {
-            // Only Rentals reach here in the new UI logic
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
                 status: "active"
             });
