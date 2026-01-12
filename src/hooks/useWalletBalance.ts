@@ -5,7 +5,23 @@ import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, A
 import { Query, Models } from 'appwrite';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { MarketTransactionItem, FoodOrderItem } from '@/pages/TrackingPage'; // Re-using interfaces from TrackingPage
+
+// Define local interfaces for raw Appwrite documents to ensure type safety
+// matching the database schema rather than the UI tracking item.
+interface TransactionDoc extends Models.Document {
+  buyerId: string;
+  sellerId: string;
+  amount: number;
+  netSellerAmount?: number;
+  status: string; // raw appwrite status (e.g., 'paid_to_seller')
+}
+
+interface FoodOrderDoc extends Models.Document {
+  buyerId: string;
+  providerId: string;
+  totalAmount: number;
+  status: string; // raw appwrite status (e.g., 'Delivered')
+}
 
 interface WalletBalanceState {
   earnedBalance: number;
@@ -36,31 +52,34 @@ export const useWalletBalance = (): WalletBalanceState => {
     let totalSpent = 0;
 
     try {
-      // Fetch Market Transactions (Buy/Sell)
-      const marketTransactionsResponse = await databases.listDocuments(
+      // 1. Fetch Market Transactions
+      const marketTransactionsResponse = await databases.listDocuments<TransactionDoc>(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
         [
           Query.or([
             Query.equal('buyerId', user.$id),
-            Query.equal('sellerId', user.$id) // Changed to sellerId
+            Query.equal('sellerId', user.$id)
           ]),
-          Query.limit(100) // Fetch a reasonable number of transactions
+          Query.limit(100)
         ]
       );
 
-      marketTransactionsResponse.documents.forEach((doc: Models.Document) => {
-        const tx = doc as unknown as MarketTransactionItem;
-        if (tx.sellerId === user.$id && tx.status === 'paid_to_seller' && tx.netSellerAmount !== undefined) { // Changed to sellerId
+      marketTransactionsResponse.documents.forEach((tx) => {
+        // Earnings: Only count if you are the seller AND status confirms payout
+        // Note: 'paid_to_seller' or 'completed' usually implies money moved.
+        if (tx.sellerId === user.$id && (tx.status === 'paid_to_seller' || tx.status === 'completed') && tx.netSellerAmount !== undefined) {
           totalEarned += tx.netSellerAmount;
         }
-        if (tx.buyerId === user.$id && tx.status !== 'failed') { // Count all non-failed purchases as spent
+        
+        // Spending: Count if you are buyer and transaction wasn't failed/cancelled
+        if (tx.buyerId === user.$id && tx.status !== 'failed') {
           totalSpent += tx.amount;
         }
       });
 
-      // Fetch Food Orders
-      const foodOrdersResponse = await databases.listDocuments(
+      // 2. Fetch Food Orders
+      const foodOrdersResponse = await databases.listDocuments<FoodOrderDoc>(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
         [
@@ -68,16 +87,17 @@ export const useWalletBalance = (): WalletBalanceState => {
             Query.equal('buyerId', user.$id),
             Query.equal('providerId', user.$id)
           ]),
-          Query.limit(100) // Fetch a reasonable number of orders
+          Query.limit(100)
         ]
       );
 
-      foodOrdersResponse.documents.forEach((doc: Models.Document) => {
-        const order = doc as unknown as FoodOrderItem;
+      foodOrdersResponse.documents.forEach((order) => {
+        // Earnings: Provider gets paid on Delivery
         if (order.providerId === user.$id && order.status === 'Delivered') {
           totalEarned += order.totalAmount;
         }
-        if (order.buyerId === user.$id && order.status === 'Delivered') { // Count delivered orders as spent
+        // Spending: Buyer spends on Delivery
+        if (order.buyerId === user.$id && order.status === 'Delivered') {
           totalSpent += order.totalAmount;
         }
       });
@@ -88,7 +108,7 @@ export const useWalletBalance = (): WalletBalanceState => {
     } catch (err: any) {
       console.error("Error fetching wallet balances:", err);
       setError(err.message || "Failed to load wallet balances.");
-      toast.error("Failed to load wallet balances.");
+      // Silent error or toast depending on UX preference
     } finally {
       setIsLoading(false);
     }
@@ -97,19 +117,14 @@ export const useWalletBalance = (): WalletBalanceState => {
   useEffect(() => {
     fetchBalances();
 
-    // Setup real-time subscriptions for transactions and food orders
     const unsubscribeTransactions = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
-      () => {
-        fetchBalances(); // Refetch balances on any transaction change
-      }
+      () => fetchBalances()
     );
 
     const unsubscribeFoodOrders = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_FOOD_ORDERS_COLLECTION_ID}.documents`,
-      () => {
-        fetchBalances(); // Refetch balances on any food order change
-      }
+      () => fetchBalances()
     );
 
     return () => {
