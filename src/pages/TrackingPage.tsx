@@ -10,28 +10,47 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { 
   Truck, DollarSign, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
-  AlertTriangle, Eye, ShieldCheck, XCircle
+  AlertTriangle, Eye, ShieldCheck, XCircle, PackageCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { databases, storage, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_COLLEGE_ID_BUCKET_ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Query, ID } from "appwrite";
+import { Query } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
 
-// --- INTERFACES ---
-export interface BaseTrackingItem {
-  id: string;
-  description: string;
-  date: string;
-  status: string; // Unified status field
-  isUserProvider: boolean;
-  timestamp: number;
-  ambassadorDelivery?: boolean;
-  ambassadorMessage?: string;
-}
+// --- CLOUDINARY CONFIGURATION ---
+// Cloud Name extracted from your URL: dpusuqjvo
+const CLOUD_NAME = "dpusuqjvo";
+const UPLOAD_PRESET = "natpe_thunai_preset"; // You MUST create this in Cloudinary Dashboard
 
-export interface MarketTransactionItem extends BaseTrackingItem {
+const uploadToCloudinary = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", UPLOAD_PRESET);
+
+  try {
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    
+    if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error?.message || "Image upload failed");
+    }
+    
+    const data = await res.json();
+    return data.secure_url; // Returns the HTTPS URL
+  } catch (error: any) {
+    console.error("Cloudinary Upload Error:", error);
+    throw new Error(error.message || "Upload failed");
+  }
+};
+
+// --- INTERFACES ---
+export interface MarketTransactionItem {
+  id: string;
   type: "Transaction" | "Cash Exchange" | "Service" | "Rental";
   productId?: string;
   productTitle: string;
@@ -40,29 +59,40 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   buyerName: string;
   sellerId: string;
   buyerId: string;
+  status: string;
   appwriteStatus: string;
+  date: string;
+  timestamp: number;
+  isUserProvider: boolean;
   
   // Handshake Props
   handoverEvidenceUrl?: string;
   returnEvidenceUrl?: string;
   isDisputed?: boolean;
   disputeReason?: string;
+  ambassadorDelivery?: boolean;
+  ambassadorMessage?: string;
 }
 
-export interface FoodOrderItem extends BaseTrackingItem {
-  type: "Food Order";
-  offeringTitle: string;
-  totalAmount: number;
-  providerName: string;
-  buyerName: string;
-  providerId: string;
-  buyerId: string;
-  quantity: number;
-  deliveryLocation: string;
-  orderStatus: FoodOrder["status"];
+export interface FoodOrderItem {
+    id: string;
+    type: "Food Order";
+    offeringTitle: string;
+    totalAmount: number;
+    providerName: string;
+    buyerName: string;
+    quantity: number;
+    orderStatus: FoodOrder["status"];
+    date: string;
+    timestamp: number;
+    isUserProvider: boolean;
+    providerId: string;
+    buyerId: string;
+    ambassadorDelivery?: boolean;
+    ambassadorMessage?: string;
 }
 
-export type TrackingItem = MarketTransactionItem | FoodOrderItem;
+type TrackingItem = MarketTransactionItem | FoodOrderItem;
 
 // --- UTILS ---
 const mapAppwriteStatusToTrackingStatus = (status: string): string => {
@@ -73,7 +103,7 @@ const mapAppwriteStatusToTrackingStatus = (status: string): string => {
     "active": "In Use / Active",
     "seller_confirmed_delivery": "Delivered",
     "meeting_scheduled": "Meeting Set",
-    "completed": "Completed & Sold",
+    "completed": "Completed",
     "failed": "Cancelled",
     "disputed": "Disputed / Damage Reported"
   };
@@ -139,14 +169,13 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
   const handleEvidenceUpload = async (file: File) => {
     setIsUploading(true);
     try {
-      const uploadedFile = await storage.createFile(APPWRITE_COLLEGE_ID_BUCKET_ID, ID.unique(), file);
-      const fileUrl = `https://cloud.appwrite.io/v1/storage/buckets/${APPWRITE_COLLEGE_ID_BUCKET_ID}/files/${uploadedFile.$id}/view?project=${process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID}`;
+      const fileUrl = await uploadToCloudinary(file);
       
       const actionType = evidenceMode === "upload_handover" ? "upload_handover_evidence" : "report_damage_with_evidence";
       onAction(actionType, item.id, { url: fileUrl });
       setShowEvidenceModal(false);
-    } catch (e) {
-      toast.error("Upload failed.");
+    } catch (e: any) {
+      toast.error(`Upload failed: ${e.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -154,6 +183,7 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
 
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
+  const requiresHandshake = item.type === "Rental"; // ONLY Rentals get Handshake logic
 
   const getIcon = () => {
     switch (item.type) {
@@ -186,19 +216,19 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
           </Badge>
         </div>
 
-        {/* Handshake UI */}
-        {marketItem && (
-          <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3">
+        {/* --- HANDSHAKE UI (Rentals Only) --- */}
+        {requiresHandshake && marketItem && (
+          <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3 animate-in fade-in">
+            {/* Status Steps */}
             <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pb-1">
                 <span className={cn(marketItem.handoverEvidenceUrl ? "text-green-500 font-bold" : "")}>1. Proof</span>
                 <div className="h-[1px] flex-1 bg-border mx-2" />
-                <span className={cn(marketItem.appwriteStatus === 'active' || marketItem.appwriteStatus === 'completed' ? "text-blue-500 font-bold" : "")}>
-                    {item.type === 'Transaction' ? '2. Sold' : '2. Active'}
-                </span>
+                <span className={cn(marketItem.appwriteStatus === 'active' ? "text-blue-500 font-bold" : "")}>2. Active</span>
                 <div className="h-[1px] flex-1 bg-border mx-2" />
                 <span className={cn(marketItem.status.includes('Completed') ? "text-green-500 font-bold" : "")}>3. Done</span>
             </div>
 
+            {/* Evidence Row */}
             <div className="flex items-center gap-3">
                 <div className={cn("flex-1 p-2 rounded border text-xs flex items-center justify-between", marketItem.handoverEvidenceUrl ? "bg-green-500/10 border-green-500/20" : "bg-card border-dashed")}>
                     <div className="flex items-center gap-2">
@@ -215,7 +245,7 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
                 </div>
             </div>
 
-            {/* Actions */}
+            {/* Handshake Actions */}
             {item.isUserProvider && !marketItem.handoverEvidenceUrl && (marketItem.appwriteStatus === 'commission_deducted' || marketItem.appwriteStatus === 'initiated') && (
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-bold" onClick={() => { setEvidenceMode("upload_handover"); setShowEvidenceModal(true); }}>
                     <Camera className="h-3 w-3 mr-2" /> Upload Handover Proof
@@ -225,8 +255,8 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
             {!item.isUserProvider && marketItem.handoverEvidenceUrl && marketItem.appwriteStatus !== 'active' && !marketItem.appwriteStatus.includes('completed') && (
                 <div className="flex gap-2">
                     <Button variant="outline" className="flex-1 h-9 text-xs" onClick={() => { setEvidenceMode("view_handover"); setShowEvidenceModal(true); }}>View Proof</Button>
-                    <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-bold" onClick={() => onAction("accept_handover", item.id, { type: item.type, productId: marketItem.productId })}>
-                        <Handshake className="h-3 w-3 mr-2" /> {item.type === 'Transaction' ? 'Accept & Buy' : 'Accept & Start'}
+                    <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-bold" onClick={() => onAction("accept_handover", item.id, { type: item.type })}>
+                        <Handshake className="h-3 w-3 mr-2" /> Accept & Start
                     </Button>
                 </div>
             )}
@@ -244,19 +274,49 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
                     </div>
                 </div>
             )}
-
-            {marketItem.isDisputed && (
-                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-start gap-3">
-                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-xs font-bold text-destructive">Dispute Reported</p>
-                        <p className="text-[10px] text-destructive/80 mt-1">Admin will review the evidence.</p>
-                    </div>
-                </div>
-            )}
           </div>
         )}
 
+        {/* --- SIMPLE FLOW UI (Sales - No Evidence) --- */}
+        {!requiresHandshake && marketItem && !marketItem.status.includes('Completed') && (
+            <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
+                {item.isUserProvider && (marketItem.appwriteStatus === 'commission_deducted' || marketItem.appwriteStatus === 'initiated') && (
+                    <Button className="bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-bold" onClick={() => onAction("mark_delivered", item.id)}>
+                        <PackageCheck className="h-3 w-3 mr-2" /> Mark Delivered
+                    </Button>
+                )}
+                {!item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
+                    <Button className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs font-bold" onClick={() => onAction("confirm_receipt_sale", item.id, { productId: marketItem.productId })}>
+                        <CheckCircle className="h-3 w-3 mr-2" /> Confirm Receipt
+                    </Button>
+                )}
+                {item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
+                    <span className="text-xs text-muted-foreground italic">Waiting for buyer confirmation...</span>
+                )}
+                {!item.isUserProvider && marketItem.appwriteStatus === 'initiated' && (
+                    <span className="text-xs text-muted-foreground italic">Waiting for seller to deliver...</span>
+                )}
+            </div>
+        )}
+
+        {/* --- FOOD ORDER ACTIONS --- */}
+        {item.type === "Food Order" && !item.status.includes("Delivered") && (
+             <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
+                {item.isUserProvider ? (
+                    <>
+                        {(item as any).orderStatus === "Pending Confirmation" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Confirmed" })}>Accept</Button>}
+                        {(item as any).orderStatus === "Confirmed" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Preparing" })}>Start Cooking</Button>}
+                        {(item as any).orderStatus === "Preparing" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Out for Delivery" })}>Dispatch</Button>}
+                    </>
+                ) : (
+                    (item as any).orderStatus === "Out for Delivery" && (
+                        <Button size="sm" className="bg-green-600" onClick={() => onAction("food_update", item.id, { status: "Delivered" })}>Confirm Receipt</Button>
+                    )
+                )}
+             </div>
+        )}
+
+        {/* Modals & Footer */}
         {showEvidenceModal && marketItem && (
             <EvidenceModal
                 isOpen={showEvidenceModal}
@@ -268,7 +328,7 @@ const TrackingCard = ({ item, onAction }: { item: TrackingItem, onAction: (actio
             />
         )}
 
-        <div className="flex justify-between items-center text-[10px] text-muted-foreground/70 mt-1">
+        <div className="flex justify-between items-center text-[10px] text-muted-foreground/70 mt-3 pt-2 border-t border-border/30">
            <span>Role: {item.isUserProvider ? "Seller" : "Buyer"}</span>
            <span className="font-mono opacity-50">ID: {item.id.substring(0, 6)}</span>
         </div>
@@ -299,7 +359,7 @@ const TrackingPage = () => {
         type: doc.type === 'product' ? 'Transaction' : 'Rental', 
         productId: doc.productId,
         productTitle: doc.productTitle,
-        description: doc.productTitle, // Map description for base type
+        description: doc.productTitle,
         status: mapAppwriteStatusToTrackingStatus(doc.status),
         appwriteStatus: doc.status,
         date: new Date(doc.$createdAt).toLocaleDateString(),
@@ -320,8 +380,8 @@ const TrackingPage = () => {
         id: o.$id, 
         type: "Food Order", 
         offeringTitle: o.offeringTitle,
-        description: o.offeringTitle, // Map description for base type
-        status: o.status, // Unified status
+        description: o.offeringTitle,
+        status: o.status,
         orderStatus: o.status,
         totalAmount: o.totalAmount, 
         providerName: o.providerName, 
@@ -347,49 +407,62 @@ const TrackingPage = () => {
   // --- ACTIONS ---
   const handleAction = async (action: string, id: string, payload?: any) => {
     try {
+        // --- HANDSHAKE ACTIONS (Rentals Only) ---
         if (action === "upload_handover_evidence") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
                 handoverEvidenceUrl: payload.url
             });
-            toast.success("Proof uploaded. Waiting for buyer acceptance.");
+            toast.success("Proof uploaded. Ask buyer to accept.");
         }
         else if (action === "accept_handover") {
-            const isSale = payload?.type === "Transaction";
-            const productId = payload?.productId;
+            // Only Rentals reach here in the new UI logic
+            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
+                status: "active"
+            });
+            toast.success("Rental started!");
+        }
+        else if (action === "report_damage_with_evidence") {
+            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
+                status: "disputed", isDisputed: true, returnEvidenceUrl: payload.url
+            });
+            toast.error("Dispute reported.");
+        }
 
-            if (isSale) {
-                await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                    status: "completed"
-                });
-                if (productId) {
-                    try {
-                        await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, productId);
-                        toast.success("Purchase confirmed! Listing removed.");
-                    } catch (delError) { console.error(delError); }
-                } else {
-                    toast.success("Transaction completed.");
-                }
+        // --- SIMPLE SALE ACTIONS (Transactions) ---
+        else if (action === "mark_delivered") {
+            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
+                status: "seller_confirmed_delivery"
+            });
+            toast.success("Marked as Delivered.");
+        }
+        else if (action === "confirm_receipt_sale") {
+            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
+                status: "completed"
+            });
+            if (payload?.productId) {
+                try {
+                    await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, payload.productId);
+                    toast.success("Transaction Complete! Listing removed.");
+                } catch (delError) { console.error("Listing delete failed", delError); }
             } else {
-                await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                    status: "active"
-                });
-                toast.success("Rental accepted! Liability period started.");
+                toast.success("Transaction Complete!");
             }
         }
+
+        // --- GENERIC COMPLETION (Rentals) ---
         else if (action === "confirm_completion") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
                 status: "completed"
             });
-            toast.success("Transaction closed successfully.");
+            toast.success("Rental Closed.");
         }
-        else if (action === "report_damage_with_evidence") {
-            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, {
-                status: "disputed",
-                isDisputed: true,
-                returnEvidenceUrl: payload.url,
-                disputeReason: "Item returned with damage."
+
+        // --- FOOD ACTIONS ---
+        else if (action === "food_update") {
+            await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, id, {
+                status: payload.status
             });
-            toast.error("Dispute raised. Trust Scores under review.");
+            toast.success(`Order updated: ${payload.status}`);
         }
         
         refreshData();
