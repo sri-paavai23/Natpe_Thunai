@@ -31,6 +31,7 @@ export const useMarketListings = () => {
         ]
       );
 
+      // FIX: Added missing properties (sellerRating, collegeName) to match Product type
       const mappedProducts = response.documents.map((doc: any) => ({
         $id: doc.$id,
         title: doc.title,
@@ -46,7 +47,10 @@ export const useMarketListings = () => {
         sellerUpiId: doc.sellerUpiId,
         $createdAt: doc.$createdAt,
         ambassadorDelivery: doc.ambassadorDelivery,
-      })) as Product[];
+        // Added these two lines:
+        sellerRating: doc.sellerRating || 0, 
+        collegeName: doc.collegeName
+      })) as unknown as Product[]; // Type assertion to ensure compatibility
 
       setProducts(mappedProducts);
       setError(null);
