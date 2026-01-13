@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom"; // Use router for navigation
+import { useNavigate } from "react-router-dom"; 
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { 
-  Truck, IndianRupee, Loader2, Utensils, CheckCircle, 
+  IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
   AlertTriangle, Eye, ShieldCheck, XCircle, PackageCheck,
   MessageCircle, Briefcase, Wallet, Lock
@@ -178,6 +178,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
 
   const initiatePayment = () => {
       if(!marketItem) return;
+      // Use UPI Intent
       const upiLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiEscrow&am=${marketItem.amount}&tn=Payment for ${marketItem.productTitle}`;
       window.open(upiLink, '_blank');
       setShowPaymentModal(true);
@@ -191,6 +192,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
       marketItem?.isDisputed && "border-l-destructive border-destructive/50"
     )}>
       <CardContent className="p-4">
+        {/* Header */}
         <div className="flex justify-between items-start mb-3">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-muted/50 rounded-xl border border-border/50">{getIcon()}</div>
@@ -206,8 +208,9 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
           </Badge>
         </div>
 
-        {/* --- CHAT BUTTON --- */}
-        <div className="mb-3 w-full">
+        {/* --- ACTIONS SECTION (Top) --- */}
+        <div className="mb-3 w-full space-y-2">
+            {/* Chat Button (Always Visible unless completed) */}
             <Button 
                 size="sm" 
                 variant="outline" 
@@ -218,9 +221,20 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                 {isCompleted ? <Lock className="h-3 w-3" /> : <MessageCircle className="h-4 w-4" />}
                 {isCompleted ? "Chat Closed" : `Chat with ${partnerName ? partnerName.split(' ')[0] : 'User'}`}
             </Button>
+
+            {/* Explicit Pay Button (Below Chat) */}
+            {marketItem && !item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
+                <Button 
+                    size="sm" 
+                    className="h-8 w-full bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold shadow-sm" 
+                    onClick={initiatePayment}
+                >
+                    <Wallet className="h-3 w-3" /> Pay Now (₹{marketItem.amount})
+                </Button>
+            )}
         </div>
 
-        {/* --- MARKET LOGIC --- */}
+        {/* --- MARKET / SERVICE / RENTAL LOGIC --- */}
         {marketItem && (
           <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3 animate-in fade-in">
             <div className="flex justify-between items-center text-xs">
@@ -229,12 +243,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             </div>
 
             <div className="flex flex-col gap-2">
-                {!item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
-                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white h-9 text-xs" onClick={initiatePayment}>
-                        <Wallet className="h-3 w-3 mr-2" /> Pay to Start
-                    </Button>
-                )}
-
+                {/* Handshake (Rentals Only) */}
                 {isRental && (
                     <>
                         {item.isUserProvider && !marketItem.handoverEvidenceUrl && marketItem.appwriteStatus === 'commission_deducted' && (
@@ -253,6 +262,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                     </>
                 )}
 
+                {/* Service/Freelance/Sale Flow */}
                 {!isRental && (
                     <>
                         {item.isUserProvider && (marketItem.appwriteStatus === 'payment_confirmed_to_developer' || marketItem.appwriteStatus === 'commission_deducted') && (
@@ -273,6 +283,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                     </>
                 )}
 
+                {/* Rental Return */}
                 {isRental && item.isUserProvider && marketItem.appwriteStatus === 'active' && (
                     <div className="flex gap-2 pt-2 border-t border-border/50">
                         <Button variant="destructive" className="flex-1 h-9 text-xs" onClick={() => { setEvidenceMode("upload_return"); setShowEvidenceModal(true); }}>Report Damage</Button>
@@ -283,6 +294,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
           </div>
         )}
 
+        {/* --- FOOD ACTIONS --- */}
         {item.type === "Food Order" && !item.status.includes("Delivered") && (
              <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
                 {item.isUserProvider ? (
@@ -297,6 +309,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
              </div>
         )}
 
+        {/* Modals */}
         {showEvidenceModal && marketItem && (
             <EvidenceModal isOpen={showEvidenceModal} onClose={() => setShowEvidenceModal(false)} title={evidenceMode.includes('upload') ? "Upload Proof" : "View Proof"} onUpload={handleEvidenceUpload} isUploading={isUploading} viewOnlyUrl={evidenceMode === 'view_handover' ? marketItem.handoverEvidenceUrl : undefined} />
         )}
@@ -355,13 +368,10 @@ const TrackingPage = () => {
   // --- SMART CHAT NAVIGATION ---
   const handleChatNavigation = async (item: TrackingItem) => {
     try {
-        // 1. Check if room exists for this transaction
         const rooms = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_CHAT_ROOMS_COLLECTION_ID, [Query.equal('transactionId', item.id)]);
-        
         if (rooms.documents.length > 0) {
             navigate(`/chat/${rooms.documents[0].$id}`);
         } else {
-            // 2. Create new room if not exists
             const marketItem = item as MarketTransactionItem;
             const buyerId = item.isUserProvider ? marketItem.buyerId : user!.$id;
             const providerId = item.isUserProvider ? user!.$id : marketItem.sellerId;
@@ -369,21 +379,11 @@ const TrackingPage = () => {
             const providerName = item.isUserProvider ? user!.name : marketItem.sellerName;
 
             const newRoom = await databases.createDocument(APPWRITE_DATABASE_ID, APPWRITE_CHAT_ROOMS_COLLECTION_ID, ID.unique(), {
-                transactionId: item.id,
-                serviceId: item.description,
-                buyerId: buyerId,
-                providerId: providerId,
-                buyerUsername: buyerName,
-                providerUsername: providerName,
-                status: "active",
-                collegeName: userProfile?.collegeName || "Unknown"
+                transactionId: item.id, serviceId: item.description, buyerId, providerId, buyerUsername: buyerName, providerUsername: providerName, status: "active", collegeName: userProfile?.collegeName || "Unknown"
             });
             navigate(`/chat/${newRoom.$id}`);
         }
-    } catch (e) {
-        console.error(e);
-        toast.error("Failed to open chat.");
-    }
+    } catch (e) { toast.error("Failed to open chat."); }
   };
 
   const handleAction = async (action: string, id: string, payload?: any) => {
