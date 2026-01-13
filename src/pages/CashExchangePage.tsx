@@ -2,16 +2,18 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, Handshake, PlusCircle, Users, Loader2, Info } from "lucide-react";
+import { DollarSign, Handshake, PlusCircle, Users, Loader2, Info, ArrowRightLeft, MapPin, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_CASH_EXCHANGE_COLLECTION_ID } from "@/lib/appwrite";
 import { ID, Models, Query } from "appwrite";
 import { useAuth } from "@/context/AuthContext";
@@ -19,375 +21,244 @@ import { cn } from "@/lib/utils";
 import CashExchangeListings from "@/components/CashExchangeListings";
 import DeletionInfoMessage from "@/components/DeletionInfoMessage";
 
-interface Contribution {
-  userId: string;
-  amount: number;
-}
-
 interface CashExchangeRequest extends Models.Document {
   type: "request" | "offer" | "group-contribution";
   amount: number;
-  commission: number;
   notes: string;
-  status: "Open" | "Accepted" | "Completed" | "Group Contribution";
+  status: "Open" | "Accepted" | "Completed";
   meetingLocation: string;
   meetingTime: string;
-  contributions?: Contribution[];
-  posterId: string;
+  isUrgent: boolean;
   posterName: string;
   collegeName: string;
 }
 
-const serializeContributions = (contributions: Contribution[]): string[] => {
-  return contributions.map(c => JSON.stringify(c));
-};
-
-const deserializeContributions = (contributions: string[] | undefined): Contribution[] => {
-  if (!contributions || !Array.isArray(contributions)) return [];
-  return contributions.map(c => {
-    try {
-      return JSON.parse(c);
-    } catch (e) {
-      console.error("Failed to parse contribution item:", c, e);
-      return { userId: "unknown", amount: 0 };
-    }
-  });
-};
-
 const CashExchangePage = () => {
   const { user, userProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<"requests" | "offers" | "group-contributions">("requests");
+  const [activeTab, setActiveTab] = useState<"need_cash" | "have_cash" | "split_bill">("need_cash");
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
+  
+  // Form States
   const [postType, setPostType] = useState<"request" | "offer" | "group-contribution">("request");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
-  const [meetingLocation, setMeetingLocation] = useState("");
-  const [meetingTime, setMeetingTime] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [exchangeRequests, setExchangeRequests] = useState<CashExchangeRequest[]>([]);
+  const [location, setLocation] = useState("");
+  const [time, setTime] = useState("");
+  const [isUrgent, setIsUrgent] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  // Common Campus Locations
+  const SAFE_SPOTS = ["Main Canteen", "Library Entrance", "Admin Block", "Hostel Gate", "Coffee Shop", "Sports Ground"];
+
+  useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const fetchRequests = useCallback(async () => {
-    if (!userProfile?.collegeName) {
-      setLoading(false);
-      setExchangeRequests([]);
-      return;
-    }
-
+    if (!userProfile?.collegeName) return;
     setLoading(true);
     try {
       const response = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
-        [
-          Query.orderDesc('$createdAt'),
-          Query.equal('collegeName', userProfile.collegeName)
-        ]
+        [Query.orderDesc('$createdAt'), Query.equal('collegeName', userProfile.collegeName)]
       );
-      
-      const deserializedRequests = (response.documents as any[]).map(doc => ({
-        ...doc,
-        contributions: deserializeContributions(doc.contributions || []),
-      })) as unknown as CashExchangeRequest[];
-      setExchangeRequests(deserializedRequests);
-    } catch (error) {
-      console.error("Error fetching cash exchange data:", error);
-      toast.error("Failed to load cash exchange listings.");
-    } finally {
-      setLoading(false);
-    }
+      setExchangeRequests(response.documents as unknown as CashExchangeRequest[]);
+    } catch (e) { toast.error("Failed to load listings."); } 
+    finally { setLoading(false); }
   }, [userProfile?.collegeName]);
 
-  useEffect(() => {
-    fetchRequests();
-
-    if (!userProfile?.collegeName) return;
-
-    const unsubscribe = databases.client.subscribe(
-      `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CASH_EXCHANGE_COLLECTION_ID}.documents`,
-      (response) => {
-        const payload = response.payload as any;
-        
-        if (payload.collegeName !== userProfile.collegeName) {
-            return;
-        }
-
-        setExchangeRequests(prev => {
-          const existingIndex = prev.findIndex(r => r.$id === payload.$id);
-          
-          const deserializedPayload: CashExchangeRequest = {
-            ...payload,
-            contributions: deserializeContributions(payload.contributions as string[] || []),
-          };
-
-          if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-            if (existingIndex === -1) {
-              toast.info(`New cash exchange post: ${deserializedPayload.type} for ₹${deserializedPayload.amount}`);
-              return [deserializedPayload, ...prev];
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-            if (existingIndex !== -1) {
-              toast.info(`Cash exchange updated: ${deserializedPayload.type} status is now ${deserializedPayload.status}`);
-              return prev.map(r => r.$id === deserializedPayload.$id ? deserializedPayload : r);
-            }
-          } else if (response.events.includes("databases.*.collections.*.documents.*.delete")) {
-            if (existingIndex !== -1) {
-              toast.info(`Cash exchange post removed.`);
-              return prev.filter(r => r.$id !== deserializedPayload.$id);
-            }
-          }
-          return prev;
-        });
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [fetchRequests, userProfile?.collegeName]);
-
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
   const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !userProfile) {
-      toast.error("You must be logged in to post.");
-      return;
-    }
-
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Please enter a valid amount.");
-      return;
-    }
-    if (!notes.trim() || !meetingLocation.trim() || !meetingTime.trim()) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
+    if (!user) { toast.error("Login required."); return; }
+    
+    if (!amount || !location || !time) { toast.error("Please fill all fields."); return; }
 
     setIsPosting(true);
     try {
-      const commissionAmount = 0; 
-
-      const newRequestData = {
-        type: postType,
-        amount: parsedAmount,
-        commission: commissionAmount,
-        notes: notes.trim(),
-        status: postType === "group-contribution" ? "Group Contribution" : "Open",
-        meetingLocation: meetingLocation.trim(),
-        meetingTime: meetingTime.trim(),
-        contributions: postType === "group-contribution" ? serializeContributions([]) : undefined,
-        posterId: user.$id,
-        posterName: user.name,
-        collegeName: userProfile.collegeName,
-      };
-
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
         ID.unique(),
-        newRequestData
+        {
+          type: postType,
+          amount: parseFloat(amount),
+          notes: notes,
+          status: "Open",
+          meetingLocation: location,
+          meetingTime: time,
+          isUrgent: isUrgent,
+          posterId: user.$id,
+          posterName: user.name,
+          collegeName: userProfile?.collegeName
+        }
       );
-
-      toast.success(`Your ${postType.replace('-', ' ')} for ₹${parsedAmount} has been posted!`);
+      toast.success("Posted successfully!");
       setIsPostDialogOpen(false);
-      setAmount("");
-      setNotes("");
-      setMeetingLocation("");
-      setMeetingTime("");
-      setActiveTab(postType === "offer" ? "offers" : (postType === "group-contribution" ? "group-contributions" : "requests"));
-    } catch (error: any) {
-      console.error("Error posting cash exchange:", error);
-      toast.error(error.message || "Failed to post cash exchange request.");
-    } finally {
-      setIsPosting(false);
-    }
+      fetchRequests();
+      // Reset Form
+      setAmount(""); setNotes(""); setLocation(""); setTime(""); setIsUrgent(false);
+    } catch (e: any) { toast.error(e.message || "Failed to post."); } 
+    finally { setIsPosting(false); }
   };
 
-  const filteredRequests = (type: "request" | "offer" | "group-contribution") => {
-    return exchangeRequests.filter(r => r.type === type);
+  const getFilteredListings = (tab: string) => {
+    if (tab === "need_cash") return exchangeRequests.filter(r => r.type === "request");
+    if (tab === "have_cash") return exchangeRequests.filter(r => r.type === "offer");
+    return exchangeRequests.filter(r => r.type === "group-contribution");
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Cash Exchange</h1>
-      <div className="max-w-md mx-auto space-y-6">
+    <div className="min-h-screen bg-background text-foreground p-4 pb-24">
+      <div className="max-w-xl mx-auto space-y-6">
         
-        {/* DISCLAIMER CARD */}
-        <Card className="bg-amber-50/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-card-foreground shadow-sm">
-          <CardContent className="p-4 flex gap-3">
-            <Info className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-1" />
-            <div className="text-sm text-amber-800 dark:text-amber-200">
-              <p className="font-semibold mb-1">Not for Money Lending</p>
-              This platform is strictly for <strong>Physical-to-Digital</strong> or <strong>Digital-to-Physical</strong> cash exchange between students (e.g., "I have ₹500 cash, need UPI"). Do not use this for loans or borrowing.
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-secondary-neon" /> Your Cash Flow
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-3">
+        {/* Header */}
+        <div className="text-center space-y-2">
+            <h1 className="text-3xl font-black italic tracking-tighter">
+                CASH <span className="text-secondary-neon">POINT</span>
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Post your cash requirements or offers for your college. This is a non-commissioned service.
+                Safe P2P cash exchange within {userProfile?.collegeName || "campus"}.
             </p>
-            <Button
-              className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-              onClick={() => setIsPostDialogOpen(true)}
-            >
-              <PlusCircle className="mr-2 h-4 w-4" /> Post New Request/Offer
-            </Button>
-          </CardContent>
-        </Card>
+        </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "requests" | "offers" | "group-contributions")} className="w-full">
-          <TabsList className="flex w-full overflow-x-auto whitespace-nowrap bg-primary-blue-light text-primary-foreground h-auto p-1 rounded-md shadow-sm scrollbar-hide">
-            <TabsTrigger value="requests" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Requests</TabsTrigger>
-            <TabsTrigger value="offers" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Offers</TabsTrigger>
-            <TabsTrigger value="group-contributions" className="flex-shrink-0 px-3 py-1.5 text-sm font-medium transition-all data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm">Group</TabsTrigger>
-          </TabsList>
-          <div className="mt-4 space-y-4">
-            <TabsContent value="requests">
-              <Card className="bg-card border-border">
-                <CardContent className="p-4 space-y-3">
-                  <CashExchangeListings listings={filteredRequests("request")} isLoading={loading} type="request" />
+        {/* Action Cards */}
+        <div className="grid grid-cols-2 gap-3">
+            <Card 
+                className="bg-green-50/50 hover:bg-green-100/50 border-green-200 cursor-pointer transition-colors"
+                onClick={() => { setPostType("offer"); setIsPostDialogOpen(true); }}
+            >
+                <CardContent className="p-4 flex flex-col items-center text-center gap-2">
+                    <div className="p-2 bg-green-100 rounded-full text-green-600"><DollarSign className="h-6 w-6"/></div>
+                    <div>
+                        <h3 className="font-bold text-green-900">I Have Cash</h3>
+                        <p className="text-xs text-green-700">Give physical cash, get UPI.</p>
+                    </div>
                 </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="offers">
-              <Card className="bg-card border-border">
-                <CardContent className="p-4 space-y-3">
-                  <CashExchangeListings listings={filteredRequests("offer")} isLoading={loading} type="offer" />
+            </Card>
+            <Card 
+                className="bg-blue-50/50 hover:bg-blue-100/50 border-blue-200 cursor-pointer transition-colors"
+                onClick={() => { setPostType("request"); setIsPostDialogOpen(true); }}
+            >
+                <CardContent className="p-4 flex flex-col items-center text-center gap-2">
+                    <div className="p-2 bg-blue-100 rounded-full text-blue-600"><ArrowRightLeft className="h-6 w-6"/></div>
+                    <div>
+                        <h3 className="font-bold text-blue-900">I Need Cash</h3>
+                        <p className="text-xs text-blue-700">Send UPI, get physical cash.</p>
+                    </div>
                 </CardContent>
-              </Card>
+            </Card>
+        </div>
+
+        {/* Safety Banner */}
+        <div className="bg-secondary/10 border border-secondary/20 rounded-lg p-3 flex items-start gap-3 text-xs text-muted-foreground">
+            <Info className="h-4 w-4 shrink-0 mt-0.5 text-secondary-neon" />
+            <p>Exchange only in public campus spots (Canteen, Library). Never transfer money before meeting.</p>
+        </div>
+
+        {/* Listings Tabs */}
+        <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1">
+                <TabsTrigger value="need_cash" className="text-xs font-bold">Requests</TabsTrigger>
+                <TabsTrigger value="have_cash" className="text-xs font-bold">Offers</TabsTrigger>
+                <TabsTrigger value="split_bill" className="text-xs font-bold">Group Split</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value={activeTab} className="mt-4">
+                <CashExchangeListings 
+                    listings={getFilteredListings(activeTab)} 
+                    isLoading={loading} 
+                    type={activeTab === 'split_bill' ? 'group-contribution' : (activeTab === 'need_cash' ? 'request' : 'offer')} 
+                />
             </TabsContent>
-            <TabsContent value="group-contributions">
-              <Card className="bg-card border-border">
-                <CardContent className="p-4 space-y-3">
-                  <CashExchangeListings listings={filteredRequests("group-contribution")} isLoading={loading} type="group-contribution" />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </div>
         </Tabs>
+
+        {/* Post Dialog */}
+        <Dialog open={isPostDialogOpen} onOpenChange={setIsPostDialogOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>
+                        {postType === 'request' ? "Request Physical Cash" : postType === 'offer' ? "Offer Physical Cash" : "Create Group Pot"}
+                    </DialogTitle>
+                </DialogHeader>
+                
+                <form onSubmit={handlePostSubmit} className="space-y-4 py-2">
+                    <DeletionInfoMessage />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Amount (₹)</Label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-muted-foreground">₹</span>
+                                <Input 
+                                    type="number" 
+                                    placeholder="500" 
+                                    className="pl-7" 
+                                    value={amount} 
+                                    onChange={(e) => setAmount(e.target.value)} 
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Time</Label>
+                            <div className="relative">
+                                <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="e.g. 2 PM Today" 
+                                    className="pl-9" 
+                                    value={time} 
+                                    onChange={(e) => setTime(e.target.value)} 
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Safe Meeting Spot</Label>
+                        <Select value={location} onValueChange={setLocation}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a public location" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {SAFE_SPOTS.map(spot => <SelectItem key={spot} value={spot}>{spot}</SelectItem>)}
+                                <SelectItem value="other">Other (Public Spot)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Notes (Optional)</Label>
+                        <Textarea 
+                            placeholder="e.g. Need only ₹100 notes / GPay accepted" 
+                            className="h-20 resize-none" 
+                            value={notes} 
+                            onChange={(e) => setNotes(e.target.value)} 
+                        />
+                    </div>
+
+                    {postType === 'request' && (
+                        <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-100 dark:border-red-900">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-red-600" />
+                                <Label className="text-red-700 cursor-pointer" htmlFor="urgent-mode">Urgent Need?</Label>
+                            </div>
+                            <Switch id="urgent-mode" checked={isUrgent} onCheckedChange={setIsUrgent} />
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button type="submit" className="w-full bg-secondary-neon font-bold text-primary-foreground" disabled={isPosting}>
+                            {isPosting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Post Listing"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+
       </div>
       <MadeWithDyad />
-
-      <Dialog open={isPostDialogOpen} onOpenChange={setIsPostDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Post New Cash Exchange</DialogTitle>
-          </DialogHeader>
-          <DeletionInfoMessage />
-          <form onSubmit={handlePostSubmit} className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
-              <Label htmlFor="postType" className="text-left sm:text-right text-foreground">
-                Type
-              </Label>
-              <div className="col-span-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant={postType === "request" ? "default" : "outline"}
-                  onClick={() => setPostType("request")}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs"
-                >
-                  Request Cash
-                </Button>
-                <Button
-                  type="button"
-                  variant={postType === "offer" ? "default" : "outline"}
-                  onClick={() => setPostType("offer")}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs"
-                >
-                  Offer Cash
-                </Button>
-                <Button
-                  type="button"
-                  variant={postType === "group-contribution" ? "default" : "outline"}
-                  onClick={() => setPostType("group-contribution")}
-                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground text-xs"
-                >
-                  Group Contribution
-                </Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
-              <Label htmlFor="amount" className="text-left sm:text-right text-foreground">
-                Amount (₹)
-              </Label>
-              <Input
-                id="amount"
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                placeholder="e.g., 1000"
-                min="1"
-                required
-                disabled={isPosting}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
-              <Label htmlFor="notes" className="text-left sm:text-right text-foreground">
-                Notes
-              </Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                placeholder="e.g., Need cash for books by tomorrow."
-                required
-                disabled={isPosting}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
-              <Label htmlFor="meetingLocation" className="text-left sm:text-right text-foreground">
-                Meeting Location
-              </Label>
-              <Input
-                id="meetingLocation"
-                type="text"
-                value={meetingLocation}
-                onChange={(e) => setMeetingLocation(e.target.value)}
-                className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                placeholder="e.g., Library Entrance, Canteen"
-                required
-                disabled={isPosting}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-4 items-center">
-              <Label htmlFor="meetingTime" className="text-left sm:text-right text-foreground">
-                Meeting Time
-              </Label>
-              <Input
-                id="meetingTime"
-                type="text"
-                value={meetingTime}
-                onChange={(e) => setMeetingTime(e.target.value)}
-                className="col-span-3 bg-input text-foreground border-border focus:ring-ring focus:border-ring"
-                placeholder="e.g., Tomorrow 3 PM, Today 1 PM"
-                required
-                disabled={isPosting}
-              />
-            </div>
-            <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsPostDialogOpen(false)} disabled={isPosting} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">Cancel</Button>
-              <Button type="submit" disabled={isPosting} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-                {isPosting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                Post
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
