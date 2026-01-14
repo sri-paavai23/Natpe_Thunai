@@ -8,7 +8,6 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Loader2, ShoppingCart, Sparkles } from "lucide-react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-// FIX: Import from your centralized config to keep Auth Session active
 import { databases, functions, APPWRITE_DATABASE_ID } from "@/lib/appwrite"; 
 
 // --- CONFIGURATION ---
@@ -57,44 +56,68 @@ const TheEditPage = () => {
   const handleLootClick = async (listingId: string) => {
     if (!userProfile?.$id) return toast.error("Please login to access deals.");
     
+    // 1. OPEN WINDOW IMMEDIATELY (Bypasses Popup Blocker)
+    // We open a blank tab first, then fill it with the URL later.
+    const newWindow = window.open("", "_blank");
+    if (newWindow) {
+        newWindow.document.write(`
+            <html>
+                <body style="background-color: #000; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+                    <h2>Generating your loot link... please wait...</h2>
+                </body>
+            </html>
+        `);
+    }
+
     setActiveGen(listingId);
+
     try {
-      // FIX: Using the imported 'functions' instance which has the user's session
       const result = await functions.createExecution(
-        FUNCTION_ID,                  // functionId
-        JSON.stringify({              // body (Stringified JSON)
+        FUNCTION_ID,                  
+        JSON.stringify({              
           listingId: listingId, 
           userId: userProfile.$id 
         }), 
-        false,                        // async (false = wait for response)
-        '/',                          // path
-        ExecutionMethod.POST          // method (Explicitly POST to allow body)
+        false,                       
+        '/',                          
+        ExecutionMethod.POST          
       );
       
       const responseBody = result.responseBody;
       
-      // Parse the response safely
       let data;
       try {
           data = JSON.parse(responseBody);
       } catch (e) {
-          console.error("JSON Parse Error:", responseBody);
+          if (newWindow) newWindow.close(); // Close if error
           throw new Error("Invalid response from server");
       }
       
       if (result.responseStatusCode >= 400) {
+          if (newWindow) newWindow.close();
           throw new Error(data.error || "Function execution failed");
       }
 
-      if (data.success || data.cuelink) {
-        window.open(data.cuelink, "_blank");
-        toast.success("Link generated!");
+      // FIX: Check for 'cueLink' (camelCase) to match backend
+      const finalLink = data.cueLink || data.cuelink || data.url;
+
+      if (finalLink) {
+        // 2. REDIRECT THE OPENED WINDOW
+        if (newWindow) {
+            newWindow.location.href = finalLink;
+        } else {
+            // Fallback if popup was totally blocked (rare with the trick above)
+            window.location.href = finalLink; 
+        }
+        toast.success("Redirecting to loot!");
       } else {
-        console.error("SERVER ERROR:", data); 
-        toast.error(`Failed: ${data.error || "Unknown Error"}`); 
+        if (newWindow) newWindow.close();
+        console.error("SERVER RESPONSE:", data); 
+        toast.error("Link generated but URL is missing."); 
       }
 
     } catch (err: any) {
+      if (newWindow) newWindow.close();
       console.error("Execution Error:", err);
       toast.error(err.message || "Failed to generate link");
     } finally {
