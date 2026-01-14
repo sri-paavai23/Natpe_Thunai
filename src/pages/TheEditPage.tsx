@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
-import { Loader2, ShoppingCart, Sparkles, ExternalLink } from "lucide-react"; // Added ExternalLink icon
+import { Loader2, ShoppingCart, Sparkles, ExternalLink } from "lucide-react"; 
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { databases, functions, APPWRITE_DATABASE_ID } from "@/lib/appwrite"; 
 
@@ -14,11 +14,27 @@ import { databases, functions, APPWRITE_DATABASE_ID } from "@/lib/appwrite";
 const COLLECTION_ID = "affiliate_listings";
 const FUNCTION_ID = "YOUR_FUNCTION_ID"; // <--- Replace with your actual Function ID
 
+// --- TYPE DEFINITIONS FOR MEDIAN ---
+// This allows TypeScript to recognize the median/gonative objects
+declare global {
+  interface Window {
+    median?: {
+      window: {
+        open: (url: string, type: 'external' | 'internal') => void;
+      };
+    };
+    gonative?: {
+      window: {
+        open: (url: string, type: 'external' | 'internal') => void;
+      };
+    };
+  }
+}
+
 interface Deal {
   $id: string;
   title: string;
   description: string;
-  // We support multiple casing variations to be safe
   originalURL?: string; 
   originalurl?: string;
   image_url?: string;
@@ -31,7 +47,6 @@ const TheEditPage = () => {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Track which deal is loading, and which is ready
   const [activeGen, setActiveGen] = useState<string | null>(null);
   const [readyLinks, setReadyLinks] = useState<Record<string, string>>({});
 
@@ -57,40 +72,68 @@ const TheEditPage = () => {
     }
   }, []);
 
-  // --- MOBILE DEEP LINK TRIGGER ---
-  const triggerDeepLink = (url: string) => {
-    // 1. Create an invisible anchor tag
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = "_self"; // Keep in same tab to allow app interception
-    link.rel = "noopener noreferrer";
-    link.style.display = 'none';
+  // --- UNIVERSAL LINK OPENER ---
+  // Handles Desktop, Mobile Web, and Median Native App
+  const openLinkSafely = (url: string) => {
     
-    // 2. Add to body, click it, then remove it
-    document.body.appendChild(link);
-    link.click(); // This simulates a real user click
+    // 1. MEDIAN / GONATIVE APP DETECTION
+    // This is the specific fix for your "Unknown Error"
+    if (window.median) {
+        toast.success("Opening in App...");
+        window.median.window.open(url, 'external');
+        return;
+    } 
+    if (window.gonative) { // Support for older versions
+        toast.success("Opening in App...");
+        window.gonative.window.open(url, 'external');
+        return;
+    }
+
+    // 2. STANDARD MOBILE BROWSER (Chrome/Safari)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
-    setTimeout(() => {
-        if (document.body.contains(link)) {
-            document.body.removeChild(link);
-        }
-    }, 500);
+    if (isMobile) {
+        // Use Anchor Injection for deep linking support
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = "_self"; 
+        link.rel = "noopener noreferrer";
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            if (document.body.contains(link)) document.body.removeChild(link);
+        }, 500);
+        
+        // Fallback safety
+        setTimeout(() => {
+             window.location.href = url;
+        }, 1500);
+        
+        toast.success("Opening App...");
+    } 
+    // 3. DESKTOP BROWSER
+    else {
+        window.open(url, "_blank");
+    }
   };
 
   const handleLootClick = async (listingId: string) => {
-    // Check if we already generated this link (Avoid re-fetching)
     if (readyLinks[listingId]) {
-        triggerDeepLink(readyLinks[listingId]);
+        openLinkSafely(readyLinks[listingId]);
         return;
     }
 
     if (!userProfile?.$id) return toast.error("Please login to access deals.");
     
+    // PRE-LOADER WINDOW (Desktop Only)
+    // We skip this for Median/Mobile to avoid flashing screens
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isMedian = window.median || window.gonative;
     let newWindow: Window | null = null;
 
-    // DESKTOP: Open new tab immediately (Anti-popup blocker)
-    if (!isMobile) {
+    if (!isMobile && !isMedian) {
         newWindow = window.open("", "_blank");
         if (newWindow) {
             newWindow.document.write(`
@@ -131,29 +174,13 @@ const TheEditPage = () => {
       }
 
       const finalLink = data.cueLink;
-      
-      // Save link so we don't fetch again if clicked twice
       setReadyLinks(prev => ({ ...prev, [listingId]: finalLink }));
 
-      if (isMobile) {
-          // --- MOBILE APP OPENING LOGIC ---
-          toast.success("Opening App...");
-          
-          // Use the "Anchor Injection" method
-          triggerDeepLink(finalLink);
-          
-          // Fallback: If the app doesn't open in 2 seconds, redirect normally
-          setTimeout(() => {
-             window.location.href = finalLink;
-          }, 1500);
-
+      // HANDOFF TO OPENER
+      if (newWindow) {
+          newWindow.location.href = finalLink;
       } else {
-          // --- DESKTOP LOGIC ---
-          if (newWindow) {
-              newWindow.location.href = finalLink;
-          } else {
-              window.open(finalLink, "_blank");
-          }
+          openLinkSafely(finalLink);
       }
 
     } catch (err: any) {
