@@ -12,7 +12,7 @@ import { databases, functions, APPWRITE_DATABASE_ID } from "@/lib/appwrite";
 
 // --- CONFIGURATION ---
 const COLLECTION_ID = "affiliate_listings";
-const FUNCTION_ID = "generate_cuelink"; // Ensure this matches your Function ID
+const FUNCTION_ID = "6953da45001e5ab7ad94"; // Your Generate Cuelink Function ID
 
 interface Deal {
   $id: string;
@@ -30,6 +30,7 @@ const TheEditPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeGen, setActiveGen] = useState<string | null>(null);
 
+  // --- 1. FETCH DEALS ---
   useEffect(() => {
     const fetchListings = async () => {
       try {
@@ -40,6 +41,7 @@ const TheEditPage = () => {
         setDeals(response.documents as unknown as Deal[]);
       } catch (error: any) {
         console.error("Appwrite Error:", error);
+        toast.error("Failed to load deals.");
       } finally {
         setLoading(false);
       }
@@ -52,12 +54,11 @@ const TheEditPage = () => {
     }
   }, []);
 
+  // --- 2. HANDLE CLICK (GENERATE & REDIRECT) ---
   const handleLootClick = async (listingId: string) => {
     if (!userProfile?.$id) return toast.error("Please login to access deals.");
     
-    // 1. OPEN POPUP IMMEDIATELY
-    // This creates the window context *during* the click event, bypassing popup blockers.
-    // We display a loading state inside the new tab.
+    // A. OPEN POPUP IMMEDIATELY (Bypass Blocker)
     const newWindow = window.open("", "_blank");
     
     if (newWindow) {
@@ -87,6 +88,7 @@ const TheEditPage = () => {
     setActiveGen(listingId);
 
     try {
+      // B. CALL BACKEND FUNCTION
       const result = await functions.createExecution(
         FUNCTION_ID,                  
         JSON.stringify({              
@@ -103,21 +105,24 @@ const TheEditPage = () => {
           data = JSON.parse(result.responseBody);
       } catch (e) {
           if (newWindow) newWindow.close();
-          throw new Error("Invalid server response");
+          throw new Error("Invalid server response (Not JSON)");
       }
       
-      if (!data.success || !data.cueLink) {
+      // Check for backend errors (Status 400/500)
+      if (result.responseStatusCode >= 400 || !data.success) {
           if (newWindow) newWindow.close();
+          // This ensures the backend error message (e.g. "Missing ID") is thrown
           throw new Error(data.error || "Link generation failed");
       }
 
-      // 2. PERFORM REDIRECT
-      if (newWindow) {
-        // A. Primary Redirect (Javascript)
-        newWindow.location.href = data.cueLink;
+      // C. GET LINK & REDIRECT
+      const finalLink = data.cueLink || data.cuelink || data.url;
 
-        // B. Fallback UI (In case redirect is slow or blocked)
-        // We inject a clickable button into the popup just in case.
+      if (finalLink && newWindow) {
+        // Try JS Redirect
+        newWindow.location.href = finalLink;
+
+        // Fallback Button (in case JS redirect is blocked or slow)
         setTimeout(() => {
             if (newWindow && !newWindow.closed) {
                 newWindow.document.body.innerHTML = `
@@ -127,16 +132,22 @@ const TheEditPage = () => {
                     </style>
                     <h2>Almost there...</h2>
                     <p>If the deal didn't open automatically:</p>
-                    <a href="${data.cueLink}" class="btn">Click Here to Open Deal</a>
+                    <a href="${finalLink}" class="btn">Click Here to Open Deal</a>
                 `;
             }
         }, 1500);
+      } else {
+        if (newWindow) newWindow.close();
+        throw new Error("Link generated but URL is empty.");
       }
 
     } catch (err: any) {
       if (newWindow) newWindow.close();
       console.error("Execution Error:", err);
-      toast.error("Failed to open deal. Please try again.");
+      
+      // --- UPDATED CATCH BLOCK ---
+      // This will now show the exact error from the backend (e.g. "DB Error", "Invalid URL")
+      toast.error(`Error: ${err.message || "Failed to open deal"}`);
     } finally {
       setActiveGen(null);
     }
