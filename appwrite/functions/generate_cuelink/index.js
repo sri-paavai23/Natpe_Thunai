@@ -1,61 +1,59 @@
 const sdk = require('node-appwrite');
-const axios = require('axios');
 
-module.exports = async function (context) {
-    // 1. Log for debugging in Appwrite Console
-    context.log("Execution started");
+module.exports = async function ({ req, res, log, error }) {
+  // 1. Initialize Client
+  const client = new sdk.Client()
+    .setEndpoint(process.env.APPWRITE_ENDPOINT)
+    .setProject(process.env.APPWRITE_PROJECT_ID)
+    .setKey(process.env.APPWRITE_API_KEY);
 
-    // 2. Extract payload safely
-    let payload;
-    if (context.req.body) {
-        payload = typeof context.req.body === 'string' 
-            ? JSON.parse(context.req.body) 
-            : context.req.body;
-    } else {
-        payload = context.req.payload || {};
+  // 2. Validate Request Method
+  // GET requests cannot carry the JSON body we need.
+  if (req.method !== 'POST') {
+    return res.json({ 
+      success: false, 
+      error: 'Invalid Method. Please use POST and send JSON body.' 
+    }, 400);
+  }
+
+  // 3. Robust Body Parsing
+  let payload;
+  try {
+    if (!req.body) {
+      throw new Error('Request body is empty.');
     }
+    // Handle if Appwrite passes body as object or string
+    payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  } catch (e) {
+    error('JSON Parse Error: ' + e.message);
+    return res.json({ success: false, error: 'Invalid JSON format' }, 400);
+  }
 
-    const { listingId, userId } = payload;
+  // 4. Validate listingId
+  if (!payload.listingId) {
+    error('Validation Error: Missing listingId in request');
+    return res.json({ 
+      success: false, 
+      error: 'Missing listingId. Payload received: ' + JSON.stringify(payload) 
+    }, 400);
+  }
 
-    // 3. Validation
-    if (!listingId) {
-        context.error("Missing listingId in request");
-        return context.res.json({ ok: false, error: "Missing listingId" }, 400);
-    }
+  log(`Generating CueLink for Listing ID: ${payload.listingId}`);
 
-    try {
-        // 4. Initialize Appwrite Client
-        const client = new sdk.Client()
-            .setEndpoint('https://nyc.cloud.appwrite.io/v1') 
-            .setProject('690f3ae200352dd0534a')           
-            .setKey(process.env.APPWRITE_API_KEY);
+  try {
+    // --- YOUR GENERATION LOGIC HERE ---
+    // Example:
+    // const link = `https://your-app.com/cuelink/${payload.listingId}`;
     
-        const databases = new sdk.Databases(client);
+    // For now, returning a success dummy response
+    return res.json({
+      success: true,
+      cueLink: `generated-link-for-${payload.listingId}`, 
+      message: 'Link generated successfully'
+    });
 
-        // 5. Fetch the original URL from your collection
-        const document = await databases.getDocument(
-            process.env.DB_ID,
-            process.env.COLLECTION_ID,
-            listingId
-        );
-
-        // 6. Request the Affiliate Link from Cuelinks
-        const cuelinksRes = await axios.get('https://www.cuelinks.com/api/v2/links.json', {
-            params: {
-                url: document.original_url,
-                apikey: process.env.CUELINKS_API_KEY,
-                subid: `natpe_${userId}`
-            }
-        });
-
-        // 7. Return the link to your frontend
-        return context.res.json({
-            ok: true,
-            cuelink: cuelinksRes.data.results[0].cuelink
-        });
-
-    } catch (err) {
-        context.error("Execution failed: " + err.message); //
-        return context.res.json({ ok: false, error: err.message }, 500);
-    }
+  } catch (err) {
+    error('Logic Error: ' + err.message);
+    return res.json({ success: false, error: err.message }, 500);
+  }
 };
