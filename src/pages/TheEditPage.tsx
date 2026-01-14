@@ -12,7 +12,7 @@ import { databases, functions, APPWRITE_DATABASE_ID } from "@/lib/appwrite";
 
 // --- CONFIGURATION ---
 const COLLECTION_ID = "affiliate_listings";
-const FUNCTION_ID = "YOUR_FUNCTION_ID"; // <--- Replace with your actual Function ID
+const FUNCTION_ID = "6953da45001e5ab7ad94"; // <--- Replace with your actual Function ID
 
 // --- TYPE DEFINITIONS FOR MEDIAN ---
 // This allows TypeScript to recognize the median/gonative objects
@@ -262,7 +262,6 @@ const TheEditPage = () => {
         </div>
       )}
       <MadeWithDyad />
-      <p className="text-xs text-center text-red-500 mt-4">Version: Mobile Fix 2.0</p>
     </div>
   );
 };
