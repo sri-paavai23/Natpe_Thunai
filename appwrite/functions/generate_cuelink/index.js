@@ -1,54 +1,61 @@
-import { Client, ID } from "https://deno.land/x/appwrite@11.0.0/mod.ts";
+const sdk = require('node-appwrite');
+const axios = require('axios');
 
-Deno.serve(async (req) => {
-  if (req.method === "GET") {
-    return new Response("This is the generate_cuelink function. Send a POST request to generate a link.", {
-      headers: { "Content-Type": "text/plain" },
-    });
-  }
+module.exports = async function (context) {
+    // 1. Log for debugging in Appwrite Console
+    context.log("Execution started");
 
-  if (req.method === "POST") {
-    try {
-      // Initialize Appwrite client (optional for simple ID generation, but good practice)
-      // Ensure you set these environment variables in your Appwrite function settings
-      const client = new Client()
-        .setEndpoint(Deno.env.get("APPWRITE_ENDPOINT") ?? "https://cloud.appwrite.io/v1") // Your Appwrite Endpoint
-        .setProject(Deno.env.get("APPWRITE_PROJECT_ID")) // Your project ID
-        .setKey(Deno.env.get("APPWRITE_API_KEY")); // Your secret API key (for server-side operations)
-
-      // Generate a unique ID for the cuelink
-      const cuelinkId = ID.unique();
-
-      // You can add logic here to store this cuelink in an Appwrite database
-      // For example:
-      // const databases = new Databases(client);
-      // await databases.createDocument(
-      //   Deno.env.get("DATABASE_ID"), // Your database ID
-      //   Deno.env.get("COLLECTION_ID"), // Your collection ID for cuelinks
-      //   cuelinkId,
-      //   {
-      //     // Add any relevant data, e.g., userId, targetUrl, creationDate
-      //     createdAt: new Date().toISOString(),
-      //   }
-      // );
-
-      // Construct the cuelink URL (example, adjust as needed)
-      // Ensure APP_BASE_URL is set in your Appwrite function environment variables
-      const baseUrl = Deno.env.get("APP_BASE_URL") ?? "https://your-app.com";
-      const cuelink = `${baseUrl}/cuelink/${cuelinkId}`;
-
-      return new Response(JSON.stringify({ cuelinkId, cuelink }), {
-        headers: { "Content-Type": "application/json" },
-        status: 200,
-      });
-    } catch (error) {
-      console.error("Error generating cuelink:", error);
-      return new Response(JSON.stringify({ error: error.message }), {
-        headers: { "Content-Type": "application/json" },
-        status: 500,
-      });
+    // 2. Extract payload safely
+    let payload;
+    if (context.req.body) {
+        payload = typeof context.req.body === 'string' 
+            ? JSON.parse(context.req.body) 
+            : context.req.body;
+    } else {
+        payload = context.req.payload || {};
     }
-  }
 
-  return new Response("Method Not Allowed", { status: 405 });
-});
+    const { listingId, userId } = payload;
+
+    // 3. Validation
+    if (!listingId) {
+        context.error("Missing listingId in request");
+        return context.res.json({ ok: false, error: "Missing listingId" }, 400);
+    }
+
+    try {
+        // 4. Initialize Appwrite Client
+        const client = new sdk.Client()
+            .setEndpoint('https://nyc.cloud.appwrite.io/v1') 
+            .setProject('690f3ae200352dd0534a')           
+            .setKey(process.env.APPWRITE_API_KEY);
+    
+        const databases = new sdk.Databases(client);
+
+        // 5. Fetch the original URL from your collection
+        const document = await databases.getDocument(
+            process.env.DB_ID,
+            process.env.COLLECTION_ID,
+            listingId
+        );
+
+        // 6. Request the Affiliate Link from Cuelinks
+        const cuelinksRes = await axios.get('https://www.cuelinks.com/api/v2/links.json', {
+            params: {
+                url: document.original_url,
+                apikey: process.env.CUELINKS_API_KEY,
+                subid: `natpe_${userId}`
+            }
+        });
+
+        // 7. Return the link to your frontend
+        return context.res.json({
+            ok: true,
+            cuelink: cuelinksRes.data.results[0].cuelink
+        });
+
+    } catch (err) {
+        context.error("Execution failed: " + err.message); //
+        return context.res.json({ ok: false, error: err.message }, 500);
+    }
+};
