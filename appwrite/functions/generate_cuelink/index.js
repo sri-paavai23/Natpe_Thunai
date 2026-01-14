@@ -1,15 +1,16 @@
 const sdk = require('node-appwrite');
 
 module.exports = async function ({ req, res, log, error }) {
-  // 1. Initialize Client
   const client = new sdk.Client()
     .setEndpoint(process.env.APPWRITE_ENDPOINT)
     .setProject(process.env.APPWRITE_PROJECT_ID)
     .setKey(process.env.APPWRITE_API_KEY);
 
   const databases = new sdk.Databases(client);
-  const APPWRITE_DATABASE_ID = process.env.APPWRITE_DATABASE_ID;
-  const APPWRITE_PRODUCTS_COLLECTION_ID = 'affiliate_listings'; 
+  
+  // USE ENV VARIABLES (Hardcoded IDs often cause errors)
+  const DATABASE_ID = process.env.APPWRITE_DATABASE_ID;
+  const COLLECTION_ID = process.env.APPWRITE_PRODUCTS_COLLECTION_ID; 
 
   if (req.method !== 'POST') {
     return res.json({ success: false, error: 'Method must be POST' }, 400);
@@ -18,50 +19,47 @@ module.exports = async function ({ req, res, log, error }) {
   try {
     const payload = JSON.parse(req.body);
     const listingId = payload.listingId;
-    const pubId = process.env.CUELINKS_PUB_ID; 
+    const pubId = process.env.CUELINKS_PUB_ID;
 
-    if (!listingId) throw new Error("Missing listingId");
-    if (!pubId) throw new Error("Missing CUELINKS_PUB_ID env variable");
+    // Debug Logs
+    log(`Processing Listing: ${listingId}`);
+    log(`Using DB: ${DATABASE_ID}, Collection: ${COLLECTION_ID}`);
 
-    // 2. Fetch Original URL
-    const product = await databases.getDocument(
-      APPWRITE_DATABASE_ID,
-      APPWRITE_PRODUCTS_COLLECTION_ID,
-      listingId
-    );
+    if (!listingId) throw new Error("Missing listingId in payload");
+    if (!DATABASE_ID) throw new Error("Missing APPWRITE_DATABASE_ID env var");
+    if (!COLLECTION_ID) throw new Error("Missing APPWRITE_PRODUCTS_COLLECTION_ID env var");
+    if (!pubId) throw new Error("Missing CUELINKS_PUB_ID env var");
+
+    // 1. Fetch the document
+    let product;
+    try {
+        product = await databases.getDocument(DATABASE_ID, COLLECTION_ID, listingId);
+    } catch (dbError) {
+        // Specific error if document is missing or permission denied
+        throw new Error(`DB Error: ${dbError.message} (Check Collection ID & Permissions)`);
+    }
 
     let rawUrl = product.original_url;
 
     if (!rawUrl) {
-      throw new Error(`Product ${listingId} has empty original_url in DB.`);
+      throw new Error(`Listing found, but 'original_url' field is empty.`);
     }
 
-    // --- FIX: URL CLEANING & VALIDATION ---
-    // 1. Remove accidental spaces
+    // 2. Clean URL
     rawUrl = rawUrl.trim();
-
-    // 2. Add https:// if missing
     if (!/^https?:\/\//i.test(rawUrl)) {
       rawUrl = 'https://' + rawUrl;
-      log(`Auto-fixed URL to: ${rawUrl}`);
     }
 
-    // 3. Validate it is a real URL (throws error if invalid)
-    new URL(rawUrl); 
-
-    // 3. Generate Deep Link
+    // 3. Generate Link
     const encodedUrl = encodeURIComponent(rawUrl);
     const affiliateUrl = `https://links.cuelinks.com/cu/${pubId}?url=${encodedUrl}`;
 
-    log(`Success: ${affiliateUrl}`);
-
-    return res.json({
-      success: true,
-      cueLink: affiliateUrl
-    });
+    return res.json({ success: true, cueLink: affiliateUrl });
 
   } catch (err) {
-    error("Error: " + err.message);
-    return res.json({ success: false, error: "Invalid URL in database: " + err.message }, 500);
+    error("Function Failed: " + err.message);
+    // Return the ACTUAL error message to the frontend
+    return res.json({ success: false, error: err.message }, 500);
   }
 };
