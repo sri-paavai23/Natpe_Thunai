@@ -35,7 +35,7 @@ module.exports = async function ({ req, res, log, error }) {
 
     // --- FIX IS HERE: Use correct attribute name 'originalURL' ---
     // We check both 'originalURL' and 'originalurl' just to be safe
-    let rawUrl = product.originalURL || product.originalurl;
+    let rawUrl = product.originalUrl;
 
     if (!rawUrl) {
       // Log what attributes ARE available to help debug if it fails again
