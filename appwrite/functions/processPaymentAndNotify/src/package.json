@@ -1,0 +1,12 @@
+{
+  "name": "processPaymentAndNotify",
+  "version": "1.0.0",
+  "description": "Handle payment and commission",
+  "main": "src/index.js",
+  "dependencies": {
+    "node-appwrite": "^11.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
