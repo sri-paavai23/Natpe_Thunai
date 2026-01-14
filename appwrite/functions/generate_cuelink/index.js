@@ -1,10 +1,17 @@
 const sdk = require('node-appwrite');
 
 module.exports = async function ({ req, res, log, error }) {
-  // 1. Setup Client
+  // --- DEBUGGING: PRINT VARIABLES ---
+  const endpoint = process.env.APPWRITE_ENDPOINT;
+  const projectId = process.env.APPWRITE_PROJECT_ID;
+  
+  // We wrap them in brackets [] so you can see if there are spaces!
+  log(`DEBUG Check: Endpoint is [${endpoint}]`);
+  log(`DEBUG Check: ProjectID is [${projectId}]`);
+
   const client = new sdk.Client()
-    .setEndpoint(process.env.APPWRITE_ENDPOINT) 
-    .setProject(process.env.APPWRITE_PROJECT_ID)
+    .setEndpoint(endpoint)
+    .setProject(projectId)
     .setKey(process.env.APPWRITE_API_KEY);
 
   const databases = new sdk.Databases(client);
@@ -20,33 +27,21 @@ module.exports = async function ({ req, res, log, error }) {
     const listingId = payload.listingId;
     const pubId = process.env.CUELINKS_PUB_ID;
 
-    if (!listingId) throw new Error("Missing listingId");
-    
-    // --- BUG FIX: Use listDocuments instead of getDocument ---
-    // This avoids the "request body" error common in older SDKs/Node 18
+    // Use listDocuments for safety (bypasses "request body" bugs)
     const response = await databases.listDocuments(
         DATABASE_ID,
         COLLECTION_ID,
-        [
-            sdk.Query.equal('$id', listingId) // Find the exact ID
-        ]
+        [ sdk.Query.equal('$id', listingId) ]
     );
 
-    // Check if we found it
-    if (response.total === 0) {
-        throw new Error(`Product not found with ID: ${listingId}`);
-    }
+    if (response.total === 0) throw new Error("Product not found");
 
-    const product = response.documents[0];
-    let rawUrl = product.original_url;
+    let rawUrl = response.documents[0].original_url;
+    if (!rawUrl) throw new Error("Original URL is empty");
 
-    if (!rawUrl) throw new Error("Product has no original_url");
-
-    // 2. Clean URL
     rawUrl = rawUrl.trim();
     if (!/^https?:\/\//i.test(rawUrl)) rawUrl = 'https://' + rawUrl;
 
-    // 3. Generate Link
     const encodedUrl = encodeURIComponent(rawUrl);
     const affiliateUrl = `https://links.cuelinks.com/cu/${pubId}?url=${encodedUrl}`;
 
