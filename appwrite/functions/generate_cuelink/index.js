@@ -1,17 +1,10 @@
 const sdk = require('node-appwrite');
 
 module.exports = async function ({ req, res, log, error }) {
-  // --- DEBUGGING: PRINT VARIABLES ---
-  const endpoint = process.env.APPWRITE_ENDPOINT;
-  const projectId = process.env.APPWRITE_PROJECT_ID;
-  
-  // We wrap them in brackets [] so you can see if there are spaces!
-  log(`DEBUG Check: Endpoint is [${endpoint}]`);
-  log(`DEBUG Check: ProjectID is [${projectId}]`);
-
+  // 1. Initialize Client
   const client = new sdk.Client()
-    .setEndpoint(endpoint)
-    .setProject(projectId)
+    .setEndpoint(process.env.APPWRITE_ENDPOINT)
+    .setProject(process.env.APPWRITE_PROJECT_ID)
     .setKey(process.env.APPWRITE_API_KEY);
 
   const databases = new sdk.Databases(client);
@@ -27,21 +20,36 @@ module.exports = async function ({ req, res, log, error }) {
     const listingId = payload.listingId;
     const pubId = process.env.CUELINKS_PUB_ID;
 
-    // Use listDocuments for safety (bypasses "request body" bugs)
+    // Use listDocuments to avoid Node 18 compatibility bugs
     const response = await databases.listDocuments(
         DATABASE_ID,
         COLLECTION_ID,
         [ sdk.Query.equal('$id', listingId) ]
     );
 
-    if (response.total === 0) throw new Error("Product not found");
+    if (response.total === 0) {
+        throw new Error(`Product with ID ${listingId} not found.`);
+    }
 
-    let rawUrl = response.documents[0].original_url;
-    if (!rawUrl) throw new Error("Original URL is empty");
+    const product = response.documents[0];
 
+    // --- FIX IS HERE: Use correct attribute name 'originalURL' ---
+    // We check both 'originalURL' and 'originalurl' just to be safe
+    let rawUrl = product.originalURL || product.originalurl;
+
+    if (!rawUrl) {
+      // Log what attributes ARE available to help debug if it fails again
+      log(`Available attributes on document: ${Object.keys(product).join(', ')}`);
+      throw new Error("Found product, but 'originalURL' is empty or missing.");
+    }
+
+    // 2. Clean URL
     rawUrl = rawUrl.trim();
-    if (!/^https?:\/\//i.test(rawUrl)) rawUrl = 'https://' + rawUrl;
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      rawUrl = 'https://' + rawUrl;
+    }
 
+    // 3. Generate Link
     const encodedUrl = encodeURIComponent(rawUrl);
     const affiliateUrl = `https://links.cuelinks.com/cu/${pubId}?url=${encodedUrl}`;
 
