@@ -3,12 +3,11 @@
 import React from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, Radar, Banknote, Trophy } from "lucide-react";
 import BargainRequestsWidget from "@/components/BargainRequestsWidget";
-import UnlockingSoonCard from "@/components/UnlockingSoonCard"; // NEW IMPORT
+import UnlockingSoonCard from "@/components/UnlockingSoonCard";
 
 const ActivityPage = () => {
   const navigate = useNavigate();
@@ -22,6 +21,7 @@ const ActivityPage = () => {
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">The Buzz</h1>
       <div className="max-w-md mx-auto space-y-6">
+        
         {/* Lost & Found Card */}
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleActivityClick("/activity/lost-found", "Lost & Found")}>
           <CardHeader className="p-0 pb-2">
@@ -37,9 +37,12 @@ const ActivityPage = () => {
           </CardContent>
         </Card>
 
+        {/* Tracking Card */}
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleActivityClick("/activity/tracking", "Tracking")}>
           <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Tracking</CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Radar className="h-5 w-5 text-secondary-neon" /> Tracking
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <p className="text-muted-foreground">Monitor orders, service status, cancellation requests, and complaint notes in one place.</p>
@@ -49,24 +52,31 @@ const ActivityPage = () => {
         {/* Bargain Requests Widget */}
         <BargainRequestsWidget />
 
+        {/* Cash Exchange Card */}
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleActivityClick("/activity/cash-exchange", "Cash Exchange")}>
           <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Cash Exchange</CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Banknote className="h-5 w-5 text-secondary-neon" /> Cash Exchange
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <p className="text-muted-foreground">Post requirements, accept deals, and contribute to the developers if you are benefited through this service (non-commissioned).</p>
           </CardContent>
         </Card>
+
+        {/* Tournament Updates Card */}
         <Card className="bg-card p-4 rounded-lg shadow-md border border-border cursor-pointer hover:shadow-xl transition-shadow" onClick={() => handleActivityClick("/tournaments", "Tournament Updates")}>
           <CardHeader className="p-0 pb-2">
-            <CardTitle className="text-xl font-semibold text-card-foreground">Tournament Updates</CardTitle>
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-secondary-neon" /> Tournament Updates
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <p className="text-muted-foreground">Stay updated with esports dates, points tables, and winner announcements.</p>
           </CardContent>
         </Card>
 
-        {/* NEW: Unlocking Soon Card */}
+        {/* Unlocking Soon Card */}
         <UnlockingSoonCard />
       </div>
       <MadeWithDyad />
