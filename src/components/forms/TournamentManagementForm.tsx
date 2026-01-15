@@ -77,7 +77,7 @@ const TournamentManagementForm: React.FC<TournamentManagementFormProps> = ({ tou
         try {
           const res = await databases.listDocuments(
             APPWRITE_DATABASE_ID,
-            "", // Now uses the real ID from appwrite.ts
+            "registrations", // Now uses the real ID from appwrite.ts
             [
               // Make sure you have an Index in Appwrite named 'tournament_idx' (or anything) 
               // on the attribute 'tournamentId' for this to work.
