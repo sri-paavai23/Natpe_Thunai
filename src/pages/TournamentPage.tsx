@@ -6,21 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trophy, Calendar, DollarSign, Users, Gamepad2, Loader2, AlertTriangle, Edit, PlusCircle, Info, Clock } from "lucide-react";
+import { Trophy, Calendar, DollarSign, Users, Gamepad2, Loader2, AlertTriangle, Edit, PlusCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import DetailedTournamentRegistrationForm from "@/components/forms/DetailedTournamentRegistrationForm";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TOURNAMENTS_COLLECTION_ID } from "@/lib/appwrite";
 import TournamentManagementForm from "@/components/forms/TournamentManagementForm";
 import PostTournamentForm from "@/components/forms/PostTournamentForm";
 import { useTournamentData, Tournament, TeamStanding, Winner } from "@/hooks/useTournamentData";
 import { useAuth } from "@/context/AuthContext";
 
-// Ensure your Tournament interface includes upiId
-// If it's defined in a hook, you might need to extend it locally or update the hook
+// Define the Extended Interface
 interface ExtendedTournament extends Tournament {
-  upiId?: string; // Host's UPI ID for payments
+  upiId?: string;
 }
 
 const TournamentPage = () => {
@@ -42,17 +40,12 @@ const TournamentPage = () => {
   const activeStandings: TeamStanding[] = tournaments.find(t => t.standings && t.standings.length > 0)?.standings || [];
 
   const handleRegisterClick = (tournament: Tournament) => {
-    // Cast to ExtendedTournament to access upiId if your hook type doesn't have it yet
     setSelectedTournament(tournament as ExtendedTournament);
     setIsRegisterDialogOpen(true);
   };
 
-  // This function is passed to the form, but the FORM handles the payment redirect now
   const handleRegistrationSubmit = (data: { teamName: string; contactEmail: string; players: { name: string; inGameId: string }[] }) => {
     if (!selectedTournament) return;
-    
-    // In a real app, you would verify payment via backend webhooks here.
-    // Since this is P2P, we assume if they return to the app and click confirm, they paid.
     toast.success(`Registration request sent for "${data.teamName}"!`);
     setIsRegisterDialogOpen(false);
   };
@@ -167,7 +160,7 @@ const TournamentPage = () => {
           </CardContent>
         </Card>
 
-        {/* ... Ongoing, Winners, Standings, Completed Sections (No changes needed) ... */}
+        {/* Ongoing Tournaments Section */}
         {ongoingTournaments.length > 0 && (
             <Card className="bg-card text-card-foreground shadow-lg border-border">
                 <CardHeader className="p-4 pb-2">
@@ -190,6 +183,109 @@ const TournamentPage = () => {
                 </CardContent>
             </Card>
         )}
+
+        {/* Winner Announcements Section */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-secondary-neon" /> Winner Announcements
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-2">
+            {isLoading ? (
+              <p className="text-center text-muted-foreground py-4">Loading winners...</p>
+            ) : allWinners.length > 0 ? (
+              allWinners.map((winner, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-border last:border-b-0">
+                  <p className="text-foreground font-medium">{winner.tournament}</p>
+                  <p className="text-muted-foreground">Winner: <span className="font-semibold text-secondary-neon">{winner.winner}</span> (Prize: {winner.prize})</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No winners announced yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tournament Standings / Team Table Section */}
+        <Card className="bg-card text-card-foreground shadow-lg border-border">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+              <Users className="h-5 w-5 text-secondary-neon" /> Tournament Standings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            {isLoading ? (
+              <p className="text-center text-muted-foreground py-4">Loading standings...</p>
+            ) : activeStandings.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px] text-foreground">Rank</TableHead>
+                    <TableHead className="text-foreground">Team Name</TableHead>
+                    <TableHead className="text-foreground">Status</TableHead>
+                    <TableHead className="text-right text-foreground">Points</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeStandings.map((team) => (
+                    <TableRow key={team.rank}>
+                      <TableCell className="font-medium text-foreground">{team.rank}</TableCell>
+                      <TableCell className="text-foreground">{team.teamName}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={cn(
+                            "px-2 py-1 text-xs font-semibold",
+                            team.status === "1st" && "bg-secondary-neon text-primary-foreground",
+                            team.status === "2nd" && "bg-blue-500 text-white",
+                            team.status === "Eliminated" && "bg-destructive text-destructive-foreground",
+                            team.status === "Participating" && "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {team.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-foreground">{team.points}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No active tournament standings available.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Completed Tournaments Section */}
+        {completedTournaments.length > 0 && (
+          <Card className="bg-card text-card-foreground shadow-lg border-border">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-green-500" /> Past Tournaments
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-4">
+              {completedTournaments.map((tournament) => (
+                <div key={tournament.$id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border border-border rounded-md bg-background">
+                  <div>
+                    <h3 className="font-semibold text-foreground">{tournament.name}</h3>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Gamepad2 className="h-3 w-3" /> {tournament.game}
+                    </p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3" /> {tournament.date}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Hosted by: <span className="font-medium text-foreground">{tournament.posterName}</span>
+                    </p>
+                  </div>
+                  <Badge className="bg-green-500 text-white mt-3 sm:mt-0">Completed</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
       </div>
       <MadeWithDyad />
 
@@ -201,12 +297,12 @@ const TournamentPage = () => {
           </DialogHeader>
           {selectedTournament && (
             <DetailedTournamentRegistrationForm
+              tournamentId={selectedTournament.$id} // PASSED HERE
               tournamentName={selectedTournament.name}
               gameName={selectedTournament.game}
               fee={selectedTournament.fee}
               minPlayers={selectedTournament.minPlayers}
               maxPlayers={selectedTournament.maxPlayers}
-              // Pass the Host UPI ID to the form
               hostUpiId={selectedTournament.upiId || ""} 
               hostName={selectedTournament.posterName}
               onRegister={handleRegistrationSubmit}
