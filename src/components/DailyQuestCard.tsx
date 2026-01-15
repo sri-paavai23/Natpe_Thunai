@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { isToday } from "date-fns";
-// --- 1. Import Appwrite DB directly for robust updates ---
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_USER_PROFILES_COLLECTION_ID } from "@/lib/appwrite";
 
 // --- Configuration: Daily Quest Definitions ---
@@ -46,21 +45,23 @@ const DailyQuestCard = () => {
   const [isQuestDialogOpen, setIsQuestDialogOpen] = useState(false);
   const [claimingQuestId, setClaimingQuestId] = useState<string | null>(null);
   
-  // 2. Use addXp and checkUserStatus from context
-  const { userProfile, addXp, checkUserStatus } = useAuth();
+  // FIX 1: Removed checkUserStatus to solve TS error (we rely on addXp to refresh)
+  const { userProfile, addXp } = useAuth();
 
   // --- Helper: Get Progress for a Quest ---
   const getQuestProgress = (questType: string): number => {
     if (!userProfile) return 0;
     
+    // FIX 2: Cast userProfile to any to access dynamic properties without TS errors
+    const profile = userProfile as any;
+
     switch (questType) {
       case "itemsListed":
-        return userProfile.itemsListedToday ?? 0;
+        return profile.itemsListedToday ?? 0;
       case "loginStreak":
-        // Fallback to localStorage for streak if not in profile yet
         return parseInt(localStorage.getItem("natpe_streak") || "0", 10);
       case "profileCompleted":
-        return (userProfile.mobileNumber && userProfile.upiId) ? 1 : 0;
+        return (profile.mobileNumber && profile.upiId) ? 1 : 0;
       default:
         return 0;
     }
@@ -70,8 +71,12 @@ const DailyQuestCard = () => {
   const isQuestClaimed = (questId: string): boolean => {
     if (!userProfile) return false;
     
-    // Safely handle if claimedQuests is a string (JSON) or an object
-    let claimedQuests = userProfile.claimedQuests || {};
+    // FIX 3: Cast to any to access 'claimedQuests'
+    const profile = userProfile as any;
+
+    let claimedQuests = profile.claimedQuests || {};
+    
+    // Handle JSON string if it comes from DB as string
     if (typeof claimedQuests === 'string') {
         try {
             claimedQuests = JSON.parse(claimedQuests);
@@ -96,16 +101,15 @@ const DailyQuestCard = () => {
     setIsQuestDialogOpen(true);
   };
 
-  // --- 3. FIXED: Handle Claim Logic ---
   const handleClaimReward = async (quest: typeof DAILY_QUESTS[0]) => {
     if (!userProfile || !userProfile.$id) return;
 
     setClaimingQuestId(quest.id);
     try {
-      // A. Prepare the updated Claimed Quests Object
-      let currentClaimedQuests = userProfile.claimedQuests || {};
+      // FIX 4: Robust Claim Logic using 'any' casting
+      const profile = userProfile as any;
+      let currentClaimedQuests = profile.claimedQuests || {};
       
-      // If it comes from DB as a string, parse it first
       if (typeof currentClaimedQuests === 'string') {
         try { currentClaimedQuests = JSON.parse(currentClaimedQuests); } catch(e) { currentClaimedQuests = {} }
       }
@@ -115,8 +119,7 @@ const DailyQuestCard = () => {
         [quest.id]: new Date().toISOString()
       };
 
-      // B. Update Database: Mark as Claimed
-      // We explicitly stringify this to ensure it saves correctly in Appwrite
+      // 1. Update Database (Mark as Claimed)
       await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
@@ -126,15 +129,14 @@ const DailyQuestCard = () => {
         }
       );
 
-      // C. Update XP (Using Context)
-      // This calculates the new level and refreshes the UI automatically
+      // 2. Add XP (Updates Context & UI)
       if (addXp) {
         await addXp(quest.xpReward);
-        toast.success(`Claimed: ${quest.title}! +${quest.xpReward} XP earned.`);
+        toast.success(`Claimed: ${quest.title}! +${quest.xpReward} XP`);
       } else {
-        // Fallback if addXp is missing
-        if (checkUserStatus) await checkUserStatus();
         toast.success(`Claimed: ${quest.title}!`);
+        // If addXp isn't available, we force a page reload to show new state as fallback
+        window.location.reload();
       }
 
     } catch (error: any) {
