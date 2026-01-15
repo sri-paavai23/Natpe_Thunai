@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { functions } from "@/lib/appwrite"; // Import 'functions' from your existing config
+import { functions } from "@/lib/appwrite"; 
 import { toast } from "sonner";
+import { ExecutionMethod } from 'appwrite'; // <--- 1. Import this
 
 export const useCueLink = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -9,11 +10,11 @@ export const useCueLink = () => {
     setIsGenerating(true);
     try {
       const execution = await functions.createExecution(
-        'generate_cuelink',      // Function ID
-        JSON.stringify({ listingId }), // Body
-        false,                   // Async (false = wait for response)
-        '/',                     // Path
-        'POST'                   // Method
+        'generate_cuelink',      
+        JSON.stringify({ listingId }), 
+        false,                   
+        '/',                     
+        ExecutionMethod.POST     // <--- 2. Use the Enum here instead of 'POST'
       );
 
       const response = JSON.parse(execution.responseBody);
@@ -21,7 +22,6 @@ export const useCueLink = () => {
       if (response.success) {
         console.log("Link Generated:", response.cueLink);
         toast.success("CueLink generated and copied!");
-        // Optional: Copy to clipboard automatically
         navigator.clipboard.writeText(response.cueLink);
         return response.cueLink;
       } else {
