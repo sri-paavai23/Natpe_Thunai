@@ -15,8 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useServiceListings } from "@/hooks/useServiceListings";
-// --- UPDATED IMPORTS ---
-import PostFoodOrderForm from "@/components/forms/PostFoodOrderForm"; // New Form
+// --- FIXED IMPORT ---
+import PostFoodOrderForm from "@/components/forms/PostFoodOrderForm"; 
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
@@ -25,7 +25,7 @@ import FoodCustomRequestsList from "@/components/FoodCustomRequestsList";
 // --- CONFIGURATION ---
 const OFFERING_CATEGORIES = ["homemade-meals", "wellness-remedies", "snacks"];
 
-// --- FOOD ITEM CARD COMPONENT ---
+// --- FOOD ITEM CARD COMPONENT (Internal for Page) ---
 const FoodItemCard = ({ item, onOrder }: { item: any, onOrder: (item: any) => void }) => {
   const seed = item.$id; 
   const imageUrl = `https://source.unsplash.com/400x300/?food,${item.category === 'homemade-meals' ? 'curry' : 'tea'}&sig=${seed}`;
@@ -182,7 +182,6 @@ const FoodWellnessPage = () => {
           posterId: user.$id,
           posterName: user.name,
           collegeName: userProfile.collegeName,
-          // 'isCustomOrder' comes from the form data
         }
       );
       toast.success(data.isCustomOrder ? "Request posted!" : "Menu updated successfully!");
@@ -217,8 +216,8 @@ const FoodWellnessPage = () => {
                 <DialogDescription>List your homemade dishes for today.</DialogDescription>
               </DialogHeader>
               
-              {/* Using the New Context-Aware Form */}
-              <PostFoodListingForm 
+              {/* FIXED: Using PostFoodOrderForm */}
+              <PostFoodOrderForm 
                  onSubmit={handlePostFoodListing} 
                  onCancel={() => setIsPostServiceDialogOpen(false)} 
                  isCustomRequest={false} // Mode: Selling
@@ -276,8 +275,8 @@ const FoodWellnessPage = () => {
                     <DialogDescription>Let chefs know what you need.</DialogDescription>
                 </DialogHeader>
                 
-                {/* Using the New Context-Aware Form */}
-                <PostFoodListingForm 
+                {/* FIXED: Using PostFoodOrderForm */}
+                <PostFoodOrderForm 
                     onSubmit={handlePostFoodListing} 
                     onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
                     isCustomRequest={true} // Mode: Requesting
