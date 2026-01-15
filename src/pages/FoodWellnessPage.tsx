@@ -1,47 +1,34 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   Soup, ShieldCheck, PlusCircle, Utensils, Loader2, 
-  MapPin, Clock, Star, ChefHat, Minus, Plus, ShoppingBag 
+  MapPin, Star, ChefHat, Minus, Plus, ShoppingBag 
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import PostServiceForm from "@/components/forms/PostServiceForm";
 import { useServiceListings } from "@/hooks/useServiceListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
+// --- UPDATED IMPORTS ---
+import PostFoodListingForm from "@/components/forms/PostFoodListingForm"; // New Form
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, APPWRITE_SERVICES_COLLECTION_ID } from "@/lib/appwrite";
 import { ID } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 import FoodCustomRequestsList from "@/components/FoodCustomRequestsList";
 
 // --- CONFIGURATION ---
-const OFFERING_CATEGORIES = ["homemade-meals", "wellness-remedies"];
-
-const OFFERING_OPTIONS = [
-  { value: "homemade-meals", label: "Food" },
-  { value: "wellness-remedies", label: "Remedy" },
-  { value: "other", label: "Other" },
-];
-
-const CUSTOM_REQUEST_OPTIONS = [
-  { value: "homemade-meals", label: "Custom Food" },
-  { value: "wellness-remedies", label: "Custom Remedy" },
-  { value: "other", label: "Other" },
-];
+const OFFERING_CATEGORIES = ["homemade-meals", "wellness-remedies", "snacks"];
 
 // --- FOOD ITEM CARD COMPONENT ---
 const FoodItemCard = ({ item, onOrder }: { item: any, onOrder: (item: any) => void }) => {
-  // Generate a random food image if none provided (using Unsplash source for realism)
   const seed = item.$id; 
-  const imageUrl = `https://source.unsplash.com/400x300/?food,${item.category === 'homemade-meals' ? 'meal' : 'tea'}&sig=${seed}`;
+  const imageUrl = `https://source.unsplash.com/400x300/?food,${item.category === 'homemade-meals' ? 'curry' : 'tea'}&sig=${seed}`;
 
   return (
     <Card className="group overflow-hidden border-border/60 hover:shadow-lg transition-all duration-300 bg-card flex flex-col h-full">
@@ -56,26 +43,29 @@ const FoodItemCard = ({ item, onOrder }: { item: any, onOrder: (item: any) => vo
         <div className="absolute top-2 left-2 bg-background/90 backdrop-blur-md px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider text-foreground shadow-sm">
           {item.category === 'homemade-meals' ? 'Home Cooked' : 'Wellness'}
         </div>
-        {/* Rating Badge (Mock) */}
-        <div className="absolute bottom-2 right-2 bg-green-600 text-white px-1.5 py-0.5 rounded flex items-center gap-1 text-xs font-bold shadow-sm">
-          4.5 <Star className="h-3 w-3 fill-white" />
+        {/* Diet Badge */}
+        <div className={`absolute top-2 right-2 px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1 ${item.dietaryType === 'non-veg' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
+           {item.dietaryType === 'non-veg' ? 'Non-Veg' : 'Veg'}
         </div>
       </div>
 
       <CardContent className="p-4 flex-grow space-y-2">
         <div className="flex justify-between items-start gap-2">
           <h3 className="font-bold text-lg leading-tight line-clamp-1">{item.title}</h3>
-          {/* Veg/Non-Veg Indicator (Mock logic based on title) */}
-          <div className={`h-4 w-4 border-[1px] flex items-center justify-center ${item.title.toLowerCase().includes('chicken') ? 'border-red-500' : 'border-green-500'}`}>
-             <div className={`h-2 w-2 rounded-full ${item.title.toLowerCase().includes('chicken') ? 'bg-red-500' : 'bg-green-500'}`} />
-          </div>
         </div>
         
         <p className="text-xs text-muted-foreground line-clamp-2">
           {item.description}
         </p>
+        
+        {/* Prep Time Badge */}
+        {item.timeEstimate && (
+            <div className="inline-flex items-center text-[10px] bg-secondary/10 px-1.5 py-0.5 rounded text-secondary-neon">
+                <span className="mr-1">🕒</span> {item.timeEstimate}
+            </div>
+        )}
 
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2 pt-2 border-t border-border/30">
           <Avatar className="h-5 w-5">
             <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${item.posterName}`} />
             <AvatarFallback>CH</AvatarFallback>
@@ -86,7 +76,7 @@ const FoodItemCard = ({ item, onOrder }: { item: any, onOrder: (item: any) => vo
 
       <CardFooter className="p-4 pt-0 flex items-center justify-between mt-auto">
         <div>
-          <p className="text-lg font-bold text-foreground">₹{item.price}</p>
+          <p className="text-lg font-bold text-foreground">{item.price}</p>
           <p className="text-[10px] text-muted-foreground">per serving</p>
         </div>
         <Button 
@@ -145,12 +135,11 @@ const FoodWellnessPage = () => {
 
     setIsOrdering(true);
     try {
-      // Create Order in 'food_orders' collection (Not transactions, keep it separate for detailed tracking)
-      // NOTE: Ensure you have a 'food_orders' collection with these attributes:
-      // providerId, providerName, buyerId, buyerName, offeringTitle, quantity, totalAmount, status, deliveryLocation, notes
-      
-      const totalPrice = parseInt(selectedItem.price.replace(/[^0-9]/g, '')) * orderQuantity;
+      const priceString = selectedItem.price.toString(); 
+      const priceNumber = parseInt(priceString.replace(/[^0-9]/g, ''));
+      const totalPrice = priceNumber * orderQuantity;
 
+      // 1. Create Order
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_FOOD_ORDERS_COLLECTION_ID,
@@ -163,11 +152,10 @@ const FoodWellnessPage = () => {
           offeringTitle: selectedItem.title,
           quantity: orderQuantity,
           totalAmount: isNaN(totalPrice) ? 0 : totalPrice,
-          status: "Pending Confirmation", // Initial Status
+          status: "Pending Confirmation",
           deliveryLocation: orderLocation,
           notes: orderNotes,
           collegeName: userProfile?.collegeName,
-          // Optional: Add link to original service ID if needed
         }
       );
 
@@ -175,50 +163,30 @@ const FoodWellnessPage = () => {
       setIsOrderDialogOpen(false);
     } catch (error: any) {
       console.error("Order failed:", error);
-      toast.error("Failed to place order. Please try again.");
+      toast.error("Failed to place order.");
     } finally {
       setIsOrdering(false);
     }
   };
 
-  const handlePostService = async (data: any) => {
+  // Logic to post a listing (Selling Food)
+  const handlePostFoodListing = async (data: any) => {
     if (!user || !userProfile) return;
     try {
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
-        APPWRITE_FOOD_ORDERS_COLLECTION_ID, // Note: You might want a separate 'offerings' collection, but reusing is fine if schema allows
+        APPWRITE_SERVICES_COLLECTION_ID, // Stored in services so it shows in feed
         ID.unique(),
         {
           ...data,
           posterId: user.$id,
           posterName: user.name,
-          isCustomOrder: false,
           collegeName: userProfile.collegeName,
+          // 'isCustomOrder' comes from the form data
         }
       );
-      toast.success("Offering posted!");
+      toast.success(data.isCustomOrder ? "Request posted!" : "Menu updated successfully!");
       setIsPostServiceDialogOpen(false);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to post.");
-    }
-  };
-
-  const handlePostCustomOrder = async (data: any) => {
-    if (!user || !userProfile) return;
-    try {
-      await databases.createDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_FOOD_ORDERS_COLLECTION_ID,
-        ID.unique(),
-        {
-          ...data,
-          posterId: user.$id,
-          posterName: user.name,
-          isCustomOrder: true,
-          collegeName: userProfile.collegeName,
-        }
-      );
-      toast.success("Request posted!");
       setIsPostCustomOrderDialogOpen(false);
     } catch (e: any) {
       toast.error(e.message || "Failed to post.");
@@ -246,16 +214,16 @@ const FoodWellnessPage = () => {
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Start Your Cloud Kitchen</DialogTitle>
+                <DialogDescription>List your homemade dishes for today.</DialogDescription>
               </DialogHeader>
-              <div className="max-h-[70vh] overflow-y-auto pr-2">
-                <PostServiceForm 
-                  onSubmit={handlePostService} 
-                  onCancel={() => setIsPostServiceDialogOpen(false)} 
-                  categoryOptions={OFFERING_OPTIONS}
-                  titlePlaceholder="e.g. Mom's Special Chicken Curry"
-                  pricePlaceholder="e.g. 120"
-                />
-              </div>
+              
+              {/* Using the New Context-Aware Form */}
+              <PostFoodListingForm 
+                 onSubmit={handlePostFoodListing} 
+                 onCancel={() => setIsPostServiceDialogOpen(false)} 
+                 isCustomRequest={false} // Mode: Selling
+              />
+
             </DialogContent>
           </Dialog>
         </div>
@@ -294,7 +262,7 @@ const FoodWellnessPage = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              Craving something specific? Request a custom meal or wellness remedy from campus chefs.
+              Craving something specific? Request a custom meal or wellness remedy.
             </p>
             <Dialog open={isPostCustomOrderDialogOpen} onOpenChange={setIsPostCustomOrderDialogOpen}>
               <DialogTrigger asChild>
@@ -303,17 +271,21 @@ const FoodWellnessPage = () => {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader><DialogTitle>Request Custom Food</DialogTitle></DialogHeader>
-                <PostServiceForm 
-                  onSubmit={handlePostCustomOrder} 
-                  onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
-                  isCustomOrder={true}
-                  categoryOptions={CUSTOM_REQUEST_OPTIONS}
+                <DialogHeader>
+                    <DialogTitle>Request Custom Food</DialogTitle>
+                    <DialogDescription>Let chefs know what you need.</DialogDescription>
+                </DialogHeader>
+                
+                {/* Using the New Context-Aware Form */}
+                <PostFoodListingForm 
+                    onSubmit={handlePostFoodListing} 
+                    onCancel={() => setIsPostCustomOrderDialogOpen(false)} 
+                    isCustomRequest={true} // Mode: Requesting
                 />
+
               </DialogContent>
             </Dialog>
             
-            {/* List of existing requests */}
             {postedCustomRequests.length > 0 && (
               <div className="mt-4 pt-4 border-t border-border/50">
                 <h3 className="text-xs font-bold uppercase text-muted-foreground mb-3">Recent Requests</h3>
@@ -330,7 +302,7 @@ const FoodWellnessPage = () => {
         </p>
       </div>
 
-      {/* --- ORDER CONFIRMATION SHEET (Responsive Dialog) --- */}
+      {/* --- ORDER CONFIRMATION SHEET --- */}
       <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card border-border">
           <DialogHeader>
@@ -343,7 +315,6 @@ const FoodWellnessPage = () => {
           </DialogHeader>
           
           <div className="space-y-4 py-2">
-            {/* Item Details */}
             <div className="flex justify-between items-center bg-muted/30 p-3 rounded-lg">
               <div>
                 <p className="font-bold text-foreground">{selectedItem?.title}</p>
@@ -366,7 +337,6 @@ const FoodWellnessPage = () => {
               </div>
             </div>
 
-            {/* Delivery Details */}
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label htmlFor="location" className="text-xs font-semibold uppercase text-muted-foreground">Delivery Location</Label>
@@ -383,7 +353,7 @@ const FoodWellnessPage = () => {
               </div>
               
               <div className="space-y-1">
-                <Label htmlFor="notes" className="text-xs font-semibold uppercase text-muted-foreground">Cooking Instructions / Notes</Label>
+                <Label htmlFor="notes" className="text-xs font-semibold uppercase text-muted-foreground">Cooking Instructions</Label>
                 <Textarea 
                   id="notes" 
                   placeholder="e.g. Less spicy, extra sauce..." 
@@ -394,7 +364,6 @@ const FoodWellnessPage = () => {
               </div>
             </div>
 
-            {/* Total */}
             <div className="flex justify-between items-center pt-2 border-t border-border">
               <span className="font-bold text-lg">Total Pay</span>
               <span className="font-black text-2xl text-secondary-neon">
