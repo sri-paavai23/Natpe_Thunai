@@ -14,10 +14,9 @@ import { ID } from "appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
-// Zod Schema
 const formSchema = z.object({
   amount: z.string().min(1, "Amount is required"),
-  meetingLocation: z.string().min(3, "Location is required (e.g., Canteen)"),
+  meetingLocation: z.string().min(3, "Location is required"),
   meetingTime: z.string().min(1, "Time is required"),
   notes: z.string().optional(),
 });
@@ -52,17 +51,18 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
         APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
         ID.unique(),
         {
-          type: type, // request, offer, or group-contribution
+          type: type,
           amount: parseFloat(values.amount),
           meetingLocation: values.meetingLocation,
           meetingTime: values.meetingTime,
-          notes: values.notes || (type === 'group-contribution' ? "Split bill" : "No notes"),
+          notes: values.notes || (type === 'group-contribution' ? "Bill Split" : "No notes"),
           status: "Open",
           posterId: user.$id,
           posterName: user.name,
           collegeName: user.prefs?.collegeName || "Unknown",
         }
       );
+      toast.success("Posted successfully!");
       onSuccess();
     } catch (error: any) {
       console.error("Error creating listing:", error);
@@ -72,25 +72,18 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
     }
   };
 
-  // --- Dynamic Labels based on Type ---
-  const getLabels = () => {
-    if (type === 'group-contribution') {
-        return {
-            amount: "Total Split Amount (₹)",
-            notes: "What is this split for? (e.g., Birthday Cake, Cab Fare)",
-            location: "Collection Point",
-            submit: "Start Group Pool"
-        };
-    }
-    return {
-        amount: "Amount (₹)",
-        notes: "Notes / Denomination preferences",
-        location: "Meeting Location",
-        submit: type === 'request' ? "Post Request" : "Post Offer"
-    };
+  // --- Dynamic Labels ---
+  const labels = type === 'group-contribution' ? {
+      amount: "Total Bill Amount (₹)",
+      notes: "What is this split for? (e.g. Birthday Cake)",
+      location: "Collection Point",
+      submit: "Start Group Pool"
+  } : {
+      amount: "Amount (₹)",
+      notes: "Notes (Optional)",
+      location: "Meeting Location",
+      submit: type === 'request' ? "Post Request" : "Post Offer"
   };
-
-  const labels = getLabels();
 
   return (
     <Form {...form}>
@@ -105,7 +98,7 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
               <FormControl>
                 <div className="relative">
                   <Banknote className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input type="number" placeholder="500" {...field} className="pl-9" />
+                  <Input type="number" placeholder="500" {...field} className="pl-9 bg-background" />
                 </div>
               </FormControl>
               <FormMessage />
@@ -122,7 +115,7 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
               <FormControl>
                 <Textarea 
                   placeholder={labels.notes} 
-                  className="resize-none" 
+                  className="resize-none bg-background" 
                   {...field} 
                 />
               </FormControl>
@@ -141,7 +134,7 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
                 <FormControl>
                     <div className="relative">
                     <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Main Canteen" {...field} className="pl-9" />
+                    <Input placeholder="Canteen" {...field} className="pl-9 bg-background" />
                     </div>
                 </FormControl>
                 <FormMessage />
@@ -158,7 +151,7 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
                 <FormControl>
                     <div className="relative">
                     <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="1:00 PM" {...field} className="pl-9" />
+                    <Input placeholder="1:00 PM" {...field} className="pl-9 bg-background" />
                     </div>
                 </FormControl>
                 <FormMessage />
@@ -169,7 +162,7 @@ const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, on
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={isSubmitting} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+          <Button type="submit" disabled={isSubmitting} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 w-full sm:w-auto">
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : labels.submit}
           </Button>
         </div>
