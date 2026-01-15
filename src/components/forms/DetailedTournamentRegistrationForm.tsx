@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, DollarSign } from "lucide-react";
 // --- FIX 1: Import Appwrite SDK and Config ---
-import { databases, APPWRITE_DATABASE_ID, ID } from "@/lib/appwrite";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_REGISTRATIONS_COLLECTION_ID } from "@/lib/appwrite";
 
 // --- FIX 2: Define Collection ID (Replace with your actual ID from previous steps) ---
 const APPWRITE_REGISTRATIONS_COLLECTION_ID = "65abcdef123456..."; // <--- PUT YOUR REAL REGISTRATION COLLECTION ID HERE
