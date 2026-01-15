@@ -78,13 +78,24 @@ const DetailedTournamentRegistrationForm = ({
     }
   };
 
-  const submitRegistration = async() => {
-    // Call the parent handler to save to Appwrite
-    onRegister({
-        teamName,
-        contactEmail,
-        players
-    });
+  const submitRegistration = async () => {
+    try {
+        await databases.createDocument(
+            APPWRITE_DATABASE_ID,
+            registrations, // Make sure to import or define this ID here too!
+            ID.unique(),
+            {
+                tournamentId: selectedTournament.$id, // You need to pass tournament ID prop to this form
+                teamName: teamName,
+                contactEmail: contactEmail,
+                players: JSON.stringify(players) // Convert array to string for storage
+            }
+        );
+        onRegister({ teamName, contactEmail, players });
+    } catch (error) {
+        toast.error("Registration failed in database.");
+        console.error(error);
+    }
     setIsSubmitting(false);
   };
 
