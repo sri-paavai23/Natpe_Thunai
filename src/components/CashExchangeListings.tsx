@@ -1,181 +1,226 @@
 "use client";
 
-import React, { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import React, { useState } from 'react';
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2, MapPin, Clock, Banknote } from "lucide-react";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_CASH_EXCHANGE_COLLECTION_ID } from "@/lib/appwrite";
-import { ID } from "appwrite";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MapPin, Clock, Handshake, CheckCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
+import { ID } from "appwrite";
 
-// Zod Schema
-const formSchema = z.object({
-  amount: z.string().min(1, "Amount is required"),
-  meetingLocation: z.string().min(3, "Location is required (e.g., Canteen)"),
-  meetingTime: z.string().min(1, "Time is required"),
-  notes: z.string().optional(),
-});
-
-interface CashExchangeFormProps {
+interface Listing {
+  $id: string;
+  $createdAt: string;
   type: "request" | "offer" | "group-contribution";
-  onSuccess: () => void;
-  onCancel: () => void;
+  amount: number;
+  notes: string;
+  status: string;
+  meetingLocation: string;
+  meetingTime: string;
+  posterId: string;
+  posterName: string;
+  contributions?: any[];
+  collegeName: string;
 }
 
-const CashExchangeForm: React.FC<CashExchangeFormProps> = ({ type, onSuccess, onCancel }) => {
+interface CashExchangeListingsProps {
+  listings: Listing[];
+  isLoading: boolean;
+  type: "request" | "offer" | "group-contribution";
+}
+
+const CashExchangeListings: React.FC<CashExchangeListingsProps> = ({ listings, isLoading, type }) => {
   const { user } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      amount: "",
-      meetingLocation: "",
-      meetingTime: "",
-      notes: "",
-    },
-  });
+  // Helper to determine button text based on listing type
+  const getActionButtonText = (listingType: string) => {
+    switch (listingType) {
+      case "request":
+        return "Contribute (I have Cash)";
+      case "offer":
+        return "Accept (I need Cash)";
+      case "group-contribution":
+        return "Join Contribution";
+      default:
+        return "Connect";
+    }
+  };
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!user) return;
-    setIsSubmitting(true);
+  const handleActionClick = (listing: Listing) => {
+    if (!user) {
+      toast.error("Please log in to participate.");
+      return;
+    }
+    if (user.$id === listing.posterId) {
+      toast.info("You cannot accept your own post.");
+      return;
+    }
+    setSelectedListing(listing);
+    setIsConfirmDialogOpen(true);
+  };
 
+  const handleConfirmAction = async () => {
+    if (!selectedListing || !user) return;
+
+    setIsProcessing(true);
     try {
+      // Create a Transaction Record for the Tracking Page
+      // This acts as the "Notification" for the poster
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
-        APPWRITE_CASH_EXCHANGE_COLLECTION_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
         ID.unique(),
         {
-          type: type, // request, offer, or group-contribution
-          amount: parseFloat(values.amount),
-          meetingLocation: values.meetingLocation,
-          meetingTime: values.meetingTime,
-          notes: values.notes || (type === 'group-contribution' ? "Split bill" : "No notes"),
-          status: "Open",
-          posterId: user.$id,
-          posterName: user.name,
-          collegeName: user.prefs?.collegeName || "Unknown",
+          productId: selectedListing.$id,
+          productTitle: `Cash Exchange: ${selectedListing.type === 'request' ? 'Request' : 'Offer'}`,
+          amount: selectedListing.amount,
+          buyerId: user.$id, // You (Contributor)
+          buyerName: user.name,
+          sellerId: selectedListing.posterId, // Poster (Receiver of notification)
+          sellerName: selectedListing.posterName,
+          status: "meeting_scheduled",
+          type: "cash-exchange",
+          collegeName: selectedListing.collegeName,
+          ambassadorDelivery: false,
+          ambassadorMessage: `Meeting scheduled at ${selectedListing.meetingLocation} @ ${selectedListing.meetingTime}`
         }
       );
-      onSuccess();
+
+      toast.success("Contribution sent! The poster has been notified in their Tracking page.");
+      setIsConfirmDialogOpen(false);
     } catch (error: any) {
-      console.error("Error creating listing:", error);
-      toast.error("Failed to post listing.");
+      console.error("Error processing contribution:", error);
+      toast.error(error.message || "Failed to process contribution.");
     } finally {
-      setIsSubmitting(false);
+      setIsProcessing(false);
     }
   };
 
-  // --- Dynamic Labels based on Type ---
-  const getLabels = () => {
-    if (type === 'group-contribution') {
-        return {
-            amount: "Total Split Amount (₹)",
-            notes: "What is this split for? (e.g., Birthday Cake, Cab Fare)",
-            location: "Collection Point",
-            submit: "Start Group Pool"
-        };
-    }
-    return {
-        amount: "Amount (₹)",
-        notes: "Notes / Denomination preferences",
-        location: "Meeting Location",
-        submit: type === 'request' ? "Post Request" : "Post Offer"
-    };
-  };
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-secondary-neon" />
+      </div>
+    );
+  }
 
-  const labels = getLabels();
+  if (listings.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No active {type}s found. Be the first to post!
+      </div>
+    );
+  }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        
-        <FormField
-          control={form.control}
-          name="amount"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">{labels.amount}</FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Banknote className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input type="number" placeholder="500" {...field} className="pl-9" />
+    <div className="space-y-4">
+      {listings.map((listing) => {
+        // Logic: Show button if user is NOT poster AND status is active (Open or Group)
+        const isOwner = user?.$id === listing.posterId;
+        const isActive = listing.status !== "Accepted" && listing.status !== "Completed";
+
+        return (
+          <Card key={listing.$id} className="bg-background border border-border hover:border-secondary-neon/50 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${listing.posterName}`} />
+                    <AvatarFallback>{listing.posterName.substring(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{listing.posterName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(listing.$createdAt || Date.now()).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <Badge variant={listing.type === 'request' ? 'destructive' : 'default'} className="uppercase text-[10px]">
+                  {listing.type}
+                </Badge>
+              </div>
 
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-foreground">Description</FormLabel>
-              <FormControl>
-                <Textarea 
-                  placeholder={labels.notes} 
-                  className="resize-none" 
-                  {...field} 
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+              <div className="flex justify-between items-center my-3">
+                <span className="text-2xl font-bold text-foreground">₹{listing.amount}</span>
+                {isActive ? (
+                  <Badge variant="outline" className="text-green-500 border-green-500">Open</Badge>
+                ) : (
+                  <Badge variant="secondary">{listing.status}</Badge>
+                )}
+              </div>
 
-        <div className="grid grid-cols-2 gap-3">
-            <FormField
-            control={form.control}
-            name="meetingLocation"
-            render={({ field }) => (
-                <FormItem>
-                <FormLabel className="text-foreground">{labels.location}</FormLabel>
-                <FormControl>
-                    <div className="relative">
-                    <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Main Canteen" {...field} className="pl-9" />
-                    </div>
-                </FormControl>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
+              <p className="text-sm text-muted-foreground mb-4 bg-muted/50 p-2 rounded-md italic">
+                "{listing.notes}"
+              </p>
 
-            <FormField
-            control={form.control}
-            name="meetingTime"
-            render={({ field }) => (
-                <FormItem>
-                <FormLabel className="text-foreground">Time</FormLabel>
-                <FormControl>
-                    <div className="relative">
-                    <Clock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="1:00 PM" {...field} className="pl-9" />
-                    </div>
-                </FormControl>
-                <FormMessage />
-                </FormItem>
-            )}
-            />
-        </div>
+              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-4">
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> {listing.meetingLocation}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> {listing.meetingTime}
+                </div>
+              </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={isSubmitting} className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : labels.submit}
-          </Button>
-        </div>
-      </form>
-    </Form>
+              {/* ACTION BUTTON */}
+              {!isOwner && isActive && (
+                <Button 
+                  className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-semibold shadow-sm"
+                  onClick={() => handleActionClick(listing)}
+                >
+                  <Handshake className="mr-2 h-4 w-4" /> 
+                  {getActionButtonText(listing.type)}
+                </Button>
+              )}
+
+              {/* OWN POST INDICATOR */}
+              {isOwner && (
+                <div className="w-full text-center text-xs text-muted-foreground py-2 border-t border-dashed border-border mt-2">
+                  (This is your post)
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-secondary-neon" /> Confirm Contribution
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground pt-2">
+              <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-md mb-3 text-yellow-600 dark:text-yellow-400 text-xs">
+                <span className="font-bold flex items-center gap-1 mb-1"><AlertTriangle className="h-3 w-3" /> Safety First:</span>
+                Ensure you meet <strong>{selectedListing?.posterName}</strong> in a public place.
+              </div>
+              <p className="mb-2">
+                You are about to {selectedListing?.type === 'request' ? 'provide cash to' : 'receive cash from'} <strong>{selectedListing?.posterName}</strong>.
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm bg-muted p-2 rounded">
+                 <span>📍 {selectedListing?.meetingLocation}</span>
+                 <span>⏰ {selectedListing?.meetingTime}</span>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConfirmDialogOpen(false)} disabled={isProcessing}>Cancel</Button>
+            <Button onClick={handleConfirmAction} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground">
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm & Notify Poster"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 
-export default CashExchangeForm;
+export default CashExchangeListings;
