@@ -1,5 +1,85 @@
 "use client";
 
+import React from "react";
+import { MadeWithDyad } from "@/components/made-with-dyad";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Gamepad2, Hammer, ChevronLeft, Cpu } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+const TournamentPage = () => {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-background text-foreground p-4 pb-20 flex flex-col items-center justify-center relative overflow-hidden">
+      
+      {/* Background Decor */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-secondary-neon/10 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
+
+      <div className="max-w-md w-full space-y-8 text-center relative z-10">
+        
+        {/* Animated Icon */}
+        <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+            <div className="absolute inset-0 bg-secondary-neon/20 rounded-full animate-ping opacity-75"></div>
+            <div className="relative bg-card border-2 border-secondary-neon p-4 rounded-full shadow-[0_0_30px_rgba(0,243,255,0.3)]">
+                <Gamepad2 className="h-10 w-10 text-secondary-neon" />
+                <Hammer className="h-5 w-5 text-foreground absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 border border-border" />
+            </div>
+        </div>
+
+        <div className="space-y-2">
+            <h1 className="text-4xl font-black italic tracking-tighter">
+                RESPAWNING <span className="text-transparent bg-clip-text bg-gradient-to-r from-secondary-neon to-cyan-400">SOON</span>
+            </h1>
+            <p className="text-muted-foreground text-lg">
+                The Arena is currently <span className="font-mono text-secondary-neon">AFK</span> for critical upgrades.
+            </p>
+        </div>
+
+        <Card className="bg-card/50 backdrop-blur-sm border-secondary-neon/30 border-dashed">
+            <CardContent className="p-6 space-y-4">
+                <div className="flex items-start gap-3 text-left">
+                    <Cpu className="h-5 w-5 text-secondary-neon mt-1 shrink-0" />
+                    <div>
+                        <h3 className="font-semibold text-foreground">System Upgrade in Progress</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            We are recalibrating the matchmaking brackets and squashing some bugs to ensure fair play.
+                        </p>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+
+        <div className="flex justify-center gap-4">
+            <Button 
+                variant="outline" 
+                onClick={() => navigate(-1)}
+                className="group border-secondary-neon/50 hover:bg-secondary-neon/10 hover:text-secondary-neon hover:border-secondary-neon"
+            >
+                <ChevronLeft className="mr-2 h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+                Go Back
+            </Button>
+            <Button disabled className="bg-muted text-muted-foreground cursor-not-allowed">
+                Join Waitlist
+            </Button>
+        </div>
+
+      </div>
+
+      <div className="absolute bottom-4 w-full">
+         <MadeWithDyad />
+      </div>
+    </div>
+  );
+};
+
+export default TournamentPage;
+
+
+/* // ==========================================
+//      ORIGINAL CODE (COMMENTED OUT)
+// ==========================================
+
 import React, { useState, useEffect } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +150,7 @@ const TournamentPage = () => {
       <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Esports Arena (Tournaments)</h1>
       <div className="max-w-md mx-auto space-y-6">
 
-        {/* Create Tournament Card */}
+        // Create Tournament Card
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
@@ -100,7 +180,7 @@ const TournamentPage = () => {
           </CardContent>
         </Card>
 
-        {/* Upcoming Tournaments Section */}
+        // Upcoming Tournaments Section
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
@@ -163,7 +243,7 @@ const TournamentPage = () => {
           </CardContent>
         </Card>
 
-        {/* Ongoing Tournaments Section */}
+        // Ongoing Tournaments Section
         {ongoingTournaments.length > 0 && (
           <Card className="bg-card text-card-foreground shadow-lg border-border">
             <CardHeader className="p-4 pb-2">
@@ -193,7 +273,7 @@ const TournamentPage = () => {
           </Card>
         )}
 
-        {/* Winner Announcements Section */}
+        // Winner Announcements Section
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
@@ -216,7 +296,7 @@ const TournamentPage = () => {
           </CardContent>
         </Card>
 
-        {/* Tournament Standings / Team Table Section */}
+        // Tournament Standings / Team Table Section
         <Card className="bg-card text-card-foreground shadow-lg border-border">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-xl font-semibold text-card-foreground flex items-center gap-2">
@@ -265,7 +345,7 @@ const TournamentPage = () => {
           </CardContent>
         </Card>
 
-        {/* Completed Tournaments Section */}
+        // Completed Tournaments Section
         {completedTournaments.length > 0 && (
           <Card className="bg-card text-card-foreground shadow-lg border-border">
             <CardHeader className="p-4 pb-2">
@@ -298,7 +378,7 @@ const TournamentPage = () => {
       </div>
       <MadeWithDyad />
 
-      {/* Registration Dialog */}
+      // Registration Dialog
       <Dialog open={isRegisterDialogOpen} onOpenChange={setIsRegisterDialogOpen}>
         <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -322,7 +402,7 @@ const TournamentPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Tournament Management Dialog */}
+      // Tournament Management Dialog
       <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
         <DialogContent className="sm:max-w-[700px] bg-card text-card-foreground border-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -341,3 +421,4 @@ const TournamentPage = () => {
 };
 
 export default TournamentPage;
+*/
