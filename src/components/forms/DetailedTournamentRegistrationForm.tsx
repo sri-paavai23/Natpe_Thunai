@@ -1,14 +1,27 @@
+"use client";
+
 import React, { useState } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { DialogFooter } from "@/components/ui/dialog";
+import { Loader2, UserPlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Loader2, DollarSign, ExternalLink } from "lucide-react";
 
-interface Player {
-  name: string;
-  inGameId: string;
-}
+const playerSchema = z.object({
+  name: z.string().min(1, "Player name is required."),
+  inGameId: z.string().min(1, "In-game ID is required."),
+});
+
+const formSchema = z.object({
+  teamName: z.string().min(3, { message: "Team name must be at least 3 characters." }),
+  contactEmail: z.string().email({ message: "Please enter a valid email address." }),
+  players: z.array(playerSchema).min(1, "At least one player is required."),
+});
 
 interface DetailedTournamentRegistrationFormProps {
   tournamentName: string;
@@ -16,167 +29,163 @@ interface DetailedTournamentRegistrationFormProps {
   fee: number;
   minPlayers: number;
   maxPlayers: number;
-  hostUpiId: string;
-  hostName: string;
-  onRegister: (data: any) => void;
+  onRegister: (data: z.infer<typeof formSchema>) => void;
   onCancel: () => void;
 }
 
-const DetailedTournamentRegistrationForm = ({
+const DetailedTournamentRegistrationForm: React.FC<DetailedTournamentRegistrationFormProps> = ({
   tournamentName,
   gameName,
   fee,
   minPlayers,
   maxPlayers,
-  hostUpiId,
-  hostName,
   onRegister,
   onCancel,
-}: DetailedTournamentRegistrationFormProps) => {
-  const [teamName, setTeamName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [players, setPlayers] = useState<Player[]>(
-    Array(minPlayers).fill({ name: "", inGameId: "" })
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
+}) => {
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  // Payment Logic
-  const handlePaymentAndRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validation
-    if (!teamName || !contactEmail) return toast.error("Please fill all details");
-    if (players.some(p => !p.name || !p.inGameId)) return toast.error("Fill all player details");
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      teamName: "",
+      contactEmail: "",
+      players: Array.from({ length: minPlayers }).map(() => ({ name: "", inGameId: "" })),
+    },
+  });
 
-    setIsSubmitting(true);
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "players",
+  });
 
-    if (fee > 0 && hostUpiId) {
-      // 1. Construct UPI Link
-      // tr = transaction reference (optional), tn = transaction note
-      const transactionNote = `Entry Fee for ${teamName} - ${tournamentName}`;
-      const upiLink = `upi://pay?pa=${hostUpiId}&pn=${encodeURIComponent(hostName)}&tn=${encodeURIComponent(transactionNote)}&am=${fee}&cu=INR`;
+  const handleRegistrationSubmit = async (data: z.infer<typeof formSchema>) => {
+    setIsRegistering(true);
+    try {
+      // Here you would typically handle payment initiation if fee > 0
+      // For this example, we'll assume payment is handled or not required.
+      if (fee > 0) {
+        toast.info(`Initiating payment for ₹${fee}. This is a placeholder.`);
+        // In a real app, integrate with a payment gateway here.
+        // If payment fails, return early.
+      }
 
-      // 2. Redirect to UPI App
-      // This works on mobile. On desktop, it might do nothing or try to open an associated app.
-      window.location.href = upiLink;
-
-      // 3. User Experience Pause
-      // We pause for a few seconds to let the app open, then assume success or ask for confirmation
-      // In a real app, you'd show a "Enter Transaction ID" input after they return.
-      setTimeout(() => {
-        const confirmed = window.confirm("Did you complete the payment in your UPI app?");
-        if (confirmed) {
-            submitRegistration();
-        } else {
-            setIsSubmitting(false);
-            toast.error("Payment not confirmed. Registration cancelled.");
-        }
-      }, 1000);
-    } else {
-      // Free tournament
-      submitRegistration();
-    }
-  };
-
-  const submitRegistration = () => {
-    // Call the parent handler to save to Appwrite
-    onRegister({
-        teamName,
-        contactEmail,
-        players
-    });
-    setIsSubmitting(false);
-  };
-
-  const updatePlayer = (index: number, field: keyof Player, value: string) => {
-    const newPlayers = [...players];
-    newPlayers[index] = { ...newPlayers[index], [field]: value };
-    setPlayers(newPlayers);
-  };
-
-  const addPlayer = () => {
-    if (players.length < maxPlayers) {
-      setPlayers([...players, { name: "", inGameId: "" }]);
+      await onRegister(data);
+      toast.success(`Team "${data.teamName}" registered for ${tournamentName}!`);
+      form.reset();
+    } catch (error: any) {
+      console.error("Error during registration:", error);
+      toast.error(error.message || "Failed to register for tournament.");
+    } finally {
+      setIsRegistering(false);
     }
   };
 
   return (
-    <form onSubmit={handlePaymentAndRegister} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Team Name</Label>
-        <Input 
-            placeholder="e.g. Team Liquid" 
-            value={teamName} 
-            onChange={(e) => setTeamName(e.target.value)} 
-            required
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Contact Email</Label>
-        <Input 
-            type="email" 
-            placeholder="captain@example.com" 
-            value={contactEmail} 
-            onChange={(e) => setContactEmail(e.target.value)} 
-            required
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label className="flex justify-between">
-            <span>Players ({players.length}/{maxPlayers})</span>
-            {players.length < maxPlayers && (
-                <span onClick={addPlayer} className="text-xs text-secondary-neon cursor-pointer hover:underline">+ Add Sub</span>
-            )}
-        </Label>
-        {players.map((player, idx) => (
-          <div key={idx} className="flex gap-2">
-            <Input 
-                placeholder={`Player ${idx + 1} Name`} 
-                value={player.name}
-                onChange={(e) => updatePlayer(idx, 'name', e.target.value)}
-                required
-            />
-             <Input 
-                placeholder="In-Game ID" 
-                value={player.inGameId}
-                onChange={(e) => updatePlayer(idx, 'inGameId', e.target.value)}
-                required
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-muted p-3 rounded-md mt-4">
-        <div className="flex justify-between items-center mb-1">
-            <span className="text-sm font-medium">Registration Fee:</span>
-            <span className="text-lg font-bold text-secondary-neon">
-                {fee === 0 ? "FREE" : `₹${fee}`}
-            </span>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleRegistrationSubmit)} className="space-y-4">
+        <div className="p-3 bg-muted/20 rounded-md border border-border">
+          <h4 className="font-semibold text-foreground mb-2">Tournament Details</h4>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{tournamentName}</span> ({gameName})
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Fee: <span className="font-medium text-foreground">{fee === 0 ? "Free" : `₹${fee}`}</span>
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Players per team: <span className="font-medium text-foreground">{minPlayers} - {maxPlayers}</span>
+          </p>
         </div>
-        {fee > 0 && (
-            <p className="text-xs text-muted-foreground">
-                Clicking Register will open your UPI app to pay <strong>{hostName}</strong> directly.
-            </p>
-        )}
-      </div>
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button 
-            type="submit" 
-            className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 w-full sm:w-auto" 
-            disabled={isSubmitting}
-        >
-          {isSubmitting ? <Loader2 className="animate-spin h-4 w-4" /> : (
-            <>
-                {fee > 0 ? <><DollarSign className="h-4 w-4 mr-1"/> Pay & Register</> : "Register Team"}
-            </>
+        <FormField
+          control={form.control}
+          name="teamName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Team Name</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Campus Conquerors" {...field} disabled={isRegistering} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
           )}
-        </Button>
-      </div>
-    </form>
+        />
+        <FormField
+          control={form.control}
+          name="contactEmail"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-foreground">Contact Email</FormLabel>
+              <FormControl>
+                <Input type="email" placeholder="team@example.com" {...field} disabled={isRegistering} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="space-y-3 border-t border-border pt-4">
+          <h3 className="text-lg font-semibold text-foreground">Team Players ({fields.length}/{maxPlayers})</h3>
+          {fields.map((item, index) => (
+            <div key={item.id} className="flex items-end gap-2">
+              <FormField
+                control={form.control}
+                name={`players.${index}.name`}
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel className="text-foreground">Player {index + 1} Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Player Name" {...field} disabled={isRegistering} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name={`players.${index}.inGameId`}
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel className="text-foreground">In-Game ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="In-Game ID" {...field} disabled={isRegistering} className="bg-input text-foreground border-border focus:ring-ring focus:border-ring" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {fields.length > minPlayers && (
+                <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)} disabled={isRegistering}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+          {fields.length < maxPlayers && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => append({ name: "", inGameId: "" })}
+              disabled={isRegistering}
+              className="w-full border-border text-primary-foreground hover:bg-muted"
+            >
+              <UserPlus className="mr-2 h-4 w-4" /> Add Player
+            </Button>
+          )}
+          {form.formState.errors.players && (
+            <p className="text-sm font-medium text-destructive">{form.formState.errors.players.message}</p>
+          )}
+        </div>
+
+        <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-2">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isRegistering} className="w-full sm:w-auto border-border text-primary-foreground hover:bg-muted">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isRegistering} className="w-full sm:w-auto bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90">
+            {isRegistering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Register Team"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
   );
 };
 
