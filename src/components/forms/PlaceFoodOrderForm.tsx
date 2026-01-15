@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { 
   Loader2, Utensils, MapPin, IndianRupee, Leaf, Beef, 
-  Truck, DollarSign, AlertTriangle, Phone, X 
+  Truck, DollarSign, AlertTriangle, Phone, X, HeartPulse
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
@@ -45,16 +45,34 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState("homemade-meals");
   const [dietaryType, setDietaryType] = useState("veg");
-  const [meetingSpot, setMeetingSpot] = useState(""); // Formerly timeEstimate
-  const [contact, setContact] = useState(userProfile?.mobileNumber || ""); // NEW: Contact Field
+  const [meetingSpot, setMeetingSpot] = useState(""); 
+  const [contact, setContact] = useState(userProfile?.mobileNumber || ""); 
 
   // --- STATE: BUY MODE ---
   const [quantity, setQuantity] = useState(1);
-  const [deliveryLocation, setDeliveryLocation] = useState(userProfile?.mobileNumber || ""); 
+  // FIX: Removed default mobile number to prevent pre-fill in location
+  const [deliveryLocation, setDeliveryLocation] = useState(""); 
   const [notes, setNotes] = useState("");
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
   const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+
+  // --- HELPER: DYNAMIC LABELS ---
+  const isRemedy = category === "wellness-remedies";
+  
+  const getTitleLabel = () => {
+    if (mode === 'request') {
+       return isRemedy ? "What remedy do you need?" : "What meal are you craving?";
+    }
+    return isRemedy ? "Remedy Name" : "Dish Name";
+  };
+
+  const getPlaceholderTitle = () => {
+    if (mode === 'request') {
+        return isRemedy ? "e.g. Ginger Tea for Cold" : "e.g. Spicy Paneer Roll";
+    }
+    return isRemedy ? "e.g. Homemade Herbal Soup" : "e.g. Mom's Hyderabadi Biryani";
+  };
 
   // --- LOGIC: SUBMIT LISTING (Sell/Request) ---
   const handleListingSubmit = async (e: React.FormEvent) => {
@@ -72,8 +90,8 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
       price: `₹${price}`,
       category,
       dietaryType,
-      contact, // Added Contact Attribute
-      timeEstimate: meetingSpot, // Mapping Meeting Spot to timeEstimate attribute for schema compatibility
+      contact, 
+      timeEstimate: meetingSpot,
       isCustomOrder: mode === 'request',
       status: "Active"
     };
@@ -155,16 +173,27 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
                 <SelectContent>
                 <SelectItem value="homemade-meals">Homemade Meal</SelectItem>
                 <SelectItem value="wellness-remedies">Home Remedy</SelectItem>
-                <SelectItem value="snacks">Snacks</SelectItem>
+                {/* FIX: Removed Snacks as requested */}
                 </SelectContent>
             </Select>
             </div>
 
             <div className="space-y-1.5">
-            <Label htmlFor="title">{mode === 'request' ? "What are you craving?" : "Dish Name"}</Label>
+            {/* FIX: Dynamic Label based on Category */}
+            <Label htmlFor="title">{getTitleLabel()}</Label>
             <div className="relative">
-                <Utensils className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input id="title" placeholder={mode === 'request' ? "e.g. Spicy Paneer Roll" : "e.g. Chicken Biryani"} className="pl-9 h-11" value={title} onChange={(e) => setTitle(e.target.value)} />
+                {isRemedy ? (
+                    <HeartPulse className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                ) : (
+                    <Utensils className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                )}
+                <Input 
+                    id="title" 
+                    placeholder={getPlaceholderTitle()} 
+                    className="pl-9 h-11" 
+                    value={title} 
+                    onChange={(e) => setTitle(e.target.value)} 
+                />
             </div>
             </div>
 
@@ -199,7 +228,6 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
                     <Input id="price" type="number" placeholder="120" className="pl-9 h-11" value={price} onChange={(e) => setPrice(e.target.value)} />
                 </div>
             </div>
-            {/* NEW CONTACT FIELD */}
             <div className="space-y-1.5">
                 <Label htmlFor="contact">Contact</Label>
                 <div className="relative">
@@ -209,7 +237,6 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
             </div>
             </div>
 
-            {/* RENAMED & REPURPOSED FIELD: Prep Time -> Meeting Spot */}
             <div className="space-y-1.5">
                 <Label htmlFor="spot">{mode === 'request' ? "Delivery Point" : "Collection Point & Time"}</Label>
                 <div className="relative">
@@ -255,7 +282,14 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
             </div>
             <div className="col-span-3 space-y-1.5">
                 <Label htmlFor="location">Delivery Spot</Label>
-                <Input id="location" value={deliveryLocation} onChange={(e) => setDeliveryLocation(e.target.value)} placeholder="e.g. Block C, Room 404" className="h-11" required />
+                <Input 
+                    id="location" 
+                    value={deliveryLocation} 
+                    onChange={(e) => setDeliveryLocation(e.target.value)} 
+                    placeholder="e.g. Block C, Room 404" 
+                    className="h-11" 
+                    required 
+                />
             </div>
         </div>
 
@@ -277,9 +311,10 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
             )}
         </div>
 
+        {/* FIX: Dismissible and Mobile Optimized Buttons */}
         <div className="flex gap-3 pt-2 mt-2">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={loading} className="flex-1 h-11">
-            Cancel
+          <Button type="button" variant="outline" onClick={onCancel} disabled={loading} className="flex-1 h-11 border-muted-foreground/20">
+            <X className="w-4 h-4 mr-1" /> Close
           </Button>
           <Button type="submit" disabled={loading} className="flex-[2] bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 h-11 text-base font-bold shadow-md">
             {loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : `Pay ₹${offering ? (parseFloat(offering.price.match(/₹(\d+(\.\d+)?)/)?.[1] || '0') * quantity).toFixed(0) : '0'}`}
