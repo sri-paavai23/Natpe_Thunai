@@ -6,7 +6,6 @@ import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWR
 import { Query } from "appwrite";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -23,7 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 // --- HELPER: GOOGLE DRIVE IMAGE FIX ---
 const getOptimizedImageUrl = (url?: string) => {
-  if (!url) return "/icons/icon-512x512.png";
+  if (!url) return "/icons/icon-512x512.png"; // Immediate fallback if empty
   
   // Check if it's a Google Drive "view" link
   if (url.includes("drive.google.com") && url.includes("/view")) {
@@ -45,6 +44,10 @@ const ProductDetailsPage = () => {
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Image Handling State
+  const [displayImage, setDisplayImage] = useState<string>("/icons/icon-512x512.png");
+  const [imageError, setImageError] = useState(false);
+
   // Interactive State
   const [currentPrice, setCurrentPrice] = useState<string>("0");
   const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
@@ -62,7 +65,11 @@ const ProductDetailsPage = () => {
           productId
         );
         setProduct(productDoc);
-        setCurrentPrice(productDoc.price); // Initialize price state
+        setCurrentPrice(productDoc.price); 
+        
+        // Initialize Image with Optimization
+        const optimizedUrl = getOptimizedImageUrl(productDoc.imageUrl);
+        setDisplayImage(optimizedUrl);
 
         const reviewsRes = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
@@ -88,12 +95,10 @@ const ProductDetailsPage = () => {
     if (!bargainAmount) return;
     setIsNegotiating(true);
 
-    // Simulate Network Request & Seller Acceptance
     setTimeout(() => {
         setIsNegotiating(false);
         setIsBargainDialogOpen(false);
         
-        // Update Price Logic
         const newPrice = `₹${bargainAmount}`;
         setCurrentPrice(newPrice);
         
@@ -128,12 +133,15 @@ const ProductDetailsPage = () => {
       <div className="max-w-3xl mx-auto">
         
         {/* --- PRODUCT IMAGE --- */}
-        <div className="w-full aspect-square sm:aspect-video bg-muted relative overflow-hidden group">
+        <div className="w-full aspect-square sm:aspect-video bg-muted relative overflow-hidden group flex items-center justify-center bg-secondary/5">
           <img 
-            src={getOptimizedImageUrl(product.imageUrl)} 
+            src={displayImage}
             alt={product.title}
-            className="w-full h-full object-contain bg-black/5 transition-transform duration-500 group-hover:scale-105"
-            onError={(e) => { (e.target as HTMLImageElement).src = '/icons/icon-512x512.png'; }}
+            className={`w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 ${imageError ? 'p-12 opacity-80' : ''}`}
+            onError={() => { 
+                setImageError(true);
+                setDisplayImage("/icons/icon-512x512.png"); 
+            }}
           />
           {/* Badge Overlay */}
           <div className="absolute top-4 left-4">
