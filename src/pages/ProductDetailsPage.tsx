@@ -8,7 +8,6 @@ import {
   APPWRITE_PRODUCTS_COLLECTION_ID, 
   APPWRITE_SERVICE_REVIEWS_COLLECTION_ID, 
   APPWRITE_TRANSACTIONS_COLLECTION_ID,
-  // Assuming you have this constant, if not add it to your config
   APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID 
 } from "@/lib/appwrite";
 import { Query, ID } from "appwrite";
@@ -18,11 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Loader2, ArrowLeft, MapPin, Star, ShieldCheck, 
-  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign 
+  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign, Percent 
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -30,7 +27,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; 
 import { useBargainRequests } from '@/hooks/useBargainRequests'; 
-import BuyProductDialog from "@/components/forms/BuyProductDialog";
 
 // --- HELPER: IMAGE OPTIMIZER ---
 const getOptimizedImageUrl = (url?: string) => {
@@ -49,7 +45,6 @@ const ProductDetailsPage = () => {
   const navigate = useNavigate();
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   
-  // --- REAL BARGAIN HOOK ---
   const { sendBargainRequest } = useBargainRequests();
 
   // Data State
@@ -61,14 +56,12 @@ const ProductDetailsPage = () => {
   const [imageStatus, setImageStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [displayImage, setDisplayImage] = useState<string>("");
 
-  // --- REAL BARGAIN STATE ---
-  // We store the full request object to get the specific 'requestedAmount'
+  // Bargain State
   const [myBargainRequest, setMyBargainRequest] = useState<any>(null);
   
   // Transaction State
   const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
   const [isBargainDialogOpen, setIsBargainDialogOpen] = useState(false);
-  const [bargainInputAmount, setBargainInputAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Ambassador State
@@ -80,7 +73,6 @@ const ProductDetailsPage = () => {
     const fetchData = async () => {
       if (!productId) return;
       try {
-        // 1. Fetch Product
         const productDoc = await databases.getDocument(
           APPWRITE_DATABASE_ID,
           APPWRITE_PRODUCTS_COLLECTION_ID,
@@ -88,7 +80,7 @@ const ProductDetailsPage = () => {
         );
         setProduct(productDoc);
         
-        // 2. Handle Image
+        // Handle Image
         const optimizedUrl = getOptimizedImageUrl(productDoc.imageUrl);
         if (optimizedUrl) {
             setDisplayImage(optimizedUrl);
@@ -97,7 +89,7 @@ const ProductDetailsPage = () => {
             setImageStatus('error');
         }
 
-        // 3. Fetch Reviews
+        // Fetch Reviews
         const reviewsRes = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
@@ -106,7 +98,7 @@ const ProductDetailsPage = () => {
         setReviews(reviewsRes.documents);
 
       } catch (error) {
-        console.error("Error fetching details:", error);
+        console.error("Error:", error);
         toast.error("Product not found.");
         navigate("/market");
       } finally {
@@ -117,16 +109,15 @@ const ProductDetailsPage = () => {
     fetchData();
   }, [productId, navigate]);
 
-  // --- FETCH & SUBSCRIBE TO MY BARGAIN REQUEST ---
+  // --- FETCH BARGAIN STATUS ---
   useEffect(() => {
     if (!user || !productId) return;
 
     const fetchMyBargain = async () => {
         try {
-            // Find if I have already made an offer on this product
             const res = await databases.listDocuments(
                 APPWRITE_DATABASE_ID,
-                'bargain_requests', // Ensure this matches your collection ID in constants
+                'bargain_requests', 
                 [
                     Query.equal('productId', productId),
                     Query.equal('buyerId', user.$id)
@@ -136,67 +127,52 @@ const ProductDetailsPage = () => {
                 setMyBargainRequest(res.documents[0]);
             }
         } catch (error) {
-            console.error("Error fetching bargain status", error);
+            console.error("Error fetching bargain", error);
         }
     };
 
     fetchMyBargain();
 
-    // Subscribe to changes (Real-time update when Seller accepts!)
+    // Subscribe to changes
     const unsubscribe = databases.client.subscribe(
         `databases.${APPWRITE_DATABASE_ID}.collections.bargain_requests.documents`,
         (response) => {
             const payload = response.payload as any;
-            // If this update is relevant to me and this product
             if (payload.productId === productId && payload.buyerId === user.$id) {
                 setMyBargainRequest(payload);
-                if (payload.status === 'accepted') {
-                    toast.success("Great news! Your offer was accepted.");
-                } else if (payload.status === 'denied') {
-                    toast.error("Your offer was declined.");
-                }
+                if (payload.status === 'accepted') toast.success("Offer accepted!");
+                if (payload.status === 'denied') toast.error("Offer denied.");
             }
         }
     );
 
-    return () => {
-        unsubscribe();
-    };
+    return () => { unsubscribe(); };
   }, [user, productId]);
 
 
-  // --- CALCULATE DYNAMIC PRICES ---
+  // --- CALCULATE PRICES ---
   const originalPriceVal = product ? parseFloat(product.price.replace(/[₹,]/g, '').split('/')[0].trim()) : 0;
-  
-  // Logic: Use Bargain Price ONLY if status is 'accepted'
   const isBargainAccepted = myBargainRequest?.status === 'accepted';
   const finalPrice = isBargainAccepted ? myBargainRequest.requestedAmount : originalPriceVal;
-  
-  const bargainStatus = myBargainRequest?.status || 'none'; // 'none', 'pending', 'accepted', 'denied'
+  const bargainStatus = myBargainRequest?.status || 'none';
 
-
-  // --- REAL BARGAIN ACTION ---
-  const handleSendBargainRequest = async () => {
+  // --- SEND 15% BARGAIN REQUEST ---
+  const handleSendFixedBargain = async () => {
     if (!user || !product) return;
-    if (!bargainInputAmount) return;
     
     setIsProcessing(true);
     try {
-        const amount = parseFloat(bargainInputAmount);
+        const discountAmount = originalPriceVal * 0.85; // 15% Off
         
-        // Use the hook to create the DB document and trigger notification
-        await sendBargainRequest(product, amount);
+        await sendBargainRequest(product, parseFloat(discountAmount.toFixed(0)));
         
         setIsBargainDialogOpen(false);
-        toast.success("Offer Sent!", {
-            description: "The seller has been notified via Buzz. Wait for them to accept."
+        toast.success("15% Discount Request Sent!", {
+            description: "Wait for the seller to accept."
         });
         
-        // Optimistic update (optional, subscription will handle real update)
-        setMyBargainRequest({
-            status: 'pending',
-            requestedAmount: amount
-        });
+        // Optimistic Update
+        setMyBargainRequest({ status: 'pending', requestedAmount: discountAmount });
 
     } catch (error: any) {
         toast.error(error.message || "Failed to send offer.");
@@ -205,7 +181,7 @@ const ProductDetailsPage = () => {
     }
   };
 
-  // --- REAL PAYMENT ACTION ---
+  // --- PAYMENT ACTION ---
   const handleInitiatePayment = async () => {
     if (!user || !userProfile || !product) return;
     setIsProcessing(true);
@@ -243,11 +219,9 @@ const ProductDetailsPage = () => {
         await incrementAmbassadorDeliveriesCount();
       }
 
-      // Generate UPI Link
-      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${finalPrice.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` #${transactionId.substring(0,6)}`)}`;
+      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunai&am=${finalPrice.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` #${transactionId.substring(0,6)}`)}`;
       
       window.open(upiDeepLink, "_blank");
-      
       setIsBuyDialogOpen(false);
       navigate(`/market/confirm-payment/${transactionId}`);
 
@@ -283,7 +257,7 @@ const ProductDetailsPage = () => {
 
       <div className="max-w-3xl mx-auto">
         
-        {/* PRODUCT IMAGE */}
+        {/* IMAGE */}
         <div className="w-full aspect-square sm:aspect-video bg-muted/30 relative overflow-hidden group flex items-center justify-center bg-secondary/5">
           {imageStatus === 'loading' && (
              <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
@@ -301,14 +275,9 @@ const ProductDetailsPage = () => {
               />
           )}
 
-          {/* FALLBACK: APP LOGO */}
           {imageStatus === 'error' && (
              <div className="flex flex-col items-center justify-center opacity-80">
-                <img 
-                    src="/app-logo.png" // Using the correct public path
-                    alt="App Logo"
-                    className="h-24 w-24 object-contain drop-shadow-md mb-2"
-                />
+                <img src="/app-logo.png" alt="App Logo" className="h-24 w-24 object-contain drop-shadow-md mb-2" />
                 <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                     <ImageOff className="h-3 w-3" /> No Preview
                 </span>
@@ -322,9 +291,8 @@ const ProductDetailsPage = () => {
           </div>
         </div>
 
-        {/* MAIN INFO */}
+        {/* INFO */}
         <div className="p-5 space-y-6">
-          
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-foreground leading-tight">{product.title}</h1>
             <div className="flex items-center gap-2">
@@ -334,22 +302,16 @@ const ProductDetailsPage = () => {
                {isBargainAccepted && (
                    <>
                      <span className="text-sm text-muted-foreground line-through decoration-destructive">₹{originalPriceVal}</span>
-                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
-                        Accepted
-                     </Badge>
+                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Accepted</Badge>
                    </>
                )}
             </div>
-            {product.condition && (
-               <Badge variant="secondary" className="mt-2 text-xs font-medium">
-                 Condition: {product.condition}
-               </Badge>
-            )}
+            {product.condition && <Badge variant="secondary" className="mt-2 text-xs font-medium">Condition: {product.condition}</Badge>}
           </div>
 
           <Separator />
 
-          {/* SELLER CARD */}
+          {/* SELLER */}
           <div className="flex items-center justify-between bg-card border border-border/50 p-4 rounded-xl shadow-sm">
              <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12 border-2 border-secondary-neon/20">
@@ -387,7 +349,7 @@ const ProductDetailsPage = () => {
              </div>
           </div>
 
-          {/* DESCRIPTION */}
+          {/* DESC */}
           <div className="space-y-2">
             <h3 className="font-bold text-lg">About this item</h3>
             <p className="text-sm text-muted-foreground leading-7 whitespace-pre-wrap">
@@ -423,46 +385,41 @@ const ProductDetailsPage = () => {
       </div>
 
       {/* --- STICKY ACTION BAR --- */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
-         <div className="max-w-3xl mx-auto flex gap-3">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+         <div className="max-w-3xl mx-auto flex gap-3 h-12">
+            {/* Logic: If Owner, Show 'Your Listing'. If not, show Actions */}
             {!isOwner ? (
                 <>
-                    {/* BARGAIN BUTTON (Logic: Show unless already accepted) */}
+                    {/* BARGAIN BUTTON (Hidden if accepted) */}
                     {!isBargainAccepted && (
                       <Dialog open={isBargainDialogOpen} onOpenChange={setIsBargainDialogOpen}>
                           <DialogTrigger asChild>
                               <Button 
                                 variant="outline" 
-                                className="flex-1 h-12 border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10 font-bold"
-                                disabled={bargainStatus === 'pending'} // Disable if already waiting
+                                className="flex-1 h-full border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10 font-bold"
+                                disabled={bargainStatus === 'pending'} 
                               >
-                                  <Gavel className="mr-2 h-4 w-4" /> 
-                                  {bargainStatus === 'pending' ? 'Offer Pending' : bargainStatus === 'denied' ? 'Try Again' : 'Make Offer'}
+                                  <Percent className="mr-2 h-4 w-4" /> 
+                                  {bargainStatus === 'pending' ? 'Offer Pending' : bargainStatus === 'denied' ? 'Fixed Price Only' : 'Get 15% Off'}
                               </Button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[400px]">
                               <DialogHeader>
-                                  <DialogTitle>Negotiate Price</DialogTitle>
-                                  <DialogDescription>Enter your offer. The seller will receive a notification.</DialogDescription>
+                                  <DialogTitle>Request Discount</DialogTitle>
+                                  <DialogDescription>
+                                      Send a request to buy this for <b>₹{(originalPriceVal * 0.85).toFixed(0)}</b> (15% Off).
+                                  </DialogDescription>
                               </DialogHeader>
-                              <div className="py-4 space-y-4">
-                                  <div className="space-y-2">
-                                      <Label>Your Offer (₹)</Label>
-                                      <div className="relative">
-                                          <span className="absolute left-3 top-3 text-muted-foreground font-bold">₹</span>
-                                          <Input 
-                                              type="number" 
-                                              className="pl-8 text-lg font-bold" 
-                                              placeholder={(originalPriceVal * 0.85).toFixed(0)}
-                                              value={bargainInputAmount}
-                                              onChange={(e) => setBargainInputAmount(e.target.value)}
-                                          />
-                                      </div>
+                              <div className="py-4 bg-secondary/5 rounded-lg p-3">
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-sm text-muted-foreground line-through">₹{originalPriceVal}</span>
+                                      <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+                                      <span className="text-lg font-bold text-green-500">₹{(originalPriceVal * 0.85).toFixed(0)}</span>
                                   </div>
                               </div>
                               <DialogFooter>
-                                  <Button onClick={handleSendBargainRequest} disabled={!bargainInputAmount || isProcessing} className="w-full bg-secondary-neon text-primary-foreground">
-                                      {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Offer"}
+                                  <Button onClick={handleSendFixedBargain} disabled={isProcessing} className="w-full bg-secondary-neon text-primary-foreground font-bold">
+                                      {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send 15% Offer"}
                                   </Button>
                               </DialogFooter>
                           </DialogContent>
@@ -472,7 +429,7 @@ const ProductDetailsPage = () => {
                     {/* BUY BUTTON */}
                     <Dialog open={isBuyDialogOpen} onOpenChange={setIsBuyDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button className="flex-[1.5] h-12 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold text-base shadow-lg shadow-secondary-neon/20">
+                            <Button className="flex-[1.5] h-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold text-base shadow-lg shadow-secondary-neon/20">
                                 <ShoppingCart className="mr-2 h-5 w-5" /> 
                                 {isBargainAccepted ? `Buy Now @ ₹${finalPrice}` : 'Buy Now'}
                             </Button>
@@ -487,7 +444,7 @@ const ProductDetailsPage = () => {
                             
                             <div className="space-y-4 py-2">
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="text-muted-foreground">Price:</span>
+                                    <span className="text-muted-foreground">Total Price:</span>
                                     <span className="font-bold text-lg">₹{finalPrice.toFixed(2)}</span>
                                 </div>
                                 <AmbassadorDeliveryOption 
@@ -508,7 +465,7 @@ const ProductDetailsPage = () => {
                     </Dialog>
                 </>
             ) : (
-                <Button disabled className="w-full h-12 bg-muted text-muted-foreground font-bold">
+                <Button disabled className="w-full h-full bg-muted text-muted-foreground font-bold border border-border">
                     This is your listing
                 </Button>
             )}
