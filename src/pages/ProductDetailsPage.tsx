@@ -1,320 +1,250 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ID } from 'appwrite';
-import { Product } from "@/lib/mockData";
-import { containsBlockedWords } from "@/lib/moderation";
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_SERVICE_REVIEWS_COLLECTION_ID } from "@/lib/appwrite";
+import { Query } from "appwrite";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, MapPin, Star, DollarSign, MessageSquareText, Building2, Loader2, Flag, Award } from 'lucide-react';
-import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, APPWRITE_PRODUCTS_COLLECTION_ID } from '@/lib/appwrite';
-import { DEVELOPER_UPI_ID } from '@/lib/config';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import ReportListingForm from "@/components/forms/ReportListingForm";
-import { useBargainRequests } from '@/hooks/useBargainRequests';
-import { getLevelBadge } from "@/utils/badges";
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Loader2, ArrowLeft, MapPin, Share2, Star, ShieldCheck, Heart, ShoppingCart, MessageCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import BuyProductDialog from "@/components/forms/BuyProductDialog";
 
-export default function ProductDetailsPage() {
+const ProductDetailsPage = () => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
-  const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
-
-  const [product, setProduct] = useState<Product | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isConfirmPurchaseDialogOpen, setIsConfirmPurchaseDialogOpen] = useState(false);
-  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
-  const [ambassadorMessage, setAmbassadorMessage] = useState("");
-  const [isBargainPurchase, setIsBargainPurchase] = useState(false);
-
-  // Get current bargain status (Real-time updated via the hook)
-  const { status: currentBargainStatus } = getBargainStatusForProduct(productId || '');
+  const { user } = useAuth();
+  
+  const [product, setProduct] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
 
   useEffect(() => {
-    const fetchProduct = async () => {
-      if (!productId) {
-        setError("Invalid product ID.");
-        setIsLoading(false);
-        return;
-      }
-      setIsLoading(true);
+    const fetchData = async () => {
+      if (!productId) return;
       try {
-        const doc = await databases.getDocument(
+        // 1. Fetch Product Details
+        const productDoc = await databases.getDocument(
           APPWRITE_DATABASE_ID,
           APPWRITE_PRODUCTS_COLLECTION_ID,
           productId
-        ) as unknown as Product;
-        setProduct(doc);
-      } catch (err: any) {
-        console.error("Error fetching product:", err);
-        setError("Product not found or failed to load.");
+        );
+        setProduct(productDoc);
+
+        // 2. Fetch Reviews (using service_reviews collection filtered by productId)
+        // Assuming your review schema links via 'serviceId' or 'productId'
+        const reviewsRes = await databases.listDocuments(
+          APPWRITE_DATABASE_ID,
+          APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+          [Query.equal("serviceId", productId), Query.orderDesc("$createdAt")]
+        );
+        setReviews(reviewsRes.documents);
+
+      } catch (error) {
+        console.error("Error fetching details:", error);
+        toast.error("Product not found or removed.");
+        navigate("/market");
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-    fetchProduct();
-  }, [productId]);
 
-  const handleOpenConfirmPurchase = (bargain: boolean) => {
-    if (!user || !userProfile) {
-      toast.error("Please log in to proceed.");
-      navigate("/auth");
-      return;
-    }
-    if (!product) return;
-    if (user.$id === product.userId) {
-      toast.error("You cannot buy your own listing.");
-      return;
-    }
-    
-    // Set the state so the payment function knows which price to use
-    setIsBargainPurchase(bargain);
-    setIsConfirmPurchaseDialogOpen(true);
-  };
+    fetchData();
+  }, [productId, navigate]);
 
-  const handleInitiatePayment = async () => {
-    if (!user || !userProfile || !product) return;
-    setIsProcessing(true);
-    
-    const priceString = product.price.replace(/[₹,]/g, '').split('/')[0].trim();
-    let amount = parseFloat(priceString);
-    
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Invalid product price.");
-      setIsProcessing(false);
-      return;
-    }
-
-    const transactionType = product.type === 'sell' ? 'buy' : 'rent';
-    const discountRate = 0.15; 
-    
-    // Apply discount if this is a bargain purchase
-    if (isBargainPurchase) {
-      amount = amount * (1 - discountRate);
-    }
-
-    const transactionAmount = parseFloat(amount.toFixed(2));
-    const transactionNote = isBargainPurchase 
-      ? `Bargain purchase of ${product.title}` 
-      : `${transactionType} of ${product.title}`;
-
-    try {
-      const newTransaction = await databases.createDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_TRANSACTIONS_COLLECTION_ID,
-        ID.unique(),
-        {
-          productId: product.$id,
-          productTitle: product.title,
-          buyerId: user.$id,
-          buyerName: user.name,
-          sellerId: product.userId,
-          sellerName: product.sellerName,
-          sellerUpiId: product.sellerUpiId,
-          amount: transactionAmount,
-          status: "initiated",
-          type: transactionType,
-          isBargain: isBargainPurchase,
-          collegeName: userProfile.collegeName,
-          ambassadorDelivery: ambassadorDelivery,
-          ambassadorMessage: ambassadorMessage || null,
-        }
-      );
-
-      const transactionId = newTransaction.$id;
-      if (ambassadorDelivery) {
-        await incrementAmbassadorDeliveriesCount();
-      }
-
-      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${transactionAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX ID: ${transactionId})`)}`;
-      window.open(upiDeepLink, "_blank");
-      navigate(`/market/confirm-payment/${transactionId}`);
-
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Failed to initiate transaction.");
-    } finally {
-      setIsProcessing(false);
-      setIsConfirmPurchaseDialogOpen(false);
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: product?.title,
+        text: `Check out this deal on Natpe Thunai: ${product?.title}`,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied to clipboard");
     }
   };
 
-  const handleSendBargainRequest = async () => {
-    if (!user || !userProfile || !product) {
-        toast.error("Please log in."); 
-        return;
-    }
-    if (user.$id === product.userId) {
-        toast.error("Cannot bargain on own item.");
-        return;
-    }
-    
-    // Status checks
-    if (currentBargainStatus === 'pending') {
-      toast.info("Request pending."); return;
-    }
-    if (currentBargainStatus === 'denied') {
-      toast.info("Request denied."); return;
-    }
-    if (currentBargainStatus === 'accepted') {
-      toast.success("Bargain already accepted! Click 'Buy Now' to purchase at discounted price."); return;
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-secondary-neon" />
+      </div>
+    );
+  }
 
-    const originalAmount = parseFloat(product.price.replace(/[₹,]/g, '').split('/')[0].trim());
-    const requestedBargainAmount = originalAmount * (1 - 0.15);
-
-    try {
-      await sendBargainRequest(product, requestedBargainAmount);
-    } catch (error) {
-      // Error handled in hook
-    }
-  };
-
-  if (isLoading) return <div className="p-6 text-center">Loading...</div>;
-  if (error || !product) return <div className="p-6 text-destructive">{error || "Product not found"}</div>;
-
-  const isModerated = containsBlockedWords(product.description) || containsBlockedWords(product.title);
-  const isBuyOrRent = product.type === 'sell' || product.type === 'rent';
-  const actionText = product.type === 'sell' ? 'Buy Now' : 'Rent Now';
-  
-  // Price Calculations
-  const originalPriceVal = parseFloat(product.price.replace(/[₹,]/g, '').split('/')[0].trim());
-  const bargainPriceVal = (originalPriceVal * 0.85).toFixed(2);
-  
-  // Logic: Is the bargain accepted?
-  const isBargainAccepted = currentBargainStatus === 'accepted';
-  
-  // Determine displayed price for the confirm dialog
-  const currentPurchasePrice = (isBargainPurchase || isBargainAccepted) ? parseFloat(bargainPriceVal) : originalPriceVal;
-  
-  const sellerBadge = product.sellerLevel ? getLevelBadge(product.sellerLevel) : undefined;
+  if (!product) return null;
 
   return (
-    <div className="container mx-auto p-6 pb-20">
-      <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-        <div>
-          <img src={product.imageUrl || "/app-logo.png"} alt={product.title} className="w-full h-auto object-cover rounded-lg shadow-lg max-h-[400px]" />
-        </div>
-
-        <div>
-          <h1 className="text-4xl font-bold mb-2 text-foreground">{product.title}</h1>
-          
-          {/* UPDATED PRICE DISPLAY LOGIC */}
-          <div className="mb-4">
-            {isBargainAccepted ? (
-                <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xl text-muted-foreground line-through decoration-destructive">
-                            {product.price}
-                        </span>
-                        <span className="text-3xl font-bold text-green-500 animate-pulse">
-                            ₹{bargainPriceVal}
-                        </span>
-                    </div>
-                    <Badge variant="outline" className="w-fit border-green-500 text-green-600 bg-green-50">
-                        Bargain Accepted (-15%)
-                    </Badge>
-                </div>
-            ) : (
-                <p className="text-3xl font-semibold text-secondary-neon">{product.price}</p>
-            )}
-          </div>
-
-          <div className="flex items-center space-x-2 mb-4">
-            <Badge variant="secondary" className="bg-primary-blue-light text-primary-foreground">{product.type.toUpperCase()}</Badge>
-            <div className="flex items-center text-secondary-neon">
-              <Star className="h-4 w-4 mr-1 fill-secondary-neon" />
-              <span>{product.sellerRating}</span>
-            </div>
-            {sellerBadge && <Badge className="bg-blue-500 text-white flex items-center gap-1"><Award className="h-3 w-3" /> {sellerBadge}</Badge>}
-          </div>
-
-          <p className="text-muted-foreground mb-6">{product.description}</p>
-
-          {isBuyOrRent && (
-            <div className="space-y-4">
-              <Button 
-                size="lg" 
-                className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90"
-                // FIX: Pass true if bargain is accepted
-                onClick={() => handleOpenConfirmPurchase(isBargainAccepted)} 
-                disabled={isProcessing || product.status !== 'available'}
-              >
-                <DollarSign className="mr-2 h-5 w-5" /> 
-                {isProcessing ? "Processing..." : (product.status !== 'available' ? "Not Available" : (isBargainAccepted ? `Buy at ₹${bargainPriceVal}` : actionText))}
-              </Button>
-              
-              {!isBargainAccepted && (
-                  <Button 
-                    variant="outline" 
-                    size="lg" 
-                    className="w-full border-primary text-primary hover:bg-primary/10"
-                    onClick={handleSendBargainRequest} 
-                    disabled={isProcessing || currentBargainStatus === 'pending' || currentBargainStatus === 'denied' || product.status !== 'available' || user?.$id === product.userId}
-                  >
-                    <MessageSquareText className="mr-2 h-5 w-5" /> 
-                    {currentBargainStatus === 'pending' ? 'Bargain Pending...' : 
-                     currentBargainStatus === 'denied' ? 'Bargain Denied' : 
-                     `Bargain (15% off: ₹${bargainPriceVal})`}
-                  </Button>
-              )}
-            </div>
-          )}
-          
-          {/* ... (Rest of the component: Seller Info, Reports, etc. remains same) */}
-          {/* Omitted for brevity, include existing Card, Alerts, Dialogs here */}
-          
-          {/* NEW: Report Listing Button & Dialogs need to remain here */}
-           <div className="mt-6">
-                {/* ... existing Seller Card ... */}
-                {/* ... existing Report Dialog ... */}
-           </div>
+    <div className="min-h-screen bg-background pb-24">
+      {/* --- HEADER --- */}
+      <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background/80 backdrop-blur-md border-b border-border">
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="icon" onClick={handleShare}>
+            <Share2 className="h-5 w-5" />
+          </Button>
+          <Button variant="ghost" size="icon">
+            <Heart className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 
-      <Dialog open={isConfirmPurchaseDialogOpen} onOpenChange={setIsConfirmPurchaseDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border">
-          <DialogHeader>
-            <DialogTitle className="text-foreground flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-secondary-neon" /> Confirm Payment
-            </DialogTitle>
-            <DialogDescription>Non-Escrow Payment</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-foreground">Item: <span className="font-semibold">{product.title}</span></p>
-            <p className="text-xl font-bold text-secondary-neon">
-              Price: ₹{currentPurchasePrice.toFixed(2)}
-            </p>
-            {/* Show badge in dialog if bargain is active */}
-            {(isBargainPurchase || isBargainAccepted) && (
-              <Badge variant="outline" className="bg-green-100 text-green-800">15% Bargain Applied</Badge>
+      <div className="max-w-4xl mx-auto">
+        
+        {/* --- PRODUCT IMAGE --- */}
+        <div className="w-full h-80 sm:h-96 bg-muted relative overflow-hidden">
+          <img 
+            src={product.imageUrl ? product.imageUrl : "/icons/icon-512x512.png"} 
+            alt={product.title}
+            className="w-full h-full object-contain bg-black/5"
+            onError={(e) => { (e.target as HTMLImageElement).src = '/icons/icon-512x512.png'; }}
+          />
+          {product.type === 'gift' && (
+             <div className="absolute bottom-4 left-4 bg-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse">
+                FREE GIFT 🎁
+             </div>
+          )}
+        </div>
+
+        {/* --- PRODUCT INFO --- */}
+        <div className="p-4 space-y-4">
+          <div>
+            <div className="flex justify-between items-start">
+               <h1 className="text-2xl font-bold text-foreground leading-tight">{product.title}</h1>
+               <div className="flex flex-col items-end">
+                  <span className="text-2xl font-black text-secondary-neon">{product.price}</span>
+                  <Badge variant="outline" className="text-[10px] uppercase">{product.type}</Badge>
+               </div>
+            </div>
+            
+            {product.condition && (
+               <p className="text-sm text-muted-foreground mt-1">
+                 Condition: <span className="font-semibold text-foreground">{product.condition}</span>
+               </p>
             )}
           </div>
-          
-          <AmbassadorDeliveryOption
-            ambassadorDelivery={ambassadorDelivery}
-            setAmbassadorDelivery={setAmbassadorDelivery}
-            ambassadorMessage={ambassadorMessage}
-            setAmbassadorMessage={setAmbassadorMessage}
-          />
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsConfirmPurchaseDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleInitiatePayment} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground">
-              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Proceed to Payment"}
+          <Separator className="bg-border/60" />
+
+          {/* --- MEETING SPOT (Important) --- */}
+          <Card className="bg-secondary/5 border-secondary-neon/20 shadow-sm">
+            <CardContent className="p-3 flex items-start gap-3">
+               <div className="p-2 bg-secondary-neon/10 rounded-full shrink-0">
+                  <MapPin className="h-5 w-5 text-secondary-neon" />
+               </div>
+               <div>
+                  <h3 className="font-bold text-sm">Meeting Spot</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {product.location || "Contact seller for location"}
+                  </p>
+                  <p className="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3" /> Meet in public campus areas only.
+                  </p>
+               </div>
+            </CardContent>
+          </Card>
+
+          {/* --- DESCRIPTION --- */}
+          <div>
+            <h3 className="font-bold text-lg mb-2">Description</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {product.description}
+            </p>
+          </div>
+
+          <Separator className="bg-border/60" />
+
+          {/* --- SELLER INFO --- */}
+          <div className="flex items-center justify-between">
+             <div className="flex items-center gap-3">
+                <Avatar className="h-12 w-12 border-2 border-secondary-neon/30">
+                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${product.sellerName}`} />
+                  <AvatarFallback>S</AvatarFallback>
+                </Avatar>
+                <div>
+                   <p className="text-sm font-bold">{product.sellerName}</p>
+                   <p className="text-xs text-muted-foreground">Seller</p>
+                </div>
+             </div>
+             <Button variant="outline" size="sm" onClick={() => toast.info("Opening Chat...")}>
+                <MessageCircle className="mr-2 h-4 w-4" /> Chat
+             </Button>
+          </div>
+
+          <Separator className="bg-border/60" />
+
+          {/* --- REVIEWS SECTION --- */}
+          <div className="space-y-3">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+               Ratings & Reviews <span className="text-xs font-normal text-muted-foreground">({reviews.length})</span>
+            </h3>
+            
+            {reviews.length === 0 ? (
+               <div className="text-center py-6 bg-muted/20 rounded-lg">
+                  <p className="text-sm text-muted-foreground">No reviews yet. Be the first!</p>
+               </div>
+            ) : (
+               <div className="space-y-3">
+                  {reviews.map((review) => (
+                     <div key={review.$id} className="p-3 bg-card border border-border/50 rounded-lg">
+                        <div className="flex justify-between items-center mb-1">
+                           <span className="font-bold text-sm">{review.reviewerName || "Student"}</span>
+                           <div className="flex items-center gap-0.5">
+                              <span className="text-sm font-bold">{review.rating}</span>
+                              <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                           </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{review.comment}</p>
+                     </div>
+                  ))}
+               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* --- STICKY BOTTOM ACTION BAR (Mobile E-com Style) --- */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-background border-t border-border z-20 flex gap-3 max-w-md mx-auto sm:max-w-full sm:px-8">
+         <div className="flex-1">
+            <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Price</p>
+            <p className="text-xl font-black text-foreground">{product.price}</p>
+         </div>
+         
+         {product.type !== 'gift' && user?.$id !== product.userId && (
+            <Dialog open={isBuyDialogOpen} onOpenChange={setIsBuyDialogOpen}>
+               <DialogTrigger asChild>
+                  <Button className="flex-1 h-12 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold text-base shadow-[0_0_15px_rgba(0,243,255,0.3)]">
+                     <ShoppingCart className="mr-2 h-5 w-5" /> Buy Now
+                  </Button>
+               </DialogTrigger>
+               <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader><DialogTitle>Secure Purchase</DialogTitle></DialogHeader>
+                  <BuyProductDialog 
+                     product={product} 
+                     onPurchaseInitiated={() => setIsBuyDialogOpen(false)} 
+                     onCancel={() => setIsBuyDialogOpen(false)} 
+                  />
+               </DialogContent>
+            </Dialog>
+         )}
+         
+         {user?.$id === product.userId && (
+            <Button disabled className="flex-1 h-12 bg-muted text-muted-foreground">
+               Your Listing
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+         )}
+      </div>
     </div>
   );
-}
+};
+
+export default ProductDetailsPage;
