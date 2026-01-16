@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Product } from "@/lib/mockData";
 import BuyProductDialog from "./forms/BuyProductDialog";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom"; // Essential for navigation
+import { useNavigate } from "react-router-dom";
 
 interface ProductListingCardProps {
   product: Product;
@@ -21,6 +21,21 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
+  
+  // Image State
+  const [imageSrc, setImageSrc] = useState<string>("");
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    // Check if imageUrl exists and is valid, otherwise set fallback immediately
+    if (product.imageUrl && product.imageUrl.trim() !== "") {
+        setImageSrc(product.imageUrl);
+        setHasError(false);
+    } else {
+        setImageSrc("/app-logo.png");
+        setHasError(true);
+    }
+  }, [product.imageUrl]);
 
   const getTypeBadgeStyle = (type: string) => {
     switch (type) {
@@ -31,21 +46,13 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
     }
   };
 
-  // --- NAVIGATION HANDLER ---
   const handleCardClick = (e: React.MouseEvent) => {
-    // Prevent navigation if the user clicked a Button or Dialog
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('[role="dialog"]')) {
       return;
     }
-    // Navigate to the details page
     navigate(`/market/${product.$id}`);
   };
-
-  // Image Fallback Logic
-  const displayImage = product.imageUrl && product.imageUrl.trim() !== "" 
-    ? product.imageUrl 
-    : "/icons/icon-512x512.png"; // PWA Icon Path
 
   return (
     <Card 
@@ -54,19 +61,23 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
     >
       
       {/* IMAGE SECTION */}
-      <div className="relative h-48 w-full bg-muted overflow-hidden">
+      <div className="relative h-48 w-full bg-muted/30 overflow-hidden flex items-center justify-center">
         <img 
-          src={displayImage} 
+          src={imageSrc} 
           alt={product.title}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          onError={(e) => { 
-            (e.target as HTMLImageElement).src = '/icons/icon-512x512.png'; 
-            (e.target as HTMLImageElement).classList.add('object-contain', 'p-4'); // Make fallback look nicer
+          className={cn(
+            "w-full h-full transition-transform duration-700 group-hover:scale-110",
+            // If it's the logo (error state), use 'object-contain' and add padding so it looks nice
+            hasError ? "object-contain p-8 opacity-90" : "object-cover"
+          )}
+          onError={() => { 
+            setImageSrc("/app-logo.png");
+            setHasError(true);
           }}
         />
         
-        {/* Overlay Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+        {/* Overlay Gradient (Only if real image) */}
+        {!hasError && <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />}
 
         <div className="absolute top-3 left-3">
           <Badge variant="outline" className={cn("capitalize text-[10px] font-bold tracking-wider shadow-sm backdrop-blur-md bg-white/90", getTypeBadgeStyle(product.type))}>
@@ -120,7 +131,7 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
                 <Button 
                   className="w-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 h-9 text-xs font-bold shadow-sm"
                   disabled={user?.$id === product.userId}
-                  onClick={(e) => e.stopPropagation()} // Stop click from opening details
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {product.type === 'rent' ? 'Rent' : 'Buy'}
                 </Button>
@@ -135,10 +146,7 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
             </DialogContent>
             </Dialog>
         ) : (
-            <Button 
-              className="w-full bg-pink-500 text-white hover:bg-pink-600 h-9 text-xs font-bold"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <Button className="w-full bg-pink-500 text-white hover:bg-pink-600 h-9 text-xs font-bold" onClick={(e) => e.stopPropagation()}>
                 Claim
             </Button>
         )}
