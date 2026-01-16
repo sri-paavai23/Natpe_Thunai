@@ -6,13 +6,14 @@ import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWR
 import { Query } from "appwrite";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
   Loader2, ArrowLeft, MapPin, Star, ShieldCheck, 
-  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel 
+  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff 
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -20,15 +21,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import BuyProductDialog from "@/components/forms/BuyProductDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-// --- HELPER: GOOGLE DRIVE IMAGE FIX ---
+// --- HELPER: URL CLEANUP ---
 const getOptimizedImageUrl = (url?: string) => {
-  if (!url) return "/icons/icon-512x512.png"; // Immediate fallback if empty
+  if (!url) return null;
   
-  // Check if it's a Google Drive "view" link
+  // Google Drive Fix
   if (url.includes("drive.google.com") && url.includes("/view")) {
     const idMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (idMatch && idMatch[1]) {
-      // Convert to direct export link
       return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
     }
   }
@@ -44,9 +44,10 @@ const ProductDetailsPage = () => {
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Image Handling State
-  const [displayImage, setDisplayImage] = useState<string>("/icons/icon-512x512.png");
-  const [imageError, setImageError] = useState(false);
+  // --- ROBUST IMAGE STATE ---
+  // 'loading' | 'success' | 'error'
+  const [imageStatus, setImageStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [displayImage, setDisplayImage] = useState<string>("");
 
   // Interactive State
   const [currentPrice, setCurrentPrice] = useState<string>("0");
@@ -65,11 +66,16 @@ const ProductDetailsPage = () => {
           productId
         );
         setProduct(productDoc);
-        setCurrentPrice(productDoc.price); 
+        setCurrentPrice(productDoc.price);
         
-        // Initialize Image with Optimization
+        // Handle Image URL
         const optimizedUrl = getOptimizedImageUrl(productDoc.imageUrl);
-        setDisplayImage(optimizedUrl);
+        if (optimizedUrl) {
+            setDisplayImage(optimizedUrl);
+            setImageStatus('loading'); // Start loading the new URL
+        } else {
+            setImageStatus('error'); // No URL, go straight to fallback
+        }
 
         const reviewsRes = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
@@ -132,19 +138,43 @@ const ProductDetailsPage = () => {
 
       <div className="max-w-3xl mx-auto">
         
-        {/* --- PRODUCT IMAGE --- */}
-        <div className="w-full aspect-square sm:aspect-video bg-muted relative overflow-hidden group flex items-center justify-center bg-secondary/5">
-          <img 
-            src={displayImage}
-            alt={product.title}
-            className={`w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 ${imageError ? 'p-12 opacity-80' : ''}`}
-            onError={() => { 
-                setImageError(true);
-                setDisplayImage("/icons/icon-512x512.png"); 
-            }}
-          />
-          {/* Badge Overlay */}
-          <div className="absolute top-4 left-4">
+        {/* --- PRODUCT IMAGE (ROBUST) --- */}
+        <div className="w-full aspect-square sm:aspect-video bg-muted/30 relative overflow-hidden group flex items-center justify-center">
+          
+          {/* 1. Loading Skeleton */}
+          {imageStatus === 'loading' && (
+             <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
+                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+             </div>
+          )}
+
+          {/* 2. Actual Image (Hidden until loaded, or removed if error) */}
+          {imageStatus !== 'error' && (
+              <img 
+                src={displayImage}
+                alt={product.title}
+                className={`w-full h-full object-contain transition-opacity duration-500 ${imageStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
+                onLoad={() => setImageStatus('success')}
+                onError={() => setImageStatus('error')} // Trigger fallback immediately
+              />
+          )}
+
+          {/* 3. Fallback App Logo (If Error or No URL) */}
+          {imageStatus === 'error' && (
+             <div className="flex flex-col items-center justify-center opacity-80">
+                <img 
+                    src="/icons/icon-512x512.png" // Ensure this path is correct in your public folder
+                    alt="App Logo"
+                    className="h-24 w-24 object-contain drop-shadow-md mb-2"
+                />
+                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <ImageOff className="h-3 w-3" /> No Preview Available
+                </span>
+             </div>
+          )}
+
+          {/* Overlay Badge */}
+          <div className="absolute top-4 left-4 z-10">
              <Badge className="bg-background/90 text-foreground backdrop-blur border border-border/50 shadow-sm uppercase tracking-wider text-[10px]">
                 {product.type}
              </Badge>
@@ -319,7 +349,7 @@ const ProductDetailsPage = () => {
                         <DialogContent className="sm:max-w-[425px]">
                             <DialogHeader><DialogTitle>Secure Purchase</DialogTitle></DialogHeader>
                             <BuyProductDialog 
-                                product={{...product, price: currentPrice}} // Pass the updated price!
+                                product={{...product, price: currentPrice}} 
                                 onPurchaseInitiated={() => setIsBuyDialogOpen(false)} 
                                 onCancel={() => setIsBuyDialogOpen(false)} 
                             />
