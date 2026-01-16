@@ -40,7 +40,8 @@ import TheEditPage from "./pages/TheEditPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import PostJobPage from "./pages/PostJobPage";
 import AmbassadorProgramPage from "./pages/AmbassadorProgramPage";
-import ProductDetailsPage from "./pages/ProductDetailsPage";
+// Note: Ensure this file is located at src/pages/market/ProductDetailsPage.tsx or update path
+import ProductDetailsPage from "./pages/market/ProductDetailsPage"; 
 import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -113,21 +114,15 @@ const OnlineRoutes = () => {
       
       <Route element={<AppLayout />}>
         <Route path="/home" element={<HomePage />} />
+        
+        {/* MARKET & PRODUCTS */}
         <Route path="/market" element={<MarketPage />} />
-        <Route path="/market/product/:productId" element={<ProductDetailsPage />} />
+        {/* FIX: Simplified path to match ProductListingCard navigation */}
+        <Route path="/market/:productId" element={<ProductDetailsPage />} />
         <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} />
+        
+        {/* SERVICES */}
         <Route path="/services" element={<ServicesPage />} />
-        <Route path="/activity" element={<ActivityPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/tournaments" element={<TournamentPage />} />
-
-        {/* Sub-pages */}
-        <Route path="/activity/tracking" element={<TrackingPage />} />
-        <Route path="/activity/cash-exchange" element={<CashExchangePage />} />
-        <Route path="/activity/lost-found" element={<LostAndFoundPage />} />
-        <Route path="/profile/details" element={<ProfileDetailsPage />} />
-        <Route path="/profile/wallet" element={<WalletPage />} />
-        <Route path="/profile/policies" element={<PoliciesPage />} />
         <Route path="/services/freelance" element={<FreelancePage />} />
         <Route path="/services/errands" element={<ErrandsPage />} />
         <Route path="/services/short-term" element={<ShortTermNeedsPage />} />
@@ -137,7 +132,22 @@ const OnlineRoutes = () => {
         <Route path="/services/post-job" element={<PostJobPage />} />
         <Route path="/services/ambassador-program" element={<AmbassadorProgramPage />} />
         <Route path="/services/confirm-payment/:transactionId" element={<ServicePaymentConfirmationPage />} />
+        
+        {/* ACTIVITY & CHAT */}
+        <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/activity/tracking" element={<TrackingPage />} />
+        <Route path="/activity/cash-exchange" element={<CashExchangePage />} />
+        <Route path="/activity/lost-found" element={<LostAndFoundPage />} />
         <Route path="/chat/:chatRoomId" element={<ChatPage />} />
+        
+        {/* PROFILE */}
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/profile/details" element={<ProfileDetailsPage />} />
+        <Route path="/profile/wallet" element={<WalletPage />} />
+        <Route path="/profile/policies" element={<PoliciesPage />} />
+        
+        {/* TOURNAMENTS */}
+        <Route path="/tournaments" element={<TournamentPage />} />
       </Route>
 
       <Route element={<DeveloperLayout />}>
