@@ -14,16 +14,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
   Loader2, ArrowLeft, MapPin, Star, ShieldCheck, 
-  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign, Flag 
+  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, DollarSign, Image as ImageIcon
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; // Ensure this component exists
-import { useBargainRequests } from '@/hooks/useBargainRequests'; // Ensure this hook exists
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+import { useBargainRequests } from '@/hooks/useBargainRequests';
+import BuyProductDialog from "@/components/forms/BuyProductDialog";
 
-// --- HELPER: IMAGE OPTIMIZER ---
+// Helper for Drive Links
 const getOptimizedImageUrl = (url?: string) => {
   if (!url) return null;
   if (url.includes("drive.google.com") && url.includes("/view")) {
@@ -40,18 +41,16 @@ const ProductDetailsPage = () => {
   const navigate = useNavigate();
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   
-  // Custom Hook for Bargains
   const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
   const { status: currentBargainStatus } = getBargainStatusForProduct(productId || '');
 
-  // Data State
   const [product, setProduct] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Image State
-  const [imageStatus, setImageStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [displayImage, setDisplayImage] = useState<string>("");
+  const [hasImageError, setHasImageError] = useState(false);
 
   // Transaction State
   const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
@@ -59,14 +58,11 @@ const ProductDetailsPage = () => {
   const [bargainAmount, setBargainAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Ambassador State
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  // Computed State
   const originalPriceVal = product ? parseFloat(product.price.replace(/[₹,]/g, '').split('/')[0].trim()) : 0;
   const isBargainAccepted = currentBargainStatus === 'accepted';
-  // If bargain accepted, use 85% of price, else original
   const finalPrice = isBargainAccepted ? (originalPriceVal * 0.85) : originalPriceVal;
 
   useEffect(() => {
@@ -80,13 +76,14 @@ const ProductDetailsPage = () => {
         );
         setProduct(productDoc);
         
-        // Handle Image
+        // Handle Initial Image State
         const optimizedUrl = getOptimizedImageUrl(productDoc.imageUrl);
-        if (optimizedUrl) {
+        if (optimizedUrl && optimizedUrl.trim() !== "") {
             setDisplayImage(optimizedUrl);
-            setImageStatus('loading');
+            setHasImageError(false);
         } else {
-            setImageStatus('error');
+            setHasImageError(true);
+            setDisplayImage("/app-logo.png"); // Fallback
         }
 
         const reviewsRes = await databases.listDocuments(
@@ -97,7 +94,7 @@ const ProductDetailsPage = () => {
         setReviews(reviewsRes.documents);
 
       } catch (error) {
-        console.error("Error fetching details:", error);
+        console.error("Error:", error);
         toast.error("Product not found.");
         navigate("/market");
       } finally {
@@ -108,18 +105,13 @@ const ProductDetailsPage = () => {
     fetchData();
   }, [productId, navigate]);
 
-  // --- BARGAIN HANDLER ---
   const handleSendBargainRequest = async () => {
-    if (!user || !product) return;
-    if (!bargainAmount) return;
-    
+    if (!user || !product || !bargainAmount) return;
     setIsProcessing(true);
     try {
-        // Send request using the hook (backend logic)
         await sendBargainRequest(product, parseFloat(bargainAmount));
         setIsBargainDialogOpen(false);
-        // Frontend feedback handled by hook/toast usually, but explicit success here:
-        toast.success("Offer Sent! Seller will be notified.");
+        toast.success("Offer Sent!");
     } catch (error: any) {
         toast.error(error.message || "Failed to send offer.");
     } finally {
@@ -127,7 +119,6 @@ const ProductDetailsPage = () => {
     }
   };
 
-  // --- PURCHASE HANDLER ---
   const handleInitiatePayment = async () => {
     if (!user || !userProfile || !product) return;
     setIsProcessing(true);
@@ -149,7 +140,7 @@ const ProductDetailsPage = () => {
           buyerName: user.name,
           sellerId: product.userId,
           sellerName: product.sellerName,
-          sellerUpiId: product.sellerUpiId, // Ensure this field exists in your DB schema
+          sellerUpiId: product.sellerUpiId, 
           amount: parseFloat(finalPrice.toFixed(2)),
           status: "initiated",
           type: transactionType,
@@ -165,7 +156,7 @@ const ProductDetailsPage = () => {
         await incrementAmbassadorDeliveriesCount();
       }
 
-      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${finalPrice.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX:${transactionId.substring(0,6)})`)}`;
+      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunai&am=${finalPrice.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX:${transactionId.substring(0,6)})`)}`;
       window.open(upiDeepLink, "_blank");
       
       setIsBuyDialogOpen(false);
@@ -202,36 +193,20 @@ const ProductDetailsPage = () => {
 
       <div className="max-w-3xl mx-auto">
         
-        {/* PRODUCT IMAGE */}
+        {/* PRODUCT IMAGE CONTAINER */}
         <div className="w-full aspect-square sm:aspect-video bg-muted/30 relative overflow-hidden group flex items-center justify-center bg-secondary/5">
-          {imageStatus === 'loading' && (
-             <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
-                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
-             </div>
-          )}
-          
-          {imageStatus !== 'error' && (
-              <img 
-                src={displayImage}
-                alt={product.title}
-                className={`w-full h-full object-contain transition-opacity duration-500 ${imageStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
-                onLoad={() => setImageStatus('success')}
-                onError={() => setImageStatus('error')} 
-              />
-          )}
-
-          {imageStatus === 'error' && (
-             <div className="flex flex-col items-center justify-center opacity-80">
-                <img 
-                    src="/app-logo.png" // CORRECT PATH for public folder
-                    alt="App Logo"
-                    className="h-24 w-24 object-contain drop-shadow-md mb-2"
-                />
-                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <ImageOff className="h-3 w-3" /> No Preview
-                </span>
-             </div>
-          )}
+          <img 
+            src={displayImage}
+            alt={product.title}
+            className={`w-full h-full transition-opacity duration-500 ${
+                // If error, contain the logo nicely. If success, cover the area.
+                hasImageError ? 'object-contain p-12 opacity-90' : 'object-contain'
+            }`}
+            onError={() => { 
+                setHasImageError(true);
+                setDisplayImage("/app-logo.png"); // Fallback to Logo
+            }}
+          />
 
           <div className="absolute top-4 left-4 z-10">
              <Badge className="bg-background/90 text-foreground backdrop-blur border border-border/50 shadow-sm uppercase tracking-wider text-[10px]">
@@ -242,7 +217,6 @@ const ProductDetailsPage = () => {
 
         {/* MAIN INFO */}
         <div className="p-5 space-y-6">
-          
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-foreground leading-tight">{product.title}</h1>
             <div className="flex items-center gap-2">
@@ -280,12 +254,7 @@ const ProductDetailsPage = () => {
                    <p className="text-xs text-muted-foreground">Verified Student</p>
                 </div>
              </div>
-             <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-xs border-secondary-neon/30 text-secondary-neon hover:bg-secondary-neon/10"
-                onClick={() => toast.info("Open tracking page to enable chat features.")}
-             >
+             <Button variant="outline" size="sm" onClick={() => toast.info("Opening Chat...")} className="h-8 text-xs border-secondary-neon/30 text-secondary-neon hover:bg-secondary-neon/10">
                 <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> Chat
              </Button>
           </div>
@@ -316,7 +285,7 @@ const ProductDetailsPage = () => {
             </p>
           </div>
 
-          {/* SAFETY INFO */}
+          {/* SAFETY */}
           <Collapsible className="border border-border rounded-lg">
              <CollapsibleTrigger className="flex items-center justify-between w-full p-4 text-sm font-medium hover:bg-muted/50 transition-colors">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-orange-500"/> Safety Guidelines</span>
@@ -325,8 +294,7 @@ const ProductDetailsPage = () => {
              <CollapsibleContent className="p-4 pt-0 text-xs text-muted-foreground leading-relaxed">
                 1. Always meet in public places like the Canteen or Library.<br/>
                 2. Verify the item condition before payment.<br/>
-                3. Use the in-app chat for coordination.<br/>
-                4. Do not share personal financial details.
+                3. Use the in-app chat for coordination.
              </CollapsibleContent>
           </Collapsible>
 
