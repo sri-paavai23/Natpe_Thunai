@@ -2,7 +2,15 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, APPWRITE_SERVICE_REVIEWS_COLLECTION_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
+import { 
+  databases, 
+  APPWRITE_DATABASE_ID, 
+  APPWRITE_PRODUCTS_COLLECTION_ID, 
+  APPWRITE_SERVICE_REVIEWS_COLLECTION_ID, 
+  APPWRITE_TRANSACTIONS_COLLECTION_ID,
+  // Assuming you have this constant, if not add it to your config
+  APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID 
+} from "@/lib/appwrite";
 import { Query, ID } from "appwrite";
 import { DEVELOPER_UPI_ID } from '@/lib/config';
 import { Button } from "@/components/ui/button";
@@ -14,17 +22,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
   Loader2, ArrowLeft, MapPin, Star, ShieldCheck, 
-  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, DollarSign, Image as ImageIcon
+  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign 
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { useBargainRequests } from '@/hooks/useBargainRequests';
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; 
+import { useBargainRequests } from '@/hooks/useBargainRequests'; 
 import BuyProductDialog from "@/components/forms/BuyProductDialog";
 
-// Helper for Drive Links
+// --- HELPER: IMAGE OPTIMIZER ---
 const getOptimizedImageUrl = (url?: string) => {
   if (!url) return null;
   if (url.includes("drive.google.com") && url.includes("/view")) {
@@ -41,34 +49,38 @@ const ProductDetailsPage = () => {
   const navigate = useNavigate();
   const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
   
-  const { sendBargainRequest, getBargainStatusForProduct } = useBargainRequests();
-  const { status: currentBargainStatus } = getBargainStatusForProduct(productId || '');
+  // --- REAL BARGAIN HOOK ---
+  const { sendBargainRequest } = useBargainRequests();
 
+  // Data State
   const [product, setProduct] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Image State
+  const [imageStatus, setImageStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [displayImage, setDisplayImage] = useState<string>("");
-  const [hasImageError, setHasImageError] = useState(false);
 
+  // --- REAL BARGAIN STATE ---
+  // We store the full request object to get the specific 'requestedAmount'
+  const [myBargainRequest, setMyBargainRequest] = useState<any>(null);
+  
   // Transaction State
   const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
   const [isBargainDialogOpen, setIsBargainDialogOpen] = useState(false);
-  const [bargainAmount, setBargainAmount] = useState("");
+  const [bargainInputAmount, setBargainInputAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // Ambassador State
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  const originalPriceVal = product ? parseFloat(product.price.replace(/[₹,]/g, '').split('/')[0].trim()) : 0;
-  const isBargainAccepted = currentBargainStatus === 'accepted';
-  const finalPrice = isBargainAccepted ? (originalPriceVal * 0.85) : originalPriceVal;
-
+  // --- INITIAL FETCH ---
   useEffect(() => {
     const fetchData = async () => {
       if (!productId) return;
       try {
+        // 1. Fetch Product
         const productDoc = await databases.getDocument(
           APPWRITE_DATABASE_ID,
           APPWRITE_PRODUCTS_COLLECTION_ID,
@@ -76,16 +88,16 @@ const ProductDetailsPage = () => {
         );
         setProduct(productDoc);
         
-        // Handle Initial Image State
+        // 2. Handle Image
         const optimizedUrl = getOptimizedImageUrl(productDoc.imageUrl);
-        if (optimizedUrl && optimizedUrl.trim() !== "") {
+        if (optimizedUrl) {
             setDisplayImage(optimizedUrl);
-            setHasImageError(false);
+            setImageStatus('loading');
         } else {
-            setHasImageError(true);
-            setDisplayImage("/app-logo.png"); // Fallback
+            setImageStatus('error');
         }
 
+        // 3. Fetch Reviews
         const reviewsRes = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
@@ -94,7 +106,7 @@ const ProductDetailsPage = () => {
         setReviews(reviewsRes.documents);
 
       } catch (error) {
-        console.error("Error:", error);
+        console.error("Error fetching details:", error);
         toast.error("Product not found.");
         navigate("/market");
       } finally {
@@ -105,13 +117,87 @@ const ProductDetailsPage = () => {
     fetchData();
   }, [productId, navigate]);
 
+  // --- FETCH & SUBSCRIBE TO MY BARGAIN REQUEST ---
+  useEffect(() => {
+    if (!user || !productId) return;
+
+    const fetchMyBargain = async () => {
+        try {
+            // Find if I have already made an offer on this product
+            const res = await databases.listDocuments(
+                APPWRITE_DATABASE_ID,
+                'bargain_requests', // Ensure this matches your collection ID in constants
+                [
+                    Query.equal('productId', productId),
+                    Query.equal('buyerId', user.$id)
+                ]
+            );
+            if (res.documents.length > 0) {
+                setMyBargainRequest(res.documents[0]);
+            }
+        } catch (error) {
+            console.error("Error fetching bargain status", error);
+        }
+    };
+
+    fetchMyBargain();
+
+    // Subscribe to changes (Real-time update when Seller accepts!)
+    const unsubscribe = databases.client.subscribe(
+        `databases.${APPWRITE_DATABASE_ID}.collections.bargain_requests.documents`,
+        (response) => {
+            const payload = response.payload as any;
+            // If this update is relevant to me and this product
+            if (payload.productId === productId && payload.buyerId === user.$id) {
+                setMyBargainRequest(payload);
+                if (payload.status === 'accepted') {
+                    toast.success("Great news! Your offer was accepted.");
+                } else if (payload.status === 'denied') {
+                    toast.error("Your offer was declined.");
+                }
+            }
+        }
+    );
+
+    return () => {
+        unsubscribe();
+    };
+  }, [user, productId]);
+
+
+  // --- CALCULATE DYNAMIC PRICES ---
+  const originalPriceVal = product ? parseFloat(product.price.replace(/[₹,]/g, '').split('/')[0].trim()) : 0;
+  
+  // Logic: Use Bargain Price ONLY if status is 'accepted'
+  const isBargainAccepted = myBargainRequest?.status === 'accepted';
+  const finalPrice = isBargainAccepted ? myBargainRequest.requestedAmount : originalPriceVal;
+  
+  const bargainStatus = myBargainRequest?.status || 'none'; // 'none', 'pending', 'accepted', 'denied'
+
+
+  // --- REAL BARGAIN ACTION ---
   const handleSendBargainRequest = async () => {
-    if (!user || !product || !bargainAmount) return;
+    if (!user || !product) return;
+    if (!bargainInputAmount) return;
+    
     setIsProcessing(true);
     try {
-        await sendBargainRequest(product, parseFloat(bargainAmount));
+        const amount = parseFloat(bargainInputAmount);
+        
+        // Use the hook to create the DB document and trigger notification
+        await sendBargainRequest(product, amount);
+        
         setIsBargainDialogOpen(false);
-        toast.success("Offer Sent!");
+        toast.success("Offer Sent!", {
+            description: "The seller has been notified via Buzz. Wait for them to accept."
+        });
+        
+        // Optimistic update (optional, subscription will handle real update)
+        setMyBargainRequest({
+            status: 'pending',
+            requestedAmount: amount
+        });
+
     } catch (error: any) {
         toast.error(error.message || "Failed to send offer.");
     } finally {
@@ -119,13 +205,14 @@ const ProductDetailsPage = () => {
     }
   };
 
+  // --- REAL PAYMENT ACTION ---
   const handleInitiatePayment = async () => {
     if (!user || !userProfile || !product) return;
     setIsProcessing(true);
 
     const transactionType = product.type === 'sell' ? 'buy' : 'rent';
     const transactionNote = isBargainAccepted 
-      ? `Bargain buy: ${product.title}` 
+      ? `Bargain Deal (${product.title})` 
       : `${transactionType}: ${product.title}`;
 
     try {
@@ -140,7 +227,7 @@ const ProductDetailsPage = () => {
           buyerName: user.name,
           sellerId: product.userId,
           sellerName: product.sellerName,
-          sellerUpiId: product.sellerUpiId, 
+          sellerUpiId: product.sellerUpiId || "default@upi",
           amount: parseFloat(finalPrice.toFixed(2)),
           status: "initiated",
           type: transactionType,
@@ -156,7 +243,9 @@ const ProductDetailsPage = () => {
         await incrementAmbassadorDeliveriesCount();
       }
 
-      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunai&am=${finalPrice.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` (TX:${transactionId.substring(0,6)})`)}`;
+      // Generate UPI Link
+      const upiDeepLink = `upi://pay?pa=${DEVELOPER_UPI_ID}&pn=NatpeThunaiDevelopers&am=${finalPrice.toFixed(2)}&cu=INR&tn=${encodeURIComponent(transactionNote + ` #${transactionId.substring(0,6)}`)}`;
+      
       window.open(upiDeepLink, "_blank");
       
       setIsBuyDialogOpen(false);
@@ -179,9 +268,10 @@ const ProductDetailsPage = () => {
   }
 
   if (!product) return null;
+  const isOwner = user?.$id === product.userId;
 
   return (
-    <div className="min-h-screen bg-background pb-28 relative">
+    <div className="min-h-screen bg-background pb-32 relative">
       
       {/* HEADER */}
       <div className="sticky top-0 z-20 flex items-center p-3 bg-background/80 backdrop-blur-xl border-b border-border">
@@ -193,20 +283,37 @@ const ProductDetailsPage = () => {
 
       <div className="max-w-3xl mx-auto">
         
-        {/* PRODUCT IMAGE CONTAINER */}
+        {/* PRODUCT IMAGE */}
         <div className="w-full aspect-square sm:aspect-video bg-muted/30 relative overflow-hidden group flex items-center justify-center bg-secondary/5">
-          <img 
-            src={displayImage}
-            alt={product.title}
-            className={`w-full h-full transition-opacity duration-500 ${
-                // If error, contain the logo nicely. If success, cover the area.
-                hasImageError ? 'object-contain p-12 opacity-90' : 'object-contain'
-            }`}
-            onError={() => { 
-                setHasImageError(true);
-                setDisplayImage("/app-logo.png"); // Fallback to Logo
-            }}
-          />
+          {imageStatus === 'loading' && (
+             <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
+                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
+             </div>
+          )}
+          
+          {imageStatus !== 'error' && (
+              <img 
+                src={displayImage}
+                alt={product.title}
+                className={`w-full h-full object-contain transition-opacity duration-500 ${imageStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
+                onLoad={() => setImageStatus('success')}
+                onError={() => setImageStatus('error')} 
+              />
+          )}
+
+          {/* FALLBACK: APP LOGO */}
+          {imageStatus === 'error' && (
+             <div className="flex flex-col items-center justify-center opacity-80">
+                <img 
+                    src="/app-logo.png" // Using the correct public path
+                    alt="App Logo"
+                    className="h-24 w-24 object-contain drop-shadow-md mb-2"
+                />
+                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <ImageOff className="h-3 w-3" /> No Preview
+                </span>
+             </div>
+          )}
 
           <div className="absolute top-4 left-4 z-10">
              <Badge className="bg-background/90 text-foreground backdrop-blur border border-border/50 shadow-sm uppercase tracking-wider text-[10px]">
@@ -217,17 +324,20 @@ const ProductDetailsPage = () => {
 
         {/* MAIN INFO */}
         <div className="p-5 space-y-6">
+          
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-foreground leading-tight">{product.title}</h1>
             <div className="flex items-center gap-2">
-               {isBargainAccepted ? (
+               <p className={isBargainAccepted ? "text-3xl font-black text-green-500 animate-pulse" : "text-3xl font-black text-secondary-neon"}>
+                  ₹{finalPrice}
+               </p>
+               {isBargainAccepted && (
                    <>
-                     <span className="text-3xl font-black text-green-500">₹{finalPrice.toFixed(2)}</span>
-                     <span className="text-sm text-muted-foreground line-through">₹{originalPriceVal}</span>
-                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Deal Accepted</Badge>
+                     <span className="text-sm text-muted-foreground line-through decoration-destructive">₹{originalPriceVal}</span>
+                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
+                        Accepted
+                     </Badge>
                    </>
-               ) : (
-                   <p className="text-3xl font-black text-secondary-neon">{product.price}</p>
                )}
             </div>
             {product.condition && (
@@ -254,7 +364,7 @@ const ProductDetailsPage = () => {
                    <p className="text-xs text-muted-foreground">Verified Student</p>
                 </div>
              </div>
-             <Button variant="outline" size="sm" onClick={() => toast.info("Opening Chat...")} className="h-8 text-xs border-secondary-neon/30 text-secondary-neon hover:bg-secondary-neon/10">
+             <Button variant="outline" size="sm" onClick={() => toast.info("Open tracking page to enable chat.")} className="h-8 text-xs border-secondary-neon/30 text-secondary-neon hover:bg-secondary-neon/10">
                 <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> Chat
              </Button>
           </div>
@@ -285,19 +395,6 @@ const ProductDetailsPage = () => {
             </p>
           </div>
 
-          {/* SAFETY */}
-          <Collapsible className="border border-border rounded-lg">
-             <CollapsibleTrigger className="flex items-center justify-between w-full p-4 text-sm font-medium hover:bg-muted/50 transition-colors">
-                <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-orange-500"/> Safety Guidelines</span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-             </CollapsibleTrigger>
-             <CollapsibleContent className="p-4 pt-0 text-xs text-muted-foreground leading-relaxed">
-                1. Always meet in public places like the Canteen or Library.<br/>
-                2. Verify the item condition before payment.<br/>
-                3. Use the in-app chat for coordination.
-             </CollapsibleContent>
-          </Collapsible>
-
           {/* REVIEWS */}
           <div className="space-y-4 pt-2">
             <h3 className="font-bold text-lg">Reviews ({reviews.length})</h3>
@@ -325,28 +422,28 @@ const ProductDetailsPage = () => {
         </div>
       </div>
 
-      {/* STICKY ACTION BAR */}
+      {/* --- STICKY ACTION BAR --- */}
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/95 backdrop-blur-md border-t border-border z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
          <div className="max-w-3xl mx-auto flex gap-3">
-            {user?.$id !== product.userId ? (
+            {!isOwner ? (
                 <>
-                    {/* BARGAIN DIALOG */}
+                    {/* BARGAIN BUTTON (Logic: Show unless already accepted) */}
                     {!isBargainAccepted && (
                       <Dialog open={isBargainDialogOpen} onOpenChange={setIsBargainDialogOpen}>
                           <DialogTrigger asChild>
                               <Button 
                                 variant="outline" 
                                 className="flex-1 h-12 border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10 font-bold"
-                                disabled={currentBargainStatus === 'pending' || currentBargainStatus === 'denied'}
+                                disabled={bargainStatus === 'pending'} // Disable if already waiting
                               >
                                   <Gavel className="mr-2 h-4 w-4" /> 
-                                  {currentBargainStatus === 'pending' ? 'Pending' : currentBargainStatus === 'denied' ? 'Denied' : 'Make Offer'}
+                                  {bargainStatus === 'pending' ? 'Offer Pending' : bargainStatus === 'denied' ? 'Try Again' : 'Make Offer'}
                               </Button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[400px]">
                               <DialogHeader>
                                   <DialogTitle>Negotiate Price</DialogTitle>
-                                  <DialogDescription>Enter your offer. 15% discount limit usually applies.</DialogDescription>
+                                  <DialogDescription>Enter your offer. The seller will receive a notification.</DialogDescription>
                               </DialogHeader>
                               <div className="py-4 space-y-4">
                                   <div className="space-y-2">
@@ -357,14 +454,14 @@ const ProductDetailsPage = () => {
                                               type="number" 
                                               className="pl-8 text-lg font-bold" 
                                               placeholder={(originalPriceVal * 0.85).toFixed(0)}
-                                              value={bargainAmount}
-                                              onChange={(e) => setBargainAmount(e.target.value)}
+                                              value={bargainInputAmount}
+                                              onChange={(e) => setBargainInputAmount(e.target.value)}
                                           />
                                       </div>
                                   </div>
                               </div>
                               <DialogFooter>
-                                  <Button onClick={handleSendBargainRequest} disabled={!bargainAmount || isProcessing} className="w-full bg-secondary-neon text-primary-foreground">
+                                  <Button onClick={handleSendBargainRequest} disabled={!bargainInputAmount || isProcessing} className="w-full bg-secondary-neon text-primary-foreground">
                                       {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Offer"}
                                   </Button>
                               </DialogFooter>
@@ -372,11 +469,12 @@ const ProductDetailsPage = () => {
                       </Dialog>
                     )}
 
-                    {/* BUY DIALOG */}
+                    {/* BUY BUTTON */}
                     <Dialog open={isBuyDialogOpen} onOpenChange={setIsBuyDialogOpen}>
                         <DialogTrigger asChild>
                             <Button className="flex-[1.5] h-12 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold text-base shadow-lg shadow-secondary-neon/20">
-                                <ShoppingCart className="mr-2 h-5 w-5" /> {isBargainAccepted ? `Buy @ ₹${finalPrice}` : 'Buy Now'}
+                                <ShoppingCart className="mr-2 h-5 w-5" /> 
+                                {isBargainAccepted ? `Buy Now @ ₹${finalPrice}` : 'Buy Now'}
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[425px]">
