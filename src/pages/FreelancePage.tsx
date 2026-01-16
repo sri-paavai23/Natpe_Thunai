@@ -10,15 +10,21 @@ import { Input } from "@/components/ui/input";
 import { 
   Briefcase, PlusCircle, Loader2, Search, Filter, Star, 
   Code, PenTool, Camera, GraduationCap, Calendar, Wrench, 
-  MessageCircle, CheckCircle, Handshake
+  Handshake, Percent, Ban, CheckCircle2
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import PostServiceForm from "@/components/forms/PostServiceForm";
-import SubmitServiceReviewForm from "@/components/forms/SubmitServiceReviewForm";
 import { useServiceListings, ServicePost } from "@/hooks/useServiceListings";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_SERVICES_COLLECTION_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID } from "@/lib/appwrite";
-import { ID } from 'appwrite';
+import { 
+  databases, 
+  APPWRITE_DATABASE_ID, 
+  APPWRITE_SERVICES_COLLECTION_ID, 
+  APPWRITE_TRANSACTIONS_COLLECTION_ID,
+  // Ensure this ID matches your database setup for bargain requests
+  APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID 
+} from "@/lib/appwrite";
+import { ID, Query } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
 
 // --- CONFIGURATION ---
@@ -27,7 +33,6 @@ const FREELANCE_CATEGORIES = [
   "tutoring", "event-planning", "photography", "other"
 ];
 
-// Mapped with Icons for UI
 const CATEGORY_CONFIG = [
   { value: "academic-help", label: "Assignments", icon: GraduationCap, color: "text-blue-500", bg: "bg-blue-500/10" },
   { value: "tech-support", label: "Tech Fix", icon: Wrench, color: "text-slate-500", bg: "bg-slate-500/10" },
@@ -38,19 +43,35 @@ const CATEGORY_CONFIG = [
   { value: "event-planning", label: "Events", icon: Calendar, color: "text-green-500", bg: "bg-green-500/10" },
 ];
 
-// --- COMPONENT: GIG CARD ---
-// A specialized card for Freelance Gigs
+// --- GIG CARD COMPONENT ---
 const GigCard = ({ 
   service, 
   onHire, 
-  isOwner 
+  onBargain,
+  isOwner,
+  bargainStatus 
 }: { 
   service: ServicePost, 
-  onHire: (s: ServicePost) => void,
-  isOwner: boolean
+  onHire: (s: ServicePost, finalPrice: number) => void,
+  onBargain: (s: ServicePost) => void,
+  isOwner: boolean,
+  bargainStatus: 'none' | 'pending' | 'accepted' | 'denied'
 }) => {
+  
+  const originalPrice = parseFloat(service.price);
+  const discountedPrice = (originalPrice * 0.85).toFixed(0); // 15% Off
+  const isAccepted = bargainStatus === 'accepted';
+
   return (
-    <Card className="group flex flex-col h-full border-border/60 hover:shadow-xl transition-all duration-300 bg-card">
+    <Card className="group flex flex-col h-full border-border/60 hover:shadow-xl transition-all duration-300 bg-card relative overflow-hidden">
+      
+      {/* Status Badge Overlay */}
+      {isAccepted && (
+         <div className="absolute top-0 right-0 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg shadow-sm z-10 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" /> 15% OFF APPLIED
+         </div>
+      )}
+
       <CardHeader className="p-4 pb-2">
         <div className="flex justify-between items-start">
           <Badge variant="outline" className="capitalize text-[10px] font-bold tracking-wider opacity-70">
@@ -81,24 +102,55 @@ const GigCard = ({
         </div>
       </CardContent>
 
-      <CardFooter className="p-4 pt-0 mt-auto flex items-center justify-between border-t border-border/40 bg-muted/20">
-        <div className="flex flex-col py-2">
-          <span className="text-[10px] text-muted-foreground uppercase font-bold">Starting at</span>
-          <span className="text-lg font-black text-foreground">₹{service.price}</span>
+      <CardFooter className="p-4 pt-0 mt-auto flex flex-col gap-3 border-t border-border/40 bg-muted/20">
+        <div className="flex justify-between items-center w-full pt-3">
+            <div className="flex flex-col">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold">Price</span>
+                {isAccepted ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-lg font-black text-green-500">₹{discountedPrice}</span>
+                        <span className="text-xs text-muted-foreground line-through decoration-red-500">₹{originalPrice}</span>
+                    </div>
+                ) : (
+                    <span className="text-lg font-black text-foreground">₹{originalPrice}</span>
+                )}
+            </div>
         </div>
-        
+
         {isOwner ? (
-          <Button variant="ghost" size="sm" disabled className="opacity-50 text-xs">
+          <Button variant="ghost" size="sm" disabled className="w-full opacity-50 text-xs border border-dashed">
             Your Gig
           </Button>
         ) : (
-          <Button 
-            size="sm" 
-            onClick={() => onHire(service)}
-            className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold shadow-sm"
-          >
-            Hire / Chat
-          </Button>
+          <div className="flex gap-2 w-full">
+             {/* BARGAIN BUTTON (15% FIXED) */}
+             {!isAccepted && (
+                 <Button 
+                    variant="outline"
+                    size="sm" 
+                    onClick={() => onBargain(service)}
+                    disabled={bargainStatus === 'pending' || bargainStatus === 'denied'}
+                    className={`flex-1 font-bold text-xs border-secondary-neon/30 
+                        ${bargainStatus === 'denied' 
+                            ? 'opacity-50 cursor-not-allowed bg-red-50/10 text-red-500' 
+                            : 'text-secondary-neon hover:bg-secondary-neon/10'
+                        }`}
+                 >
+                    {bargainStatus === 'pending' ? 'Pending...' : 
+                     bargainStatus === 'denied' ? 'Fixed Price' : 
+                     <><Percent className="mr-1 h-3 w-3" /> Get 15% Off</>}
+                 </Button>
+             )}
+
+             {/* HIRE BUTTON */}
+             <Button 
+                size="sm" 
+                onClick={() => onHire(service, isAccepted ? parseFloat(discountedPrice) : originalPrice)}
+                className="flex-[1.5] bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold shadow-sm text-xs"
+             >
+                {isAccepted ? 'Hire Now' : 'Hire / Chat'}
+             </Button>
+          </div>
         )}
       </CardFooter>
     </Card>
@@ -112,16 +164,53 @@ const FreelancePage = () => {
   // Dialog States
   const [isPostServiceDialogOpen, setIsPostServiceDialogOpen] = useState(false);
   const [isHireDialogOpen, setIsHireDialogOpen] = useState(false);
-  const [selectedGig, setSelectedGig] = useState<ServicePost | null>(null);
   
+  // Transaction / Hire States
+  const [selectedGig, setSelectedGig] = useState<ServicePost | null>(null);
+  const [finalHirePrice, setFinalHirePrice] = useState<number>(0);
+  
+  // Bargain Logic States
+  const [isConfirmBargainOpen, setIsConfirmBargainOpen] = useState(false);
+  const [bargainTargetGig, setBargainTargetGig] = useState<ServicePost | null>(null);
+  
+  // User's Bargain Requests Map: { gigId: 'pending' | 'accepted' | 'denied' }
+  const [myBargains, setMyBargains] = useState<Record<string, string>>({});
+
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Data
-  const { services: freelanceListings, isLoading, error } = useServiceListings(FREELANCE_CATEGORIES);
+  const { services: freelanceListings, isLoading } = useServiceListings(FREELANCE_CATEGORIES);
   const isAgeGated = (userProfile?.age ?? 0) >= 25; 
+
+  // --- FETCH MY BARGAIN REQUESTS ---
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchMyBargains = async () => {
+        try {
+            // "bargain_requests" is the collection ID/Name you use
+            const response = await databases.listDocuments(
+                APPWRITE_DATABASE_ID,
+                'bargain_requests', 
+                [Query.equal('buyerId', user.$id)]
+            );
+            
+            const mapping: Record<string, string> = {};
+            response.documents.forEach((doc: any) => {
+                // Assuming 'productId' stores the Gig/Service ID
+                mapping[doc.productId] = doc.status; 
+            });
+            setMyBargains(mapping);
+        } catch (error) {
+            console.error("Failed to load bargains", error);
+        }
+    };
+
+    fetchMyBargains();
+  }, [user, freelanceListings]); // Refresh when listings load/change
 
   // --- LOGIC: Filter Gigs ---
   const filteredGigs = freelanceListings.filter(gig => {
@@ -157,13 +246,67 @@ const FreelancePage = () => {
     }
   };
 
+  // --- LOGIC: Initiate Bargain (Fixed 15%) ---
+  const handleBargainClick = (gig: ServicePost) => {
+    if (!user) {
+      toast.error("Login required to bargain.");
+      return;
+    }
+    setBargainTargetGig(gig);
+    setIsConfirmBargainOpen(true);
+  };
+
+  const confirmFixedBargain = async () => {
+    if (!bargainTargetGig || !user) return;
+    
+    setIsProcessing(true);
+    try {
+        const originalAmount = parseFloat(bargainTargetGig.price);
+        const discountAmount = originalAmount * 0.15;
+        const requestedAmount = originalAmount - discountAmount;
+
+        // Create Bargain Request
+        await databases.createDocument(
+            APPWRITE_DATABASE_ID,
+            'bargain_requests', // Replace with APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID constant if available
+            ID.unique(),
+            {
+                productId: bargainTargetGig.$id,
+                productTitle: bargainTargetGig.title,
+                buyerId: user.$id,
+                buyerName: user.name,
+                sellerId: bargainTargetGig.posterId,
+                originalAmount: originalAmount,
+                requestedAmount: requestedAmount, // Exact 15% off
+                status: 'pending',
+                type: 'service'
+            }
+        );
+
+        // Update Local State Optimistically
+        setMyBargains(prev => ({ ...prev, [bargainTargetGig.$id]: 'pending' }));
+
+        toast.success("Discount request sent!", {
+            description: "The poster will be notified. Check back later."
+        });
+        setIsConfirmBargainOpen(false);
+
+    } catch (error: any) {
+        console.error("Bargain Error:", error);
+        toast.error("Failed to send request.");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
   // --- LOGIC: Hire / Connect ---
-  const handleHireClick = (gig: ServicePost) => {
+  const handleHireClick = (gig: ServicePost, price: number) => {
     if (!user) {
       toast.error("Login to hire freelancers.");
       return;
     }
     setSelectedGig(gig);
+    setFinalHirePrice(price);
     setIsHireDialogOpen(true);
   };
 
@@ -172,7 +315,6 @@ const FreelancePage = () => {
     setIsProcessing(true);
 
     try {
-      // Create Transaction Record (Status: Negotiating)
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
@@ -180,20 +322,20 @@ const FreelancePage = () => {
         {
           productId: selectedGig.$id,
           productTitle: `Gig: ${selectedGig.title}`,
-          amount: parseFloat(selectedGig.price) || 0, // Store base price
+          amount: finalHirePrice, // Uses the discounted price if applied
           buyerId: user.$id,
           buyerName: user.name,
           sellerId: selectedGig.posterId,
           sellerName: selectedGig.posterName,
           collegeName: selectedGig.collegeName,
-          status: "negotiating", // New status for freelance
+          status: "negotiating",
           type: "service",
           ambassadorDelivery: false,
-          ambassadorMessage: `Interested in your gig: ${selectedGig.title}`
+          ambassadorMessage: `Interested in gig (${finalHirePrice === parseFloat(selectedGig.price) ? 'Standard' : 'Discounted'} Rate)`
         }
       );
       
-      toast.success("Interest sent! Check your Activity tab to chat.");
+      toast.success("Interest sent! Check your Activity tab.");
       setIsHireDialogOpen(false);
     } catch (error) {
       console.error(error);
@@ -287,7 +429,10 @@ const FreelancePage = () => {
                   key={gig.$id} 
                   service={gig} 
                   onHire={handleHireClick}
+                  onBargain={handleBargainClick}
                   isOwner={user?.$id === gig.posterId}
+                  // Pass the specific status for this gig (default 'none')
+                  bargainStatus={(myBargains[gig.$id] as any) || 'none'}
                 />
               ))}
             </div>
@@ -303,6 +448,43 @@ const FreelancePage = () => {
         </div>
       </div>
 
+      {/* --- CONFIRM BARGAIN DIALOG --- */}
+      <Dialog open={isConfirmBargainOpen} onOpenChange={setIsConfirmBargainOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                    <Percent className="h-5 w-5 text-secondary-neon" /> Request 15% Discount?
+                </DialogTitle>
+                <DialogDescription>
+                    You are requesting to hire <b>{bargainTargetGig?.title}</b> at a reduced rate.
+                </DialogDescription>
+            </DialogHeader>
+            
+            <div className="bg-muted/30 p-4 rounded-lg space-y-3">
+                <div className="flex justify-between text-sm text-muted-foreground line-through">
+                    <span>Original Price:</span>
+                    <span>₹{bargainTargetGig?.price}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold text-foreground">
+                    <span>Your Offer (15% Off):</span>
+                    <span className="text-green-500">
+                        ₹{(parseFloat(bargainTargetGig?.price || "0") * 0.85).toFixed(0)}
+                    </span>
+                </div>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded text-[10px] text-yellow-700 dark:text-yellow-400 mt-2">
+                    Note: If the poster rejects this offer, you will only be able to hire at the original fixed price.
+                </div>
+            </div>
+
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsConfirmBargainOpen(false)}>Cancel</Button>
+                <Button onClick={confirmFixedBargain} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground font-bold">
+                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Request"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* --- HIRE DIALOG --- */}
       <Dialog open={isHireDialogOpen} onOpenChange={setIsHireDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
@@ -311,22 +493,25 @@ const FreelancePage = () => {
               <Handshake className="h-5 w-5 text-secondary-neon" /> Connect with {selectedGig?.posterName}
             </DialogTitle>
             <DialogDescription>
-              Start a conversation to discuss requirements for <b>{selectedGig?.title}</b>.
+              Start a conversation for <b>{selectedGig?.title}</b>.
             </DialogDescription>
           </DialogHeader>
           
           <div className="bg-muted/30 p-4 rounded-lg space-y-2 text-sm">
              <div className="flex justify-between">
-                <span className="text-muted-foreground">Base Price:</span>
-                <span className="font-bold">₹{selectedGig?.price}</span>
+                <span className="text-muted-foreground">Price:</span>
+                <span className={`font-bold ${finalHirePrice < parseFloat(selectedGig?.price || "0") ? "text-green-500" : ""}`}>
+                    ₹{finalHirePrice}
+                </span>
              </div>
-             <div className="flex justify-between">
+             {finalHirePrice < parseFloat(selectedGig?.price || "0") && (
+                 <div className="text-[10px] text-green-500 text-right font-medium">
+                    (Discount Applied)
+                 </div>
+             )}
+             <div className="flex justify-between pt-2 border-t border-border/50 mt-2">
                 <span className="text-muted-foreground">Provider:</span>
                 <span className="font-bold">{selectedGig?.posterName}</span>
-             </div>
-             <div className="flex justify-between">
-                <span className="text-muted-foreground">Contact:</span>
-                <span className="font-bold text-blue-500">{selectedGig?.contact}</span>
              </div>
           </div>
 
