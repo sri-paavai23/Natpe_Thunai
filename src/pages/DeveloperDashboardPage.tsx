@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { 
   databases, 
@@ -16,13 +17,17 @@ import {
   APPWRITE_DEVELOPER_MESSAGES_COLLECTION_ID 
 } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2, DollarSign, Shield, XCircle, MessageSquareText, Clock, Send, Truck, Flag, Briefcase, Utensils, ShoppingBag } from "lucide-react";
+import { 
+  Loader2, DollarSign, Shield, XCircle, MessageSquareText, 
+  Send, Truck, Flag, Briefcase, Utensils, ShoppingBag, 
+  Search, Filter, CheckCircle2, AlertCircle
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Query, ID } from "appwrite";
 import { useDeveloperMessages } from "@/hooks/useDeveloperMessages";
 import { calculateCommissionRate } from "@/utils/commission";
-import { useReports, Report } from "@/hooks/useReports";
+import { useReports } from "@/hooks/useReports";
 import { useBlockedWords } from "@/hooks/useBlockedWords";
 
 interface Transaction {
@@ -34,7 +39,7 @@ interface Transaction {
   sellerName: string;
   sellerUpiId: string;
   amount: number;
-  status: "initiated" | "payment_confirmed_to_developer" | "commission_deducted" | "paid_to_seller" | "failed";
+  status: string;
   type: "buy" | "rent" | "service" | "food" | "errand" | "cash-exchange";
   productTitle: string;
   commissionAmount?: number;
@@ -42,18 +47,24 @@ interface Transaction {
   $createdAt: string;
   collegeName: string;
   ambassadorDelivery?: boolean;
-  ambassadorMessage?: string;
   utrId?: string;
 }
 
 const DeveloperDashboardPage = () => {
   const { user, userProfile } = useAuth();
-  const { messages, isLoading: isMessagesLoading, error: messagesError, refetch: refetchMessages } = useDeveloperMessages(); 
-  const { reports, isLoading: isReportsLoading, error: reportsError, refetch: refetchReports, updateReportStatus } = useReports();
-  const { blockedWords, isLoading: isBlockedWordsLoading, error: blockedWordsError, addBlockedWord, removeBlockedWord } = useBlockedWords();
+  const { messages, isLoading: isMessagesLoading, refetch: refetchMessages } = useDeveloperMessages(); 
+  const { reports, isLoading: isReportsLoading, updateReportStatus } = useReports();
+  const { blockedWords, isLoading: isBlockedWordsLoading, addBlockedWord, removeBlockedWord } = useBlockedWords();
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
+  
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  
+  // Moderation
   const [newBlockedWord, setNewBlockedWord] = useState("");
   const [developerReply, setDeveloperReply] = useState("");
   const [isReplying, setIsReplying] = useState(false);
@@ -73,9 +84,10 @@ const DeveloperDashboardPage = () => {
         const response = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_TRANSACTIONS_COLLECTION_ID,
-          [Query.orderDesc("$createdAt")] // Show newest first
+          [Query.orderDesc("$createdAt"), Query.limit(100)] 
         );
         setTransactions(response.documents as unknown as Transaction[]);
+        setFilteredTransactions(response.documents as unknown as Transaction[]);
       } catch (error) {
         console.error("Error fetching transactions:", error);
         toast.error("Failed to load transactions.");
@@ -86,47 +98,57 @@ const DeveloperDashboardPage = () => {
 
     fetchTransactions();
 
-    // Real-time subscription for new/updated transactions
+    // Real-time subscription
     const unsubscribe = databases.client.subscribe(
       `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
       (response) => {
         const payload = response.payload as unknown as Transaction;
-        
-        if (response.events.includes("databases.*.collections.*.documents.*.create")) {
-          setTransactions((prev) => [payload, ...prev]);
-          toast.info(`New ${payload.type} transaction: "${payload.productTitle}"`);
-        } else if (response.events.includes("databases.*.collections.*.documents.*.update")) {
-          setTransactions((prev) => prev.map((t) => t.$id === payload.$id ? payload : t));
-          
-          if (payload.status === 'payment_confirmed_to_developer' && payload.utrId) {
-            toast.success(`Payment Verified: ${payload.type.toUpperCase()} - ${payload.amount}`);
-          }
+        if (response.events.includes("create")) {
+          setTransactions(prev => [payload, ...prev]);
+          toast.info(`New Transaction: ${payload.productTitle}`);
+        } else if (response.events.includes("update")) {
+          setTransactions(prev => prev.map(t => t.$id === payload.$id ? payload : t));
         }
       }
     );
 
-    return () => {
-      unsubscribe();
-    };
+    return () => { unsubscribe(); };
   }, [isDeveloper]);
 
-  // --- 2. Moderation Handlers ---
+  // --- 2. Filter Logic ---
+  useEffect(() => {
+    let result = transactions;
+
+    if (filterType !== "all") {
+        result = result.filter(t => t.type === filterType);
+    }
+
+    if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        result = result.filter(t => 
+            t.productTitle.toLowerCase().includes(lowerTerm) ||
+            t.buyerName.toLowerCase().includes(lowerTerm) ||
+            t.sellerName.toLowerCase().includes(lowerTerm) ||
+            t.$id.includes(lowerTerm) ||
+            (t.utrId && t.utrId.includes(lowerTerm))
+        );
+    }
+
+    setFilteredTransactions(result);
+  }, [transactions, filterType, searchTerm]);
+
+  // --- 3. Moderation Handlers ---
   const handleAddBlockedWord = () => {
     if (!newBlockedWord.trim()) return;
     addBlockedWord(newBlockedWord);
     setNewBlockedWord("");
   };
 
-  // --- 3. Transaction Logic (Universal for All Types) ---
+  // --- 4. Transaction Logic ---
   const handleProcessPayment = async (transaction: Transaction) => {
-    if (transaction.status !== "payment_confirmed_to_developer") {
-      toast.error("Transaction is not in 'Payment Confirmed' status.");
-      return;
-    }
-
     setLoadingTransactions(true);
     try {
-      // Fetch Seller/Provider Profile to get Level for Commission
+      // Fetch Seller Profile
       const sellerProfileResponse = await databases.listDocuments(
         APPWRITE_DATABASE_ID,
         APPWRITE_USER_PROFILES_COLLECTION_ID,
@@ -134,19 +156,14 @@ const DeveloperDashboardPage = () => {
       );
 
       if (sellerProfileResponse.documents.length === 0) {
-        toast.error("Seller/Provider profile not found. Cannot calculate commission.");
-        return;
+        throw new Error("Seller profile not found.");
       }
 
       const sellerProfile = sellerProfileResponse.documents[0] as any;
-      const sellerLevel = sellerProfile.level ?? 1;
-      
-      // Calculate Commission (Dynamic based on level)
-      const commissionRate = calculateCommissionRate(sellerLevel);
+      const commissionRate = calculateCommissionRate(sellerProfile.level ?? 1);
       const commissionAmount = transaction.amount * commissionRate;
       const netSellerAmount = transaction.amount - commissionAmount;
 
-      // Update Transaction
       await databases.updateDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_TRANSACTIONS_COLLECTION_ID,
@@ -157,58 +174,43 @@ const DeveloperDashboardPage = () => {
           netSellerAmount: netSellerAmount,
         }
       );
-      toast.success(`Commission (${(commissionRate * 100).toFixed(2)}%) deducted. Net: ₹${netSellerAmount.toFixed(2)}`);
+      toast.success(`Commission calculated. Net: ₹${netSellerAmount.toFixed(2)}`);
     } catch (error: any) {
-      console.error("Error processing payment:", error);
-      toast.error(error.message || "Failed to process payment.");
+      toast.error(error.message);
     } finally {
       setLoadingTransactions(false);
     }
   };
 
   const handlePaySeller = async (transaction: Transaction) => {
-    if (transaction.status !== "commission_deducted") {
-      toast.error("Commission must be deducted first.");
-      return;
-    }
-    if (!transaction.netSellerAmount || !transaction.sellerUpiId) {
-      toast.error("Missing net amount or UPI ID.");
-      return;
-    }
-
     setLoadingTransactions(true);
     try {
-      // 1. Open UPI App
-      const upiDeepLink = `upi://pay?pa=${transaction.sellerUpiId}&pn=${encodeURIComponent(transaction.sellerName)}&am=${transaction.netSellerAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Payout: ${transaction.productTitle}`)}`;
+      const upiDeepLink = `upi://pay?pa=${transaction.sellerUpiId}&pn=${encodeURIComponent(transaction.sellerName)}&am=${transaction.netSellerAmount?.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Payout: ${transaction.productTitle}`)}`;
       window.open(upiDeepLink, "_blank");
       
-      toast.info(`Redirecting to pay ₹${transaction.netSellerAmount.toFixed(2)} to ${transaction.sellerName}.`);
-
-      // 2. Mark as Paid (Delayed slightly to allow UI transition)
+      // Simulate confirmation after redirect
       setTimeout(async () => {
-        await databases.updateDocument(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_TRANSACTIONS_COLLECTION_ID,
-          transaction.$id,
-          { status: "paid_to_seller" }
-        );
-        toast.success(`Marked transaction ${transaction.$id} as Completed.`);
-      }, 3000); 
-
+        if(window.confirm("Did the UPI payment succeed? Mark as Paid?")) {
+            await databases.updateDocument(
+              APPWRITE_DATABASE_ID,
+              APPWRITE_TRANSACTIONS_COLLECTION_ID,
+              transaction.$id,
+              { status: "paid_to_seller" }
+            );
+            toast.success("Transaction Settled.");
+        }
+      }, 2000); 
     } catch (error: any) {
-      console.error("Error paying seller:", error);
-      toast.error("Failed to update status.");
+      toast.error("Failed to process payout.");
     } finally {
       setLoadingTransactions(false);
     }
   };
 
-  // --- 4. Developer Reply Logic ---
+  // --- 5. Developer Reply ---
   const handleDeveloperReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedReply = developerReply.trim();
-
-    if (!trimmedReply || !user || !userProfile) return;
+    if (!developerReply.trim() || !user || !userProfile) return;
 
     setIsReplying(true);
     try {
@@ -219,7 +221,7 @@ const DeveloperDashboardPage = () => {
         {
           senderId: user.$id,
           senderName: user.name,
-          message: trimmedReply,
+          message: developerReply,
           isDeveloper: true,
           collegeName: userProfile.collegeName,
         }
@@ -227,29 +229,14 @@ const DeveloperDashboardPage = () => {
       setDeveloperReply("");
       toast.success("Reply sent!");
       refetchMessages();
-    } catch (error: any) {
-      toast.error("Failed to send reply.");
+    } catch (error) {
+      toast.error("Failed to send.");
     } finally {
       setIsReplying(false);
     }
   };
 
   // --- Helpers ---
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case "initiated": return "bg-yellow-500 text-white";
-      case "payment_confirmed_to_developer": return "bg-blue-500 text-white";
-      case "commission_deducted": return "bg-orange-500 text-white";
-      case "paid_to_seller": return "bg-green-500 text-white";
-      case "failed": return "bg-destructive text-white";
-      case "Pending": return "bg-yellow-500 text-white"; // Report status
-      case "Reviewed": return "bg-blue-500 text-white"; // Report status
-      case "Resolved": return "bg-green-500 text-white"; // Report status
-      case "Dismissed": return "bg-gray-500 text-white"; // Report status
-      default: return "bg-muted text-muted-foreground";
-    }
-  };
-
   const getTypeIcon = (type: string) => {
     switch(type) {
         case 'buy': case 'rent': return <ShoppingBag className="h-3 w-3 mr-1" />;
@@ -261,195 +248,219 @@ const DeveloperDashboardPage = () => {
   }
 
   // --- Access Check ---
-  if (!isDeveloper) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-4">
-        <XCircle className="h-10 w-10 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-      </div>
-    );
-  }
+  if (!isDeveloper) return <div className="flex h-screen items-center justify-center font-bold text-xl">Access Denied</div>;
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
-      <h1 className="text-4xl font-bold mb-6 text-center text-foreground">Developer Dashboard</h1>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <h1 className="text-3xl font-black mb-6 text-center tracking-tight">DEVELOPER <span className="text-secondary-neon">DASHBOARD</span></h1>
+      
+      <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* --- 1. Developer Messages --- */}
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <MessageSquareText className="h-5 w-5 text-secondary-neon" /> User Messages (Last 48h)
+        {/* === SECTION 1: FINANCIALS === */}
+        <Card className="bg-card border-border shadow-md">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <DollarSign className="h-5 w-5 text-green-500" /> Financial Operations
             </CardTitle>
+            <CardDescription>Verify payments, calculate commissions, and release payouts.</CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-4">
-            {isMessagesLoading ? (
-              <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-            ) : messages.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">No recent messages.</p>
-            ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {messages.map((msg) => (
-                  <div key={msg.$id} className={cn("p-3 rounded-md border", msg.isDeveloper ? "bg-primary/10 border-primary" : "bg-background border-border")}>
-                    <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="font-semibold">{msg.senderName} ({msg.collegeName})</span>
-                      <span className="text-muted-foreground">{new Date(msg.$createdAt).toLocaleString()}</span>
-                    </div>
-                    <p className="text-sm">{msg.message}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <form onSubmit={handleDeveloperReply} className="flex gap-2 mt-4">
-              <Input placeholder="Reply to users..." value={developerReply} onChange={(e) => setDeveloperReply(e.target.value)} disabled={isReplying} />
-              <Button type="submit" size="icon" disabled={isReplying} className="bg-secondary-neon text-primary-foreground">
-                {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Separator className="my-6" />
-
-        {/* --- 2. Transactions (Products, Services, Food, etc) --- */}
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-secondary-neon" /> All Transactions & Escrow
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 overflow-x-auto">
-            {loadingTransactions ? (
-              <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
-            ) : transactions.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">No transactions found.</p>
-            ) : (
-              <Table className="min-w-[1200px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Buyer</TableHead>
-                    <TableHead>Seller/Provider</TableHead>
-                    <TableHead>Total Amount</TableHead>
-                    <TableHead>Commission</TableHead>
-                    <TableHead>Net Payout</TableHead>
-                    <TableHead>Target UPI</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((tx) => (
-                    <TableRow key={tx.$id}>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize flex items-center w-fit">
-                            {getTypeIcon(tx.type)} {tx.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{tx.productTitle}</TableCell>
-                      <TableCell className="text-muted-foreground">{tx.buyerName}</TableCell>
-                      <TableCell className="text-muted-foreground">{tx.sellerName}</TableCell>
-                      <TableCell className="font-bold">₹{tx.amount.toFixed(2)}</TableCell>
-                      <TableCell className="text-red-500">
-                        {tx.commissionAmount ? `₹${tx.commissionAmount.toFixed(2)}` : "-"}
-                      </TableCell>
-                      <TableCell className="text-green-500 font-bold">
-                        {tx.netSellerAmount ? `₹${tx.netSellerAmount.toFixed(2)}` : "-"}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono">{tx.sellerUpiId}</TableCell>
-                      <TableCell>
-                        <Badge className={cn("px-2 py-1 text-[10px]", getStatusBadgeClass(tx.status))}>
-                          {tx.status.replace(/_/g, ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right space-y-2">
-                        {tx.status === "payment_confirmed_to_developer" && (
-                          <Button size="sm" variant="secondary" onClick={() => handleProcessPayment(tx)} className="w-full bg-blue-600 text-white hover:bg-blue-700 h-8 text-xs">
-                            Calc Commission
-                          </Button>
-                        )}
-                        {tx.status === "commission_deducted" && (
-                          <Button size="sm" variant="default" onClick={() => handlePaySeller(tx)} className="w-full bg-green-600 text-white hover:bg-green-700 h-8 text-xs">
-                            Release Payout
-                          </Button>
-                        )}
-                        {tx.status === "paid_to_seller" && <span className="text-green-500 text-xs flex items-center justify-end"><Shield className="h-3 w-3 mr-1"/> Settled</span>}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Separator className="my-6" />
-
-        {/* --- 3. Moderation (Blocked Words) --- */}
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <Shield className="h-5 w-5 text-secondary-neon" /> Content Moderation
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-4">
-            <div className="flex gap-2">
-                <Input placeholder="Block new word" value={newBlockedWord} onChange={(e) => setNewBlockedWord(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddBlockedWord()} />
-                <Button onClick={handleAddBlockedWord} disabled={isBlockedWordsLoading}>Block</Button>
+          <CardContent>
+            {/* Filters Toolbar */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Search ID, Name, UTR..." 
+                        className="pl-9" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <Select value={filterType} onValueChange={setFilterType}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filter Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="food">Food</SelectItem>
+                        <SelectItem value="buy">Market</SelectItem>
+                        <SelectItem value="service">Service</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
-            <div className="flex flex-wrap gap-2 p-3 border rounded-md bg-background min-h-[50px]">
-                {blockedWords.map((word) => (
-                    <Badge key={word.$id} variant="destructive" className="cursor-pointer" onClick={() => removeBlockedWord(word.$id)}>
-                        {word.word} <XCircle className="ml-1 h-3 w-3" />
-                    </Badge>
-                ))}
-                {blockedWords.length === 0 && <span className="text-muted-foreground text-sm">No words blocked.</span>}
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* --- 4. Reports --- */}
-        <Card className="bg-card text-card-foreground shadow-lg border-border">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-xl font-semibold flex items-center gap-2">
-              <Flag className="h-5 w-5 text-destructive" /> User Reports
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 overflow-x-auto">
-             {isReportsLoading ? <div className="flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
+            {/* Transactions Table */}
+            <div className="border rounded-md overflow-hidden">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted/50">
                         <TableRow>
-                            <TableHead>Target</TableHead>
-                            <TableHead>Reason</TableHead>
-                            <TableHead>Message</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead className="w-[100px]">Type</TableHead>
+                            <TableHead>Details</TableHead>
+                            <TableHead>Financials</TableHead>
+                            <TableHead>User Status</TableHead>
+                            <TableHead>Dev Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {reports.map((report) => (
-                            <TableRow key={report.$id}>
-                                <TableCell>{report.productTitle} (by {report.sellerId})</TableCell>
-                                <TableCell>{report.reason}</TableCell>
-                                <TableCell className="max-w-[200px] truncate">{report.message}</TableCell>
-                                <TableCell><Badge className={getStatusBadgeClass(report.status)}>{report.status}</Badge></TableCell>
-                                <TableCell className="text-right space-x-1">
-                                    {report.status === 'Pending' && (
-                                        <>
-                                            <Button size="sm" variant="secondary" onClick={() => updateReportStatus(report.$id, "Reviewed")}>Review</Button>
-                                            <Button size="sm" variant="destructive" onClick={() => updateReportStatus(report.$id, "Dismissed")}>Dismiss</Button>
-                                        </>
+                        {filteredTransactions.map((tx) => (
+                            <TableRow key={tx.$id}>
+                                <TableCell>
+                                    <Badge variant="outline" className="capitalize flex w-fit items-center">
+                                        {getTypeIcon(tx.type)} {tx.type}
+                                    </Badge>
+                                    <div className="text-[10px] text-muted-foreground mt-1 font-mono">{tx.$id.substring(0,6)}</div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="font-bold text-sm">{tx.productTitle}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        <span className="text-green-600">From: {tx.buyerName}</span> <br/>
+                                        <span className="text-blue-600">To: {tx.sellerName}</span>
+                                    </div>
+                                    {tx.utrId && <Badge variant="secondary" className="mt-1 text-[10px] font-mono">UTR: {tx.utrId}</Badge>}
+                                </TableCell>
+                                <TableCell>
+                                    <div className="text-sm font-bold">Total: ₹{tx.amount}</div>
+                                    {tx.commissionAmount && (
+                                        <div className="text-xs text-red-500">Comm: -₹{tx.commissionAmount.toFixed(2)}</div>
                                     )}
-                                    {report.status === 'Reviewed' && <Button size="sm" className="bg-green-600" onClick={() => updateReportStatus(report.$id, "Resolved")}>Resolve</Button>}
+                                    {tx.netSellerAmount && (
+                                        <div className="text-xs text-green-600 font-bold border-t border-dashed border-gray-300 mt-1 pt-1">
+                                            Pay: ₹{tx.netSellerAmount.toFixed(2)}
+                                        </div>
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    <Badge className={cn(
+                                        "capitalize",
+                                        tx.status === 'completed' || tx.status === 'seller_confirmed_delivery' ? "bg-green-500 hover:bg-green-600" :
+                                        tx.status === 'payment_confirmed_to_developer' ? "bg-blue-500 hover:bg-blue-600" :
+                                        "bg-yellow-500 hover:bg-yellow-600"
+                                    )}>
+                                        {tx.status.replace(/_/g, ' ')}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    {tx.status === "payment_confirmed_to_developer" && (
+                                        <Button size="sm" onClick={() => handleProcessPayment(tx)} className="w-full bg-blue-600 hover:bg-blue-700 text-xs h-8">
+                                            Calculate Fee
+                                        </Button>
+                                    )}
+                                    {tx.status === "commission_deducted" && (
+                                        <Button size="sm" onClick={() => handlePaySeller(tx)} className="w-full bg-green-600 hover:bg-green-700 text-xs h-8">
+                                            Release Payout
+                                        </Button>
+                                    )}
+                                    {tx.status === "paid_to_seller" && (
+                                        <div className="flex items-center text-green-600 text-xs font-bold justify-end">
+                                            <CheckCircle2 className="h-4 w-4 mr-1" /> Settled
+                                        </div>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
-             )}
+                {filteredTransactions.length === 0 && <div className="p-8 text-center text-muted-foreground">No transactions found.</div>}
+            </div>
           </CardContent>
+        </Card>
+
+        {/* === SECTION 2: MODERATION & REPORTS === */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Blocked Words */}
+            <Card className="bg-card border-border shadow-md">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <Shield className="h-5 w-5 text-red-500" /> Chat Moderation
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex gap-2">
+                        <Input 
+                            placeholder="Block offensive word..." 
+                            value={newBlockedWord} 
+                            onChange={(e) => setNewBlockedWord(e.target.value)} 
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddBlockedWord()}
+                        />
+                        <Button onClick={handleAddBlockedWord} variant="secondary">Block</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 p-3 border rounded-md bg-muted/20 min-h-[100px]">
+                        {blockedWords.map((word) => (
+                            <Badge key={word.$id} variant="destructive" className="cursor-pointer hover:opacity-80" onClick={() => removeBlockedWord(word.$id)}>
+                                {word.word} <XCircle className="ml-1 h-3 w-3" />
+                            </Badge>
+                        ))}
+                        {blockedWords.length === 0 && <span className="text-xs text-muted-foreground">No words blocked yet.</span>}
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Reports */}
+            <Card className="bg-card border-border shadow-md">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                        <Flag className="h-5 w-5 text-orange-500" /> User Reports
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-y-auto max-h-[300px]">
+                    {isReportsLoading ? <div className="flex justify-center p-4"><Loader2 className="animate-spin"/></div> : (
+                        <div className="space-y-3">
+                            {reports.map((report) => (
+                                <div key={report.$id} className="p-3 border rounded-md bg-background flex flex-col gap-2">
+                                    <div className="flex justify-between items-start">
+                                        <div className="font-bold text-sm">{report.productTitle}</div>
+                                        <Badge variant="outline" className={cn("text-[10px]", 
+                                            report.status === 'Resolved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        )}>{report.status}</Badge>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        <span className="font-semibold text-red-500">{report.reason}</span> • Reported by {report.reporterName}
+                                    </div>
+                                    <div className="text-xs bg-muted p-2 rounded italic">"{report.message}"</div>
+                                    {report.status === 'Pending' && (
+                                        <div className="flex gap-2 justify-end">
+                                            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => updateReportStatus(report.$id, "Dismissed")}>Dismiss</Button>
+                                            <Button size="sm" className="h-6 text-xs bg-red-600 hover:bg-red-700 text-white" onClick={() => updateReportStatus(report.$id, "Resolved")}>Resolve</Button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            {reports.length === 0 && <div className="text-center text-muted-foreground text-xs py-4">No active reports.</div>}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+
+        {/* === SECTION 3: MESSAGES === */}
+        <Card className="bg-card border-border shadow-md">
+            <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                    <MessageSquareText className="h-5 w-5 text-blue-500" /> Global Announcements
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={handleDeveloperReply} className="flex gap-2">
+                    <Input 
+                        placeholder="Broadcast message to all users (Appears in 'Buzz')..." 
+                        value={developerReply} 
+                        onChange={(e) => setDeveloperReply(e.target.value)} 
+                        disabled={isReplying}
+                    />
+                    <Button type="submit" disabled={isReplying} className="bg-secondary-neon text-primary-foreground">
+                        {isReplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                </form>
+                <div className="mt-4 space-y-2 max-h-[200px] overflow-y-auto">
+                    {messages.slice(0, 5).map(msg => (
+                        <div key={msg.$id} className="text-xs p-2 border-b last:border-0">
+                            <span className="font-bold">{msg.senderName}:</span> {msg.message}
+                            <span className="text-muted-foreground float-right">{new Date(msg.$createdAt).toLocaleDateString()}</span>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
         </Card>
 
       </div>
