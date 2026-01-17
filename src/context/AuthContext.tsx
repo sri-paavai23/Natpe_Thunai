@@ -6,8 +6,9 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Models, Query } from "appwrite";
+// Import the new leveling logic functions
 import { calculateMaxXpForLevel, checkAndApplyLevelUp } from "@/utils/leveling";
-import { isToday } from "date-fns"; // NEW: Import isToday
+import { isToday } from "date-fns";
 
 interface AppwriteUser extends Models.User<Models.Preferences> {}
 
@@ -27,9 +28,9 @@ interface UserProfile extends Models.Document {
   currentXp: number;
   maxXp: number;
   ambassadorDeliveriesCount: number;
-  lastQuestCompletedDate: string | null; // NEW: Track last quest completion
-  itemsListedToday: number; // NEW: Track items listed today for quests
-  avatarStyle: string; // NEW: Add avatarStyle
+  lastQuestCompletedDate: string | null;
+  itemsListedToday: number;
+  avatarStyle: string;
 }
 
 interface AuthContextType {
@@ -38,14 +39,13 @@ interface AuthContextType {
   user: AppwriteUser | null;
   userProfile: UserProfile | null;
   isVerified: boolean;
-  login: () => Promise<void>; // Re-added: Function to trigger session re-check
+  login: () => Promise<void>;
   logout: () => void;
   updateUserProfile: (profileId: string, data: Partial<UserProfile>) => Promise<void>;
   addXp: (amount: number) => Promise<void>;
   deductXp: (amount: number, reason: string) => Promise<void>;
   incrementAmbassadorDeliveriesCount: () => Promise<void>;
-  recordMarketListing: () => Promise<void>; // NEW: Function to record market listings
-  // handleAuthSuccess: (currentUser: AppwriteUser) => Promise<void>; // Removed
+  recordMarketListing: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -67,29 +67,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         [Query.equal('userId', userId)]
       );
       const profile = response.documents[0] as unknown as UserProfile | undefined;
+      
       if (profile) {
-        const level = profile.level ?? 1;
-        const maxXp = calculateMaxXpForLevel(level);
+        let level = profile.level ?? 1;
+        let currentXp = profile.currentXp ?? 0;
+        
+        // 1. Calculate the initial Max XP based on the current level using the new formula
+        let maxXp = calculateMaxXpForLevel(level);
 
-        // Reset itemsListedToday if it's a new day since last quest completion
+        // 2. RECONCILIATION: Check if the new curve means the user should have leveled up already.
+        // This handles the transition from the Old Curve to the New Curve automatically.
+        const reconciled = checkAndApplyLevelUp(level, currentXp, maxXp);
+        
+        // Update local variables with reconciled values
+        level = reconciled.newLevel;
+        currentXp = reconciled.newCurrentXp;
+        maxXp = reconciled.newMaxXp;
+
+        // Reset itemsListedToday if it's a new day
         let itemsListedToday = profile.itemsListedToday ?? 0;
         const lastQuestDate = profile.lastQuestCompletedDate ? new Date(profile.lastQuestCompletedDate) : null;
         if (lastQuestDate && !isToday(lastQuestDate)) {
-          itemsListedToday = 0; // Reset if it's a new day
+          itemsListedToday = 0;
         }
 
+        // 3. Construct the profile object with reconciled Level/XP data
         const completeProfile: UserProfile = {
           ...profile,
           level: level,
-          currentXp: profile.currentXp ?? 0,
+          currentXp: currentXp,
           maxXp: maxXp,
           collegeName: profile.collegeName || "Unknown College",
           ambassadorDeliveriesCount: profile.ambassadorDeliveriesCount ?? 0,
-          lastQuestCompletedDate: profile.lastQuestCompletedDate ?? null, // Initialize new field
-          itemsListedToday: itemsListedToday, // Initialize new field
-          avatarStyle: profile.avatarStyle || "lorelei", // NEW: Initialize avatarStyle
+          lastQuestCompletedDate: profile.lastQuestCompletedDate ?? null,
+          itemsListedToday: itemsListedToday,
+          avatarStyle: profile.avatarStyle || "lorelei",
         };
+        
         setUserProfile(completeProfile);
+
+        // OPTIONAL: If the level changed due to reconciliation, save it to DB silently
+        if (level !== (profile.level ?? 1)) {
+             // We don't await this to keep the UI snappy, just sync in background
+             databases.updateDocument(
+                 APPWRITE_DATABASE_ID, 
+                 APPWRITE_USER_PROFILES_COLLECTION_ID, 
+                 profile.$id, 
+                 { level, currentXp }
+             ).catch(err => console.error("Silent level sync failed", err));
+        }
+
       } else {
         console.warn("User profile not found for user:", userId);
         setUserProfile(null);
@@ -115,12 +142,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [fetchUserProfile]);
 
-  // Re-added login function
   const login = useCallback(async () => {
     setIsLoading(true);
     await checkUserSession();
   }, [checkUserSession]);
-
 
   useEffect(() => {
     checkUserSession();
@@ -163,9 +188,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         maxXp: calculatedMaxXp,
         collegeName: updatedProfileData.collegeName || "Unknown College",
         ambassadorDeliveriesCount: updatedProfileData.ambassadorDeliveriesCount ?? 0,
-        lastQuestCompletedDate: updatedProfileData.lastQuestCompletedDate ?? null, // Ensure new field is updated
-        itemsListedToday: updatedProfileData.itemsListedToday ?? 0, // Ensure new field is updated
-        avatarStyle: updatedProfileData.avatarStyle || "lorelei", // NEW: Ensure avatarStyle is updated
+        lastQuestCompletedDate: updatedProfileData.lastQuestCompletedDate ?? null,
+        itemsListedToday: updatedProfileData.itemsListedToday ?? 0,
+        avatarStyle: updatedProfileData.avatarStyle || "lorelei",
       };
       setUserProfile(updatedProfile);
     } catch (error: any) {
@@ -182,7 +207,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     let currentLevel = userProfile.level;
     let currentXp = userProfile.currentXp + amount;
-    let maxXp = userProfile.maxXp;
+    // We recalculate MaxXP here to be safe, rather than relying on stale state
+    let maxXp = calculateMaxXpForLevel(currentLevel); 
 
     const { newLevel, newCurrentXp, newMaxXp } = checkAndApplyLevelUp(currentLevel, currentXp, maxXp);
 
@@ -213,19 +239,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let currentLevel = userProfile.level;
     let currentXp = userProfile.currentXp - amount;
     
-    // Ensure XP doesn't go below zero
     if (currentXp < 0) currentXp = 0;
 
-    // Recalculate level if XP drops below current level's threshold
     let newLevel = currentLevel;
     let newMaxXp = calculateMaxXpForLevel(newLevel);
 
+    // Logic remains robust with new formula: checks previous level's incremental cap
     while (newLevel > 1 && currentXp < calculateMaxXpForLevel(newLevel - 1)) {
       newLevel -= 1;
       newMaxXp = calculateMaxXpForLevel(newLevel);
-      currentXp = newMaxXp + currentXp; // Carry over remaining XP to the new lower level
+      currentXp = newMaxXp + currentXp; 
     }
-    if (newLevel === 1 && currentXp < 0) currentXp = 0; // Ensure XP is not negative at level 1
+    if (newLevel === 1 && currentXp < 0) currentXp = 0; 
 
     try {
       if (newLevel !== currentLevel || currentXp !== userProfile.currentXp) {
@@ -267,7 +292,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // NEW: Function to record market listings for daily quest
   const recordMarketListing = async () => {
     if (!userProfile || !user) {
       console.warn("Cannot record market listing: User not logged in or profile missing.");
@@ -277,7 +301,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let currentItemsListedToday = userProfile.itemsListedToday ?? 0;
     const lastQuestDate = userProfile.lastQuestCompletedDate ? new Date(userProfile.lastQuestCompletedDate) : null;
 
-    // Reset if it's a new day since last quest completion
     if (lastQuestDate && !isToday(lastQuestDate)) {
       currentItemsListedToday = 0;
     }
@@ -291,7 +314,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Failed to record market listing:", error);
     }
   };
-
 
   if (isLoading) {
     return (
@@ -309,7 +331,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user, 
       userProfile, 
       isVerified, 
-      login, // Re-added
+      login, 
       logout, 
       updateUserProfile, 
       addXp, 
