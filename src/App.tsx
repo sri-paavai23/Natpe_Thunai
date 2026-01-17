@@ -7,8 +7,6 @@ import React from "react";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
-
-// NEW: Import ThemeProvider
 import { ThemeProvider } from "@/components/theme-provider";
 
 // --- Page Imports ---
@@ -40,7 +38,6 @@ import TheEditPage from "./pages/TheEditPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import PostJobPage from "./pages/PostJobPage";
 import AmbassadorProgramPage from "./pages/AmbassadorProgramPage";
-// Note: Ensure this file is located at src/pages/market/ProductDetailsPage.tsx or update path
 import ProductDetailsPage from "./pages/ProductDetailsPage"; 
 import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
@@ -117,7 +114,6 @@ const OnlineRoutes = () => {
         
         {/* MARKET & PRODUCTS */}
         <Route path="/market" element={<MarketPage />} />
-        {/* FIX: Simplified path to match ProductListingCard navigation */}
         <Route path="/market/:productId" element={<ProductDetailsPage />} />
         <Route path="/market/confirm-payment/:transactionId" element={<PaymentConfirmationPage />} />
         
@@ -165,13 +161,11 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        {/* WRAP EVERYTHING IN THEME PROVIDER */}
         <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
           <Toaster />
           <Sonner />
           <BrowserRouter>
             <AuthProvider>
-              {/* AUTOMATIC SWITCHING LOGIC */}
               {/* If online: Show App Routes. If offline: Show Cosmic Dash Game. */}
               {isOnline ? <OnlineRoutes /> : <OfflinePage />}
             </AuthProvider>
