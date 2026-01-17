@@ -3,105 +3,124 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Flame, CheckCircle } from "lucide-react";
+import { Flame, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 
 const LoginStreakCard = () => {
-  const { addXp } = useAuth();
+  const { addXp, userProfile } = useAuth();
   const [loginStreak, setLoginStreak] = useState(0);
   const [claimedToday, setClaimedToday] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    // 1. Get Today's Date (ignoring time)
-    const today = new Date().toDateString(); // e.g., "Mon Jan 01 2024"
-    
-    // 2. Retrieve stored data
-    const lastLoginDate = localStorage.getItem("natpe_last_login_date");
-    const lastClaimDate = localStorage.getItem("natpe_last_claim_date");
-    let currentStreak = parseInt(localStorage.getItem("natpe_streak") || "0", 10);
+    const initializeStreak = () => {
+        // 1. Get Today's Date
+        const today = new Date().toDateString(); 
+        
+        // 2. Retrieve stored data
+        const lastLoginDate = localStorage.getItem("natpe_last_login_date");
+        const lastClaimDate = localStorage.getItem("natpe_last_claim_date");
+        let currentStreak = parseInt(localStorage.getItem("natpe_streak") || "0", 10);
 
-    // 3. Logic to Calculate Streak
-    if (lastLoginDate === today) {
-      // User has already visited today. 
-      // Do NOT increment, just keep the streak as it is (persisted from previous visit today).
-      // If this is the very first render ever (streak 0), set to 1.
-      if (currentStreak === 0) currentStreak = 1;
-    } else {
-      // User is visiting for the first time today.
-      
-      // Calculate 'Yesterday'
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayString = yesterday.toDateString();
+        // 3. Logic to Calculate Streak
+        if (lastLoginDate === today) {
+            // Already visited today, keep streak
+            if (currentStreak === 0) currentStreak = 1;
+        } else {
+            // First visit today
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayString = yesterday.toDateString();
 
-      if (lastLoginDate === yesterdayString) {
-        // Last login was exactly yesterday -> Increment Streak
-        currentStreak += 1;
-      } else {
-        // Last login was NOT yesterday (and not today) -> Streak Broken (Reset)
-        currentStreak = 1;
-      }
+            if (lastLoginDate === yesterdayString) {
+                currentStreak += 1;
+            } else {
+                currentStreak = 1; // Streak broken
+            }
 
-      // Update storage immediately so subsequent refreshes today hit the "if (lastLoginDate === today)" block
-      localStorage.setItem("natpe_last_login_date", today);
-      localStorage.setItem("natpe_streak", currentStreak.toString());
-    }
+            // Update storage
+            localStorage.setItem("natpe_last_login_date", today);
+            localStorage.setItem("natpe_streak", currentStreak.toString());
+        }
 
-    // 4. Update State
-    setLoginStreak(currentStreak);
+        // 4. Update State
+        setLoginStreak(currentStreak);
 
-    // 5. Check Claim Status
-    if (lastClaimDate === today) {
-      setClaimedToday(true);
-    } else {
-      setClaimedToday(false);
-    }
-    
-    setIsLoading(false);
+        // 5. Check Claim Status
+        if (lastClaimDate === today) {
+            setClaimedToday(true);
+        } else {
+            setClaimedToday(false);
+        }
+        
+        setIsLoading(false);
+    };
+
+    initializeStreak();
   }, []);
 
-  const handleClaimReward = (event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent card click event
+  const handleClaimReward = async (event: React.MouseEvent) => {
+    event.stopPropagation(); 
 
     if (claimedToday) {
       toast.info("Reward already claimed today. Come back tomorrow!");
       return;
     }
 
-    const rewardXP = 10 * loginStreak;
-
-    // Call Auth Context to add XP
-    if (addXp) {
-        addXp(rewardXP);
-        toast.success(`Streak maintained! +${rewardXP} XP earned.`);
-    } else {
-        toast.error("Unable to connect to profile. Please try again.");
+    if (!userProfile) {
+        toast.error("Please login to claim rewards.");
         return;
     }
 
-    // Mark as claimed for today
-    const today = new Date().toDateString();
-    localStorage.setItem("natpe_last_claim_date", today);
-    setClaimedToday(true);
+    setIsProcessing(true);
+
+    try {
+        // LEVELING LOGIC FIX:
+        // Cap the reward at 50 XP max. 
+        // Early levels (Hook phase) need ~50 XP, so this is a huge reward.
+        // Later levels (Grind phase) need ~500 XP, so this is a balanced daily boost.
+        const rawReward = 10 * loginStreak;
+        const rewardXP = Math.min(rawReward, 50); 
+
+        if (addXp) {
+            await addXp(rewardXP);
+            
+            // Mark as claimed locally
+            const today = new Date().toDateString();
+            localStorage.setItem("natpe_last_claim_date", today);
+            setClaimedToday(true);
+            
+            toast.success("Streak Reward Claimed!", {
+                description: `You earned +${rewardXP} XP for your ${loginStreak}-day streak.`
+            });
+        }
+    } catch (error) {
+        toast.error("Failed to claim reward.");
+    } finally {
+        setIsProcessing(false);
+    }
   };
 
   const handleCardClick = () => {
-    toast.info(`You are on a ${loginStreak}-day streak! Claim daily to increase your reward.`);
+    toast.info(`You are on a ${loginStreak}-day streak! Max daily reward is capped at 50 XP.`);
   };
 
   if (isLoading) {
       return (
         <Card className="bg-card shadow-lg border-border h-[130px] flex items-center justify-center">
-            <p className="text-sm text-muted-foreground animate-pulse">Loading streak...</p>
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </Card>
       );
   }
 
+  // Calculate potential reward for display
+  const potentialReward = Math.min(10 * loginStreak, 50);
+
   return (
     <Card 
-        className="bg-card text-card-foreground shadow-lg border-border cursor-pointer hover:shadow-xl transition-shadow" 
+        className="bg-card text-card-foreground shadow-lg border-border cursor-pointer hover:shadow-xl transition-shadow relative overflow-hidden" 
         onClick={handleCardClick}
     >
       <CardHeader className="p-4 pb-2">
@@ -116,17 +135,19 @@ const LoginStreakCard = () => {
         </p>
         <Button 
           onClick={handleClaimReward} 
-          className={`w-full text-primary-foreground transition-all duration-200 ${
+          className={`w-full text-primary-foreground transition-all duration-200 font-bold ${
             claimedToday 
-                ? "bg-muted hover:bg-muted cursor-not-allowed text-muted-foreground" 
-                : "bg-secondary-neon hover:bg-secondary-neon/90"
+                ? "bg-muted hover:bg-muted cursor-not-allowed text-muted-foreground border border-border" 
+                : "bg-secondary-neon hover:bg-secondary-neon/90 shadow-md"
           }`}
-          disabled={claimedToday}
+          disabled={claimedToday || isProcessing}
         >
-          {claimedToday ? (
-            <span className="flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Claimed Today</span>
+          {isProcessing ? (
+             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : claimedToday ? (
+            <span className="flex items-center gap-2"><CheckCircle className="h-4 w-4" /> Claimed</span>
           ) : (
-            `Claim +${10 * loginStreak} XP`
+            `Claim +${potentialReward} XP`
           )}
         </Button>
       </CardContent>
