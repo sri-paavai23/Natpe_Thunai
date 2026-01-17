@@ -10,7 +10,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Plus, Minus, MapPin, IndianRupee, CheckCircle, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { databases, APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID } from "@/lib/appwrite";
+import { 
+  databases, 
+  APPWRITE_DATABASE_ID, 
+  APPWRITE_FOOD_ORDERS_COLLECTION_ID,
+  APPWRITE_TRANSACTIONS_COLLECTION_ID // Import Transactions Collection ID
+} from "@/lib/appwrite";
 import { ID } from "appwrite";
 import { DEVELOPER_UPI_ID } from "@/lib/config";
 
@@ -80,40 +85,74 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
         // 1. Calculate and Sanitize Data
         const priceVal = parseFloat(offering.price) || 0;
         const totalAmount = priceVal * quantity;
+        const safeOfferingId = String(offering.$id);
+        const safeOfferingTitle = String(offering.title).substring(0, 99);
+        const safeProviderId = String(offering.posterId);
+        const safeProviderName = String(offering.posterName);
+        const safeBuyerId = String(user.$id);
+        const safeBuyerName = String(user.name);
+        const safeLocation = String(deliveryLocation);
+        const safeCollege = String(userProfile?.collegeName || "Unknown");
+        const safeUtr = String(transactionId);
+        const safeSellerUpi = offering.sellerUpiId || "default@upi"; // Fallback if missing
 
-        // 2. Prepare Payload (Strict Typing)
-        const payload = {
-            offeringId: String(offering.$id), // String
-            offeringTitle: String(offering.title).substring(0, 99), // String (Truncate if needed)
-            providerId: String(offering.posterId), // String
-            providerName: String(offering.posterName), // String
-            buyerId: String(user.$id), // String
-            buyerName: String(user.name), // String
-            quantity: Number(quantity), // Integer
-            totalAmount: Number(totalAmount.toFixed(2)), // Float/Double (2 decimals)
-            deliveryLocation: String(deliveryLocation), // String
-            status: "Pending Confirmation", // String
-            transactionId: String(transactionId), // String
-            collegeName: String(userProfile?.collegeName || "Unknown") // String
+        // 2. Prepare Food Order Payload (Kitchen/Status Tracking)
+        const foodOrderPayload = {
+            offeringId: safeOfferingId,
+            offeringTitle: safeOfferingTitle,
+            providerId: safeProviderId,
+            providerName: safeProviderName,
+            buyerId: safeBuyerId,
+            buyerName: safeBuyerName,
+            quantity: Number(quantity),
+            totalAmount: Number(totalAmount.toFixed(2)),
+            deliveryLocation: safeLocation,
+            status: "Pending Confirmation",
+            transactionId: safeUtr,
+            collegeName: safeCollege
         };
 
-        // 3. Log Payload for Debugging (Check console if it fails)
-        console.log("Submitting Order Payload:", payload);
+        // 3. Prepare Transaction Payload (Developer Dashboard/Financial Tracking)
+        const transactionPayload = {
+            productId: safeOfferingId,
+            productTitle: `Food: ${safeOfferingTitle} (x${quantity})`, // Descriptive title
+            buyerId: safeBuyerId,
+            buyerName: safeBuyerName,
+            sellerId: safeProviderId,
+            sellerName: safeProviderName,
+            sellerUpiId: safeSellerUpi,
+            amount: Number(totalAmount.toFixed(2)),
+            status: "payment_confirmed_to_developer", // Set status so Developer sees it immediately
+            type: "food", // Explicit type for filtering
+            collegeName: safeCollege,
+            ambassadorDelivery: false, // Food is usually direct delivery
+            utrId: safeUtr, // Link the payment reference
+            isBargain: false
+        };
 
-        // 4. Send to Appwrite
-        await databases.createDocument(
-            APPWRITE_DATABASE_ID,
-            APPWRITE_FOOD_ORDERS_COLLECTION_ID,
-            ID.unique(),
-            payload
-        );
+        console.log("Submitting Orders...");
 
-        toast.success("Order Placed! Waiting for chef confirmation.");
+        // 4. Send to Appwrite (Parallel Execution for speed)
+        await Promise.all([
+            databases.createDocument(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_FOOD_ORDERS_COLLECTION_ID,
+                ID.unique(),
+                foodOrderPayload
+            ),
+            databases.createDocument(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_TRANSACTIONS_COLLECTION_ID,
+                ID.unique(),
+                transactionPayload
+            )
+        ]);
+
+        toast.success("Order Placed Successfully!");
         if (onOrderPlaced) onOrderPlaced();
 
     } catch (error: any) {
         console.error("Order Error:", error);
-        // Show specific error message from Appwrite (e.g., "Invalid attribute: quantity")
         toast.error(`Order Failed: ${error.message || "Unknown error"}`);
     } finally {
         setIsProcessing(false);
