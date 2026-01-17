@@ -13,8 +13,8 @@ import { Label } from "@/components/ui/label";
 import { 
   IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
-  AlertTriangle, Eye, ShieldCheck, XCircle, PackageCheck,
-  MessageCircle, Briefcase, Wallet, Lock, MapPin
+  AlertTriangle, ShieldCheck, XCircle, PackageCheck,
+  MessageCircle, Briefcase, Wallet, Lock, MapPin, Ban
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -166,7 +166,13 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
 
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
-  const isCompleted = item.status.toLowerCase().includes('completed') || item.status === 'Cancelled' || item.status === 'Disputed';
+  
+  // ROBUST COMPLETION CHECK: Ensures Delivered Food and Paid Cash are also "Completed"
+  const isCompleted = 
+    item.status.toLowerCase().includes('completed') || 
+    item.status.toLowerCase().includes('delivered') || 
+    item.status === 'Cancelled' || 
+    item.status === 'Disputed';
 
   const getIcon = () => {
     switch (item.type) {
@@ -216,15 +222,20 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             <Button 
                 size="sm" 
                 variant="outline" 
-                className="h-8 gap-2 border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10 w-full"
+                className={cn(
+                    "h-8 gap-2 w-full transition-all",
+                    isCompleted 
+                        ? "bg-muted/50 text-muted-foreground border-dashed" 
+                        : "border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10"
+                )}
                 onClick={() => onChat(item)}
                 disabled={isCompleted}
             >
-                {isCompleted ? <Lock className="h-3 w-3" /> : <MessageCircle className="h-4 w-4" />}
-                {isCompleted ? "Chat Closed" : `Chat with ${partnerName ? partnerName.split(' ')[0] : 'User'}`}
+                {isCompleted ? <Ban className="h-3 w-3" /> : <MessageCircle className="h-4 w-4" />}
+                {isCompleted ? "Chat Locked (Deal Closed)" : `Chat with ${partnerName ? partnerName.split(' ')[0] : 'User'}`}
             </Button>
 
-            {/* --- PAY BUTTON (Explicitly Exclude Cash Exchange & Food) --- */}
+            {/* --- PAY BUTTON --- */}
             {marketItem && item.type !== 'Cash Exchange' && !item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
                 <Button 
                     size="sm" 
@@ -236,16 +247,15 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             )}
         </div>
 
-        {/* --- CASH EXCHANGE SPECIFIC VIEW --- */}
+        {/* --- CASH EXCHANGE VIEW --- */}
         {item.type === 'Cash Exchange' && !isCompleted && (
             <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-200 dark:border-green-800 mb-3 text-center">
                 <p className="text-xs text-muted-foreground mb-2">Meet in person to exchange cash.</p>
-                {/* Note: Connect / Mark Complete happens in Listings Page or via Chat logic */}
-                <div className="text-[10px] text-muted-foreground italic">Use the Listings page to mark as completed.</div>
+                <div className="text-[10px] text-muted-foreground italic">Use the Listings page to mark completed.</div>
             </div>
         )}
 
-        {/* --- MARKET / SERVICE / RENTAL LOGIC --- */}
+        {/* --- MARKET LOGIC --- */}
         {marketItem && item.type !== 'Cash Exchange' && (
           <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3">
             <div className="flex justify-between items-center text-xs">
@@ -254,7 +264,6 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             </div>
 
             <div className="flex flex-col gap-2">
-                {/* RENTALS */}
                 {item.type === 'Rental' && (
                     <>
                         {item.isUserProvider && !marketItem.handoverEvidenceUrl && marketItem.appwriteStatus === 'commission_deducted' && (
@@ -279,7 +288,6 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                     </>
                 )}
 
-                {/* SERVICES / ERRANDS / TRANSACTIONS */}
                 {(item.type === 'Service' || item.type === 'Errand' || item.type === 'Transaction') && (
                     <>
                         {item.isUserProvider && (marketItem.appwriteStatus === 'payment_confirmed_to_developer' || marketItem.appwriteStatus === 'commission_deducted') && (
@@ -303,7 +311,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
           </div>
         )}
 
-        {/* --- FOOD ACTIONS (Live Update Targets) --- */}
+        {/* --- FOOD ACTIONS --- */}
         {item.type === "Food Order" && !item.status.includes("Delivered") && (
              <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
                 {item.isUserProvider ? (
@@ -394,6 +402,28 @@ const TrackingPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
+  // --- HELPER: LOCK CHAT ROOM ---
+  const lockChatRoom = async (transactionId: string) => {
+    try {
+        const rooms = await databases.listDocuments(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_CHAT_ROOMS_COLLECTION_ID,
+            [Query.equal('transactionId', transactionId)]
+        );
+        if (rooms.documents.length > 0) {
+            await databases.updateDocument(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_CHAT_ROOMS_COLLECTION_ID,
+                rooms.documents[0].$id,
+                { status: "closed" }
+            );
+            console.log("🔒 Chat room locked for transaction:", transactionId);
+        }
+    } catch (error) {
+        console.error("Failed to lock chat room:", error);
+    }
+  };
+
   // --- INITIAL DATA FETCH ---
   const refreshData = useCallback(async () => {
     if (!user?.$id) return;
@@ -403,13 +433,11 @@ const TrackingPage = () => {
       
       const uniqueItemsMap = new Map<string, TrackingItem>();
 
-      // 1. Process Transactions
       response.documents.forEach((doc: any) => {
         const item = processTransactionDoc(doc, user.$id);
         uniqueItemsMap.set(item.id, item);
       });
 
-      // 2. Process Food Orders (from hook or initial fetch)
       initialFoodOrders.forEach(o => {
         const item = processFoodDoc(o, user.$id);
         uniqueItemsMap.set(item.id, item);
@@ -425,11 +453,8 @@ const TrackingPage = () => {
   // --- REAL-TIME SUBSCRIPTION ---
   useEffect(() => {
     if (!user?.$id) return;
-
-    // Load initial data
     refreshData();
 
-    // Subscribe to BOTH collections
     const unsubscribe = databases.client.subscribe(
         [
             `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_TRANSACTIONS_COLLECTION_ID}.documents`,
@@ -437,9 +462,8 @@ const TrackingPage = () => {
         ],
         (response) => {
             const doc = response.payload as any;
-            const eventType = response.events[0]; // e.g., create, update, delete
+            const eventType = response.events[0];
 
-            // 1. Check if this document belongs to the current user
             const isRelevant = 
                 doc.buyerId === user.$id || 
                 doc.sellerId === user.$id || 
@@ -448,43 +472,43 @@ const TrackingPage = () => {
             if (isRelevant) {
                 setItems((prevItems) => {
                     const newItemsMap = new Map(prevItems.map(i => [i.id, i]));
-                    
-                    // Determine Type (Transaction vs Food) based on fields present
                     let newItem: TrackingItem | null = null;
 
-                    if (doc.productTitle) { // It's a Transaction
+                    if (doc.productTitle) { 
                         newItem = processTransactionDoc(doc, user.$id);
-                    } else if (doc.offeringTitle) { // It's a Food Order
+                    } else if (doc.offeringTitle) { 
                         newItem = processFoodDoc(doc, user.$id);
                     }
 
                     if (newItem) {
-                        // If it's a delete event (rare but possible), remove it
                         if (eventType.includes('.delete')) {
                             newItemsMap.delete(newItem.id);
                         } else {
-                            // Update or Add
                             newItemsMap.set(newItem.id, newItem);
                         }
                     }
-
-                    // Re-sort
                     return Array.from(newItemsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
                 });
-                
-                // Optional: Play a subtle sound or visual cue for update
-                // toast.info("Activity updated!");
             }
         }
     );
 
-    return () => {
-        unsubscribe();
-    };
+    return () => { unsubscribe(); };
   }, [user, refreshData]);
 
   // --- ACTIONS ---
   const handleChatNavigation = async (item: TrackingItem) => {
+    // 1. SAFETY GUARD: Check completion status
+    const isCompleted = item.status.toLowerCase().includes('completed') || 
+                        item.status.toLowerCase().includes('delivered') ||
+                        item.status === 'Cancelled' || 
+                        item.status === 'Disputed';
+
+    if (isCompleted) {
+        toast.info("Safety First: Chat is closed for completed transactions.");
+        return;
+    }
+
     try {
         const rooms = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_CHAT_ROOMS_COLLECTION_ID, [Query.equal('transactionId', item.id)]);
         if (rooms.documents.length > 0) {
@@ -523,15 +547,21 @@ const TrackingPage = () => {
             toast.success("Marked Delivered.");
         }
         else if (action === "confirm_receipt_sale" || action === "confirm_completion") {
+            // MARK COMPLETED -> LOCK CHAT
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "completed" });
             if (payload?.productId) { try { await databases.deleteDocument(APPWRITE_DATABASE_ID, APPWRITE_PRODUCTS_COLLECTION_ID, payload.productId); } catch {} }
-            toast.success("Completed!");
+            await lockChatRoom(id); // TRIGGER LOCK
+            toast.success("Completed! Chat has been closed.");
         }
         else if (action === "food_update") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_FOOD_ORDERS_COLLECTION_ID, id, { status: payload.status });
-            toast.success("Updated.");
+            if (payload.status === "Delivered") {
+                await lockChatRoom(id); // TRIGGER LOCK FOR FOOD
+                toast.success("Order Delivered! Chat closed.");
+            } else {
+                toast.success("Updated.");
+            }
         }
-        // No need to call refreshData() manually, the subscription will catch it!
     } catch (e) { toast.error("Action Failed"); }
   };
 
