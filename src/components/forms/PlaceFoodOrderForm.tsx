@@ -55,7 +55,9 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
         return;
     }
 
-    const totalAmount = parseFloat(offering.price) * quantity;
+    // Parse price safely
+    const priceVal = parseFloat(offering.price) || 0;
+    const totalAmount = priceVal * quantity;
     const note = `Food Order: ${offering.title} x${quantity}`;
     
     // Open UPI App
@@ -75,26 +77,35 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
 
     setIsProcessing(true);
     try {
-        const totalAmount = parseFloat(offering.price) * quantity;
+        // 1. Calculate and Sanitize Data
+        const priceVal = parseFloat(offering.price) || 0;
+        const totalAmount = priceVal * quantity;
 
+        // 2. Prepare Payload (Strict Typing)
+        const payload = {
+            offeringId: String(offering.$id), // String
+            offeringTitle: String(offering.title).substring(0, 99), // String (Truncate if needed)
+            providerId: String(offering.posterId), // String
+            providerName: String(offering.posterName), // String
+            buyerId: String(user.$id), // String
+            buyerName: String(user.name), // String
+            quantity: Number(quantity), // Integer
+            totalAmount: Number(totalAmount.toFixed(2)), // Float/Double (2 decimals)
+            deliveryLocation: String(deliveryLocation), // String
+            status: "Pending Confirmation", // String
+            transactionId: String(transactionId), // String
+            collegeName: String(userProfile?.collegeName || "Unknown") // String
+        };
+
+        // 3. Log Payload for Debugging (Check console if it fails)
+        console.log("Submitting Order Payload:", payload);
+
+        // 4. Send to Appwrite
         await databases.createDocument(
             APPWRITE_DATABASE_ID,
             APPWRITE_FOOD_ORDERS_COLLECTION_ID,
             ID.unique(),
-            {
-                offeringId: offering.$id,
-                offeringTitle: offering.title,
-                providerId: offering.posterId,
-                providerName: offering.posterName,
-                buyerId: user.$id,
-                buyerName: user.name,
-                quantity: quantity,
-                totalAmount: totalAmount,
-                deliveryLocation: deliveryLocation,
-                status: "Pending Confirmation", // Initial status
-                transactionId: transactionId, // Store the UTR
-                collegeName: userProfile?.collegeName
-            }
+            payload
         );
 
         toast.success("Order Placed! Waiting for chef confirmation.");
@@ -102,7 +113,8 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
 
     } catch (error: any) {
         console.error("Order Error:", error);
-        toast.error("Failed to place order. Please try again.");
+        // Show specific error message from Appwrite (e.g., "Invalid attribute: quantity")
+        toast.error(`Order Failed: ${error.message || "Unknown error"}`);
     } finally {
         setIsProcessing(false);
     }
@@ -119,7 +131,7 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
     const postData = {
       title,
       description,
-      price, // Stored as string in ServicePost schema usually, but verify your schema
+      price, 
       category,
       dietaryType,
       timeEstimate,
@@ -132,7 +144,8 @@ const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({
 
   // --- RENDER: BUY MODE ---
   if (mode === "buy" && offering) {
-    const total = (parseFloat(offering.price) * quantity).toFixed(0);
+    const priceVal = parseFloat(offering.price) || 0;
+    const total = (priceVal * quantity).toFixed(0);
 
     return (
       <div className="space-y-4">
