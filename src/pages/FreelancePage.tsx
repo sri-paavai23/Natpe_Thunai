@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { 
   Briefcase, PlusCircle, Loader2, Search, Filter, Star, 
   Code, PenTool, Camera, GraduationCap, Calendar, Wrench, 
-  Handshake, Percent, Ban, CheckCircle2
+  Handshake, Percent, CheckCircle2, MessageSquarePlus
 } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -21,8 +21,7 @@ import {
   APPWRITE_DATABASE_ID, 
   APPWRITE_SERVICES_COLLECTION_ID, 
   APPWRITE_TRANSACTIONS_COLLECTION_ID,
-  // Ensure this ID matches your database setup for bargain requests
-  APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID 
+  APPWRITE_SERVICE_REVIEWS_COLLECTION_ID // Ensure this is exported in your lib/appwrite
 } from "@/lib/appwrite";
 import { ID, Query } from 'appwrite';
 import { useAuth } from "@/context/AuthContext";
@@ -48,12 +47,14 @@ const GigCard = ({
   service, 
   onHire, 
   onBargain,
+  onReview, // New Prop
   isOwner,
   bargainStatus 
 }: { 
   service: ServicePost, 
   onHire: (s: ServicePost, finalPrice: number) => void,
   onBargain: (s: ServicePost) => void,
+  onReview: (s: ServicePost) => void,
   isOwner: boolean,
   bargainStatus: 'none' | 'pending' | 'accepted' | 'denied'
 }) => {
@@ -115,6 +116,19 @@ const GigCard = ({
                     <span className="text-lg font-black text-foreground">₹{originalPrice}</span>
                 )}
             </div>
+            
+            {/* REVIEW BUTTON (Small, Icon only to save space) */}
+            {!isOwner && (
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-muted-foreground hover:text-yellow-500 hover:bg-yellow-500/10"
+                    onClick={() => onReview(service)}
+                    title="Leave a Review"
+                >
+                    <MessageSquarePlus className="h-4 w-4" />
+                </Button>
+            )}
         </div>
 
         {isOwner ? (
@@ -123,7 +137,7 @@ const GigCard = ({
           </Button>
         ) : (
           <div className="flex gap-2 w-full">
-             {/* BARGAIN BUTTON (15% FIXED) */}
+             {/* BARGAIN BUTTON */}
              {!isAccepted && (
                  <Button 
                     variant="outline"
@@ -137,8 +151,8 @@ const GigCard = ({
                         }`}
                  >
                     {bargainStatus === 'pending' ? 'Pending...' : 
-                     bargainStatus === 'denied' ? 'Fixed Price' : 
-                     <><Percent className="mr-1 h-3 w-3" /> Get 15% Off</>}
+                     bargainStatus === 'denied' ? 'Fixed' : 
+                     <><Percent className="mr-1 h-3 w-3" /> 15% Off</>}
                  </Button>
              )}
 
@@ -173,7 +187,12 @@ const FreelancePage = () => {
   const [isConfirmBargainOpen, setIsConfirmBargainOpen] = useState(false);
   const [bargainTargetGig, setBargainTargetGig] = useState<ServicePost | null>(null);
   
-  // User's Bargain Requests Map: { gigId: 'pending' | 'accepted' | 'denied' }
+  // Review States
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [reviewTargetGig, setReviewTargetGig] = useState<ServicePost | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  
+  // User's Bargain Requests Map
   const [myBargains, setMyBargains] = useState<Record<string, string>>({});
 
   // Filter States
@@ -188,19 +207,15 @@ const FreelancePage = () => {
   // --- FETCH MY BARGAIN REQUESTS ---
   useEffect(() => {
     if (!user) return;
-    
     const fetchMyBargains = async () => {
         try {
-            // "bargain_requests" is the collection ID/Name you use
             const response = await databases.listDocuments(
                 APPWRITE_DATABASE_ID,
                 'bargain_requests', 
                 [Query.equal('buyerId', user.$id)]
             );
-            
             const mapping: Record<string, string> = {};
             response.documents.forEach((doc: any) => {
-                // Assuming 'productId' stores the Gig/Service ID
                 mapping[doc.productId] = doc.status; 
             });
             setMyBargains(mapping);
@@ -208,9 +223,8 @@ const FreelancePage = () => {
             console.error("Failed to load bargains", error);
         }
     };
-
     fetchMyBargains();
-  }, [user, freelanceListings]); // Refresh when listings load/change
+  }, [user, freelanceListings]);
 
   // --- LOGIC: Filter Gigs ---
   const filteredGigs = freelanceListings.filter(gig => {
@@ -223,7 +237,6 @@ const FreelancePage = () => {
   // --- LOGIC: Post Gig ---
   const handlePostService = async (data: any) => {
     if (!user || !userProfile) return;
-
     try {
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
@@ -246,10 +259,10 @@ const FreelancePage = () => {
     }
   };
 
-  // --- LOGIC: Initiate Bargain (Fixed 15%) ---
+  // --- LOGIC: Initiate Bargain ---
   const handleBargainClick = (gig: ServicePost) => {
     if (!user) {
-      toast.error("Login required to bargain.");
+      toast.error("Login required.");
       return;
     }
     setBargainTargetGig(gig);
@@ -258,17 +271,15 @@ const FreelancePage = () => {
 
   const confirmFixedBargain = async () => {
     if (!bargainTargetGig || !user) return;
-    
     setIsProcessing(true);
     try {
         const originalAmount = parseFloat(bargainTargetGig.price);
         const discountAmount = originalAmount * 0.15;
         const requestedAmount = originalAmount - discountAmount;
 
-        // Create Bargain Request
         await databases.createDocument(
             APPWRITE_DATABASE_ID,
-            'bargain_requests', // Replace with APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID constant if available
+            'bargain_requests',
             ID.unique(),
             {
                 productId: bargainTargetGig.$id,
@@ -277,29 +288,61 @@ const FreelancePage = () => {
                 buyerName: user.name,
                 sellerId: bargainTargetGig.posterId,
                 originalAmount: originalAmount,
-                requestedAmount: requestedAmount, // Exact 15% off
+                requestedAmount: requestedAmount,
                 status: 'pending',
                 type: 'service'
             }
         );
-
-        // Update Local State Optimistically
         setMyBargains(prev => ({ ...prev, [bargainTargetGig.$id]: 'pending' }));
-
-        toast.success("Discount request sent!", {
-            description: "The poster will be notified. Check back later."
-        });
+        toast.success("Discount request sent!");
         setIsConfirmBargainOpen(false);
-
     } catch (error: any) {
-        console.error("Bargain Error:", error);
         toast.error("Failed to send request.");
     } finally {
         setIsProcessing(false);
     }
   };
 
-  // --- LOGIC: Hire / Connect ---
+  // --- LOGIC: Review (Stars Only) ---
+  const handleReviewClick = (gig: ServicePost) => {
+    if (!user) {
+        toast.error("Login required to review.");
+        return;
+    }
+    setReviewTargetGig(gig);
+    setReviewRating(0);
+    setIsReviewDialogOpen(true);
+  };
+
+  const submitStarReview = async () => {
+    if (!reviewTargetGig || !user || reviewRating === 0) {
+        toast.error("Please select a star rating.");
+        return;
+    }
+    setIsProcessing(true);
+    try {
+        await databases.createDocument(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+            ID.unique(),
+            {
+                serviceId: reviewTargetGig.$id,
+                reviewerId: user.$id,
+                reviewerName: user.name,
+                rating: reviewRating,
+                comment: "", // Explicitly empty as requested
+            }
+        );
+        toast.success(`Rated ${reviewTargetGig.title} ${reviewRating} stars!`);
+        setIsReviewDialogOpen(false);
+    } catch (error: any) {
+        toast.error("Failed to submit review.");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
+  // --- LOGIC: Hire ---
   const handleHireClick = (gig: ServicePost, price: number) => {
     if (!user) {
       toast.error("Login to hire freelancers.");
@@ -313,7 +356,6 @@ const FreelancePage = () => {
   const confirmHire = async () => {
     if (!selectedGig || !user) return;
     setIsProcessing(true);
-
     try {
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
@@ -322,7 +364,7 @@ const FreelancePage = () => {
         {
           productId: selectedGig.$id,
           productTitle: `Gig: ${selectedGig.title}`,
-          amount: finalHirePrice, // Uses the discounted price if applied
+          amount: finalHirePrice,
           buyerId: user.$id,
           buyerName: user.name,
           sellerId: selectedGig.posterId,
@@ -331,14 +373,12 @@ const FreelancePage = () => {
           status: "negotiating",
           type: "service",
           ambassadorDelivery: false,
-          ambassadorMessage: `Interested in gig (${finalHirePrice === parseFloat(selectedGig.price) ? 'Standard' : 'Discounted'} Rate)`
+          ambassadorMessage: `Interested in gig`
         }
       );
-      
       toast.success("Interest sent! Check your Activity tab.");
       setIsHireDialogOpen(false);
     } catch (error) {
-      console.error(error);
       toast.error("Failed to connect.");
     } finally {
       setIsProcessing(false);
@@ -348,7 +388,7 @@ const FreelancePage = () => {
   return (
     <div className="min-h-screen bg-background text-foreground p-4 pb-20">
       
-      {/* --- HEADER & SEARCH --- */}
+      {/* --- HEADER --- */}
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
@@ -430,8 +470,8 @@ const FreelancePage = () => {
                   service={gig} 
                   onHire={handleHireClick}
                   onBargain={handleBargainClick}
+                  onReview={handleReviewClick}
                   isOwner={user?.$id === gig.posterId}
-                  // Pass the specific status for this gig (default 'none')
                   bargainStatus={(myBargains[gig.$id] as any) || 'none'}
                 />
               ))}
@@ -448,6 +488,33 @@ const FreelancePage = () => {
         </div>
       </div>
 
+      {/* --- REVIEW DIALOG (Stars Only) --- */}
+      <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+        <DialogContent className="sm:max-w-[350px]">
+            <DialogHeader>
+                <DialogTitle className="text-center">Rate this Service</DialogTitle>
+                <DialogDescription className="text-center">
+                    How was your experience with <b>{reviewTargetGig?.title}</b>?
+                </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-center gap-2 py-6">
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <Star 
+                        key={star}
+                        className={`h-8 w-8 cursor-pointer transition-transform hover:scale-110 ${star <= reviewRating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`}
+                        onClick={() => setReviewRating(star)}
+                    />
+                ))}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsReviewDialogOpen(false)}>Cancel</Button>
+                <Button onClick={submitStarReview} disabled={isProcessing || reviewRating === 0} className="bg-secondary-neon text-primary-foreground font-bold">
+                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Rating"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* --- CONFIRM BARGAIN DIALOG --- */}
       <Dialog open={isConfirmBargainOpen} onOpenChange={setIsConfirmBargainOpen}>
         <DialogContent className="sm:max-w-[400px]">
@@ -459,7 +526,6 @@ const FreelancePage = () => {
                     You are requesting to hire <b>{bargainTargetGig?.title}</b> at a reduced rate.
                 </DialogDescription>
             </DialogHeader>
-            
             <div className="bg-muted/30 p-4 rounded-lg space-y-3">
                 <div className="flex justify-between text-sm text-muted-foreground line-through">
                     <span>Original Price:</span>
@@ -475,7 +541,6 @@ const FreelancePage = () => {
                     Note: If the poster rejects this offer, you will only be able to hire at the original fixed price.
                 </div>
             </div>
-
             <DialogFooter>
                 <Button variant="outline" onClick={() => setIsConfirmBargainOpen(false)}>Cancel</Button>
                 <Button onClick={confirmFixedBargain} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground font-bold">
