@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
   Loader2, ArrowLeft, MapPin, Star, ShieldCheck, 
-  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign, Percent 
+  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign, Percent, PenTool 
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -69,6 +69,12 @@ const ProductDetailsPage = () => {
   // Ambassador State
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
+
+  // Review State
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // --- INITIAL FETCH ---
   useEffect(() => {
@@ -238,6 +244,54 @@ const ProductDetailsPage = () => {
     }
   };
 
+  // --- REVIEW ACTION ---
+  const handleSubmitReview = async () => {
+    if (!user || !product) {
+        toast.error("You must be logged in to leave a review.");
+        return;
+    }
+    if (!reviewComment.trim()) {
+        toast.error("Please write a comment.");
+        return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+        await databases.createDocument(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+            ID.unique(),
+            {
+                serviceId: productId,
+                reviewerId: user.$id,
+                reviewerName: user.name,
+                rating: reviewRating,
+                comment: reviewComment,
+                // createdAt is auto-handled by Appwrite usually, but we can rely on $createdAt
+            }
+        );
+
+        toast.success("Review submitted successfully!");
+        setIsReviewDialogOpen(false);
+        setReviewComment("");
+        setReviewRating(5);
+
+        // Refresh reviews
+        const reviewsRes = await databases.listDocuments(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
+            [Query.equal("serviceId", productId || ''), Query.orderDesc("$createdAt")]
+        );
+        setReviews(reviewsRes.documents);
+
+    } catch (error: any) {
+        console.error("Review Error:", error);
+        toast.error(error.message || "Failed to submit review.");
+    } finally {
+        setIsSubmittingReview(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -247,9 +301,7 @@ const ProductDetailsPage = () => {
   }
 
   if (!product) return null;
-  
-  // IMPORTANT: Ensure this logic correctly identifies if YOU are the owner
-  const isOwner = user && product && user.$id === product.userId;
+  const isOwner = user?.$id === product.userId;
 
   return (
     <div className="min-h-screen bg-background pb-32 relative">
@@ -339,7 +391,7 @@ const ProductDetailsPage = () => {
              </Button>
           </div>
 
-          {/* MEETING SPOT - FIX: Use specific location or generic fallback */}
+          {/* MEETING SPOT */}
           <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 p-4 rounded-xl">
              <div className="flex items-start gap-3">
                 <div className="p-2 bg-background rounded-full shadow-sm shrink-0 text-blue-500">
@@ -347,7 +399,6 @@ const ProductDetailsPage = () => {
                 </div>
                 <div>
                    <h3 className="font-bold text-sm text-foreground">Meeting Spot</h3>
-                   {/* FIXED LOCATION DISPLAY */}
                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                      {product.location ? product.location : "Contact seller for meeting details"}
                    </p>
@@ -366,9 +417,57 @@ const ProductDetailsPage = () => {
             </p>
           </div>
 
-          {/* REVIEWS */}
+          {/* REVIEWS SECTION */}
           <div className="space-y-4 pt-2">
-            <h3 className="font-bold text-lg">Reviews ({reviews.length})</h3>
+            <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">Reviews ({reviews.length})</h3>
+                {/* REVIEW BUTTON */}
+                {!isOwner && (
+                    <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 border-dashed">
+                                <PenTool className="h-3 w-3" /> Write Review
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[400px]">
+                            <DialogHeader>
+                                <DialogTitle>Leave a Review</DialogTitle>
+                                <DialogDescription>Share your experience with this item/seller.</DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4 space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Rating</Label>
+                                    <div className="flex gap-2 justify-center">
+                                        {[1, 2, 3, 4, 5].map((star) => (
+                                            <Star 
+                                                key={star} 
+                                                className={`h-8 w-8 cursor-pointer transition-all hover:scale-110 ${star <= reviewRating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`}
+                                                onClick={() => setReviewRating(star)}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Comment</Label>
+                                    <textarea 
+                                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        placeholder="Was the item as described? smooth transaction?"
+                                        value={reviewComment}
+                                        onChange={(e) => setReviewComment(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsReviewDialogOpen(false)}>Cancel</Button>
+                                <Button onClick={handleSubmitReview} disabled={isSubmittingReview} className="bg-secondary-neon text-primary-foreground">
+                                    {isSubmittingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Review"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                )}
+            </div>
+
             {reviews.length === 0 ? (
                <div className="text-center py-8 border border-dashed border-border rounded-lg bg-muted/10">
                   <Star className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -394,13 +493,11 @@ const ProductDetailsPage = () => {
       </div>
 
       {/* --- STICKY ACTION BAR --- */}
-      {/* FIXED: Added z-[100] to appear above BottomNavbar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border z-[100] shadow-[0_-5px_30px_rgba(0,0,0,0.1)]">
          <div className="max-w-3xl mx-auto flex gap-3 h-12">
-            {/* Logic: If Owner, Show 'Your Listing'. If not, show Actions */}
             {!isOwner ? (
                 <>
-                    {/* BARGAIN BUTTON (Hidden if accepted) */}
+                    {/* BARGAIN BUTTON */}
                     {!isBargainAccepted && (
                       <Dialog open={isBargainDialogOpen} onOpenChange={setIsBargainDialogOpen}>
                           <DialogTrigger asChild>
