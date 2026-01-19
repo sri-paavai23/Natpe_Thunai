@@ -14,7 +14,8 @@ import {
   IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
   AlertTriangle, ShieldCheck, XCircle, PackageCheck,
-  MessageCircle, Briefcase, Wallet, Lock, MapPin, Ban, Hourglass
+  MessageCircle, Briefcase, Wallet, Lock, MapPin, Ban, Hourglass,
+  CheckCircle2, Circle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -55,9 +56,9 @@ const mapAppwriteStatusToTrackingStatus = (status: string): string => {
     "negotiating": "Negotiating",
     "initiated": "Payment Pending",
     "payment_confirmed_to_developer": "Verifying Payment",
-    "commission_deducted": "Active / In Progress",
-    "active": "Active / In Progress",
-    "seller_confirmed_delivery": "Work Done / Review",
+    "commission_deducted": "Ready to Start",
+    "active": "In Progress",
+    "seller_confirmed_delivery": "Delivered / Reviewing",
     "meeting_scheduled": "Meeting Scheduled",
     "completed": "Completed",
     "failed": "Cancelled",
@@ -107,6 +108,46 @@ export interface FoodOrderItem extends BaseTrackingItem {
 }
 
 type TrackingItem = MarketTransactionItem | FoodOrderItem;
+
+// --- COMPONENT: PROGRESS STEPPER ---
+const StatusStepper = ({ currentStep }: { currentStep: number }) => {
+    const steps = ["Ordered", "Paid", "In Progress", "Delivered", "Done"];
+    
+    return (
+        <div className="flex items-center justify-between w-full px-1 my-4 relative">
+            {/* Connecting Line */}
+            <div className="absolute left-0 top-2.5 w-full h-0.5 bg-muted -z-10" />
+            <div 
+                className="absolute left-0 top-2.5 h-0.5 bg-secondary-neon transition-all duration-500 -z-10" 
+                style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }} 
+            />
+
+            {steps.map((label, index) => {
+                const isActive = index <= currentStep;
+                const isCurrent = index === currentStep;
+                
+                return (
+                    <div key={label} className="flex flex-col items-center gap-1.5">
+                        <div className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-300 bg-background",
+                            isActive ? "border-secondary-neon text-secondary-neon" : "border-muted text-muted-foreground",
+                            isCurrent && "ring-2 ring-secondary-neon/30 scale-110"
+                        )}>
+                            {isActive ? <div className="w-2.5 h-2.5 bg-secondary-neon rounded-full" /> : <div className="w-2 h-2 bg-muted rounded-full" />}
+                        </div>
+                        <span className={cn(
+                            "text-[9px] font-medium transition-colors", 
+                            isActive ? "text-foreground" : "text-muted-foreground",
+                            isCurrent && "text-secondary-neon font-bold"
+                        )}>
+                            {label}
+                        </span>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
 // --- COMPONENT: EVIDENCE MODAL ---
 const EvidenceModal = ({ isOpen, onClose, title, onUpload, isUploading, viewOnlyUrl }: any) => {
@@ -166,16 +207,26 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
 
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
+  const foodItem = !isMarket ? (item as FoodOrderItem) : null;
   
-  // STRICT STATUS CHECK
-  // 'completed' (lowercase) is the database status we set in handleAction
-  const appwriteStatus = marketItem?.appwriteStatus || "";
-  const isCompleted = 
-    appwriteStatus === 'completed' || 
-    item.status.toLowerCase().includes('completed') || 
-    item.status.toLowerCase().includes('delivered') || 
-    item.status === 'Cancelled' || 
-    item.status === 'Disputed';
+  // DETERMINE STEP FOR STEPPER
+  let currentStep = 0;
+  if (marketItem) {
+      if (marketItem.appwriteStatus === 'completed') currentStep = 4;
+      else if (marketItem.appwriteStatus === 'seller_confirmed_delivery') currentStep = 3;
+      else if (marketItem.appwriteStatus === 'active') currentStep = 2;
+      else if (marketItem.appwriteStatus === 'commission_deducted' || marketItem.appwriteStatus === 'payment_confirmed_to_developer') currentStep = 1;
+      else currentStep = 0;
+  } else if (foodItem) {
+      if (foodItem.orderStatus === 'Delivered' || foodItem.status === 'completed') currentStep = 4;
+      else if (foodItem.orderStatus === 'Out for Delivery') currentStep = 3;
+      else if (foodItem.orderStatus === 'Preparing') currentStep = 2;
+      else if (foodItem.orderStatus === 'Confirmed') currentStep = 1;
+      else currentStep = 0;
+  }
+
+  // STATUS FLAGS
+  const isCompleted = currentStep === 4 || item.status === 'Cancelled' || item.status === 'Disputed';
 
   const getIcon = () => {
     switch (item.type) {
@@ -220,6 +271,11 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
           </Badge>
         </div>
 
+        {/* --- LIVE TRACKING STEPPER --- */}
+        {!isCompleted && item.type !== 'Cash Exchange' && (
+            <StatusStepper currentStep={currentStep} />
+        )}
+
         {/* --- COMMON ACTIONS: CHAT --- */}
         <div className="mb-3 w-full space-y-2">
             <Button 
@@ -242,7 +298,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             {!isCompleted && marketItem && item.type !== 'Cash Exchange' && !item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
                 <Button 
                     size="sm" 
-                    className="h-8 w-full bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold shadow-sm" 
+                    className="h-8 w-full bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold shadow-sm animate-pulse" 
                     onClick={initiatePayment}
                 >
                     <Wallet className="h-3 w-3" /> Pay Escrow (₹{marketItem.amount})
@@ -250,20 +306,11 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             )}
         </div>
 
-        {/* --- CASH EXCHANGE VIEW --- */}
-        {item.type === 'Cash Exchange' && !isCompleted && (
-            <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-200 dark:border-green-800 mb-3 text-center">
-                <p className="text-xs text-muted-foreground mb-2">Meet in person to exchange cash.</p>
-                <div className="text-[10px] text-muted-foreground italic">Use the Listings page to mark completed.</div>
-            </div>
-        )}
-
         {/* --- MARKET LOGIC (STRICT) --- */}
         {marketItem && item.type !== 'Cash Exchange' && !isCompleted && (
           <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3">
             <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Amount: <b className="text-foreground flex items-center gap-0.5"><IndianRupee className="h-3 w-3"/>{marketItem.amount}</b></span>
-                {marketItem.appwriteStatus === 'negotiating' && <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-[4px] text-[10px] font-bold">Negotiating</span>}
             </div>
 
             <div className="flex flex-col gap-2">
@@ -271,14 +318,14 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                 {item.type === 'Rental' && (
                     <>
                         {item.isUserProvider && !marketItem.handoverEvidenceUrl && marketItem.appwriteStatus === 'commission_deducted' && (
-                            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs" onClick={() => { setEvidenceMode("upload_handover"); setShowEvidenceModal(true); }}>
-                                <Camera className="h-3 w-3 mr-2" /> Upload Handover Proof
+                            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs font-bold" onClick={() => { setEvidenceMode("upload_handover"); setShowEvidenceModal(true); }}>
+                                <Camera className="h-3 w-3 mr-2" /> 📸 Upload Handover Proof
                             </Button>
                         )}
                         {!item.isUserProvider && marketItem.handoverEvidenceUrl && marketItem.appwriteStatus === 'commission_deducted' && (
                             <div className="flex gap-2">
                                 <Button variant="outline" className="flex-1 h-9 text-xs" onClick={() => { setEvidenceMode("view_handover"); setShowEvidenceModal(true); }}>View Proof</Button>
-                                <Button className="flex-1 bg-green-600 text-white h-9 text-xs" onClick={() => onAction("accept_handover", item.id)}>
+                                <Button className="flex-1 bg-green-600 text-white h-9 text-xs font-bold" onClick={() => onAction("accept_handover", item.id)}>
                                     <Handshake className="h-3 w-3 mr-2" /> Accept & Rent
                                 </Button>
                             </div>
@@ -286,7 +333,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                         {item.isUserProvider && marketItem.appwriteStatus === 'active' && (
                             <div className="flex gap-2 pt-2 border-t border-border/50">
                                 <Button variant="destructive" className="flex-1 h-9 text-xs" onClick={() => { setEvidenceMode("upload_return"); setShowEvidenceModal(true); }}>Report Damage</Button>
-                                <Button className="flex-1 bg-green-600 text-white h-9 text-xs" onClick={() => onAction("confirm_completion", item.id)}>Return Verified</Button>
+                                <Button className="flex-1 bg-green-600 text-white h-9 text-xs font-bold" onClick={() => onAction("confirm_completion", item.id)}>✅ Return Verified</Button>
                             </div>
                         )}
                     </>
@@ -297,29 +344,29 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                     <>
                         {/* PROVIDER: Start Work */}
                         {item.isUserProvider && (marketItem.appwriteStatus === 'payment_confirmed_to_developer' || marketItem.appwriteStatus === 'commission_deducted') && (
-                            <Button className="w-full bg-blue-600 text-white h-9 text-xs" onClick={() => onAction(item.type === 'Transaction' ? "mark_delivered" : "start_work", item.id)}>
-                                {item.type === 'Transaction' ? 'Mark Delivered' : 'Start Work'}
+                            <Button className="w-full bg-blue-600 text-white h-9 text-xs font-bold shadow-sm" onClick={() => onAction(item.type === 'Transaction' ? "mark_delivered" : "start_work", item.id)}>
+                                {item.type === 'Transaction' ? '🚚 Mark Shipped' : '🚀 Start Work'}
                             </Button>
                         )}
                         
                         {/* PROVIDER: Mark Completed */}
                         {item.isUserProvider && marketItem.appwriteStatus === 'active' && (
-                            <Button className="w-full bg-purple-600 text-white h-9 text-xs" onClick={() => onAction("deliver_work", item.id)}>
-                                <PackageCheck className="h-3 w-3 mr-2" /> Mark Completed / Delivered
+                            <Button className="w-full bg-purple-600 text-white h-9 text-xs font-bold shadow-sm" onClick={() => onAction("deliver_work", item.id)}>
+                                <PackageCheck className="h-3 w-3 mr-2" /> Mark Done / Delivered
                             </Button>
                         )}
 
-                        {/* PROVIDER: Waiting State (After marking delivered) */}
+                        {/* PROVIDER: Waiting State */}
                         {item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
-                            <Button variant="secondary" disabled className="w-full h-9 text-xs opacity-70">
-                                <Hourglass className="h-3 w-3 mr-2 animate-pulse" /> Waiting for Client Confirmation
+                            <Button variant="secondary" disabled className="w-full h-9 text-xs opacity-80 border border-border">
+                                <Hourglass className="h-3 w-3 mr-2 animate-spin" /> Waiting for Confirmation...
                             </Button>
                         )}
 
-                        {/* CLIENT: Confirm & Release (Only when Provider has delivered) */}
+                        {/* CLIENT: Confirm & Release */}
                         {!item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
-                            <Button className="w-full bg-green-600 text-white h-9 text-xs" onClick={() => onAction("confirm_receipt_sale", item.id, { productId: marketItem.productId })}>
-                                <CheckCircle className="h-3 w-3 mr-2" /> Confirm & Release Pay
+                            <Button className="w-full bg-green-600 text-white h-9 text-xs font-bold shadow-lg shadow-green-500/20" onClick={() => onAction("confirm_receipt_sale", item.id, { productId: marketItem.productId })}>
+                                <CheckCircle className="h-3 w-3 mr-2" /> 🔓 Confirm & Release Payment
                             </Button>
                         )}
                     </>
@@ -333,13 +380,13 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
              <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
                 {item.isUserProvider ? (
                     <>
-                        {(item as any).orderStatus === "Pending Confirmation" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Confirmed" })}>Accept Order</Button>}
-                        {(item as any).orderStatus === "Confirmed" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Preparing" })}>Start Cooking</Button>}
-                        {(item as any).orderStatus === "Preparing" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Out for Delivery" })}>Dispatch</Button>}
-                        {(item as any).orderStatus === "Out for Delivery" && <Button size="sm" disabled variant="secondary"><Hourglass className="mr-1 h-3 w-3"/> Waiting for Client</Button>}
+                        {(item as any).orderStatus === "Pending Confirmation" && <Button size="sm" className="bg-blue-600 font-bold" onClick={() => onAction("food_update", item.id, { status: "Confirmed" })}>👍 Accept Order</Button>}
+                        {(item as any).orderStatus === "Confirmed" && <Button size="sm" className="bg-orange-500 font-bold" onClick={() => onAction("food_update", item.id, { status: "Preparing" })}>🍳 Start Cooking</Button>}
+                        {(item as any).orderStatus === "Preparing" && <Button size="sm" className="bg-purple-600 font-bold" onClick={() => onAction("food_update", item.id, { status: "Out for Delivery" })}>🛵 Dispatch</Button>}
+                        {(item as any).orderStatus === "Out for Delivery" && <Button size="sm" disabled variant="secondary"><Hourglass className="mr-1 h-3 w-3"/> On the way...</Button>}
                     </>
                 ) : (
-                    (item as any).orderStatus === "Out for Delivery" && <Button size="sm" className="bg-green-600" onClick={() => onAction("food_update", item.id, { status: "Delivered" })}>Confirm Receipt</Button>
+                    (item as any).orderStatus === "Out for Delivery" && <Button size="sm" className="bg-green-600 font-bold w-full" onClick={() => onAction("food_update", item.id, { status: "Delivered" })}><Utensils className="mr-2 h-4 w-4"/> Confirm Delivery</Button>
                 )}
              </div>
         )}
