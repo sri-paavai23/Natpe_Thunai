@@ -167,7 +167,6 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
   
-  // ROBUST COMPLETION CHECK: Ensures Delivered Food and Paid Cash are also "Completed"
   const isCompleted = 
     item.status.toLowerCase().includes('completed') || 
     item.status.toLowerCase().includes('delivered') || 
@@ -217,7 +216,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
           </Badge>
         </div>
 
-        {/* --- COMMON ACTIONS: CHAT --- */}
+        {/* --- ACTIONS --- */}
         <div className="mb-3 w-full space-y-2">
             <Button 
                 size="sm" 
@@ -542,6 +541,7 @@ const TrackingPage = () => {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "active" });
             toast.success("Started!");
         }
+        // FIXED: Isolated logic for marking delivered/completed
         else if (action === "deliver_work" || action === "mark_delivered") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "seller_confirmed_delivery" });
             toast.success("Marked Delivered.");
@@ -562,7 +562,11 @@ const TrackingPage = () => {
                 toast.success("Updated.");
             }
         }
-    } catch (e) { toast.error("Action Failed"); }
+    } catch (e: any) { 
+        console.error("Action Failed:", e);
+        // UPDATED: Show specific error message from database
+        toast.error("Action Failed: " + (e.message || "Unknown error")); 
+    }
   };
 
   return (
