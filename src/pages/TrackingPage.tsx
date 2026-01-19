@@ -14,7 +14,7 @@ import {
   IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
   AlertTriangle, ShieldCheck, XCircle, PackageCheck,
-  MessageCircle, Briefcase, Wallet, Lock, MapPin, Ban
+  MessageCircle, Briefcase, Wallet, Lock, MapPin, Ban, Hourglass
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -57,7 +57,7 @@ const mapAppwriteStatusToTrackingStatus = (status: string): string => {
     "payment_confirmed_to_developer": "Verifying Payment",
     "commission_deducted": "Active / In Progress",
     "active": "Active / In Progress",
-    "seller_confirmed_delivery": "Work Done / Delivered",
+    "seller_confirmed_delivery": "Work Done / Review",
     "meeting_scheduled": "Meeting Scheduled",
     "completed": "Completed",
     "failed": "Cancelled",
@@ -167,7 +167,11 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
   const isMarket = item.type !== "Food Order";
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
   
+  // STRICT STATUS CHECK
+  // 'completed' (lowercase) is the database status we set in handleAction
+  const appwriteStatus = marketItem?.appwriteStatus || "";
   const isCompleted = 
+    appwriteStatus === 'completed' || 
     item.status.toLowerCase().includes('completed') || 
     item.status.toLowerCase().includes('delivered') || 
     item.status === 'Cancelled' || 
@@ -216,7 +220,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
           </Badge>
         </div>
 
-        {/* --- ACTIONS --- */}
+        {/* --- COMMON ACTIONS: CHAT --- */}
         <div className="mb-3 w-full space-y-2">
             <Button 
                 size="sm" 
@@ -234,8 +238,8 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                 {isCompleted ? "Chat Locked (Deal Closed)" : `Chat with ${partnerName ? partnerName.split(' ')[0] : 'User'}`}
             </Button>
 
-            {/* --- PAY BUTTON --- */}
-            {marketItem && item.type !== 'Cash Exchange' && !item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
+            {/* --- PAY BUTTON (BUYER ONLY) --- */}
+            {!isCompleted && marketItem && item.type !== 'Cash Exchange' && !item.isUserProvider && (marketItem.appwriteStatus === 'negotiating' || marketItem.appwriteStatus === 'initiated') && (
                 <Button 
                     size="sm" 
                     className="h-8 w-full bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold shadow-sm" 
@@ -254,8 +258,8 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             </div>
         )}
 
-        {/* --- MARKET LOGIC --- */}
-        {marketItem && item.type !== 'Cash Exchange' && (
+        {/* --- MARKET LOGIC (STRICT) --- */}
+        {marketItem && item.type !== 'Cash Exchange' && !isCompleted && (
           <div className="bg-muted/20 p-3 rounded-lg border border-border/50 mb-3 space-y-3">
             <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Amount: <b className="text-foreground flex items-center gap-0.5"><IndianRupee className="h-3 w-3"/>{marketItem.amount}</b></span>
@@ -263,6 +267,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             </div>
 
             <div className="flex flex-col gap-2">
+                {/* 1. RENTAL FLOW */}
                 {item.type === 'Rental' && (
                     <>
                         {item.isUserProvider && !marketItem.handoverEvidenceUrl && marketItem.appwriteStatus === 'commission_deducted' && (
@@ -287,18 +292,31 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
                     </>
                 )}
 
+                {/* 2. GENERAL FLOW (Service / Product / Errand) */}
                 {(item.type === 'Service' || item.type === 'Errand' || item.type === 'Transaction') && (
                     <>
+                        {/* PROVIDER: Start Work */}
                         {item.isUserProvider && (marketItem.appwriteStatus === 'payment_confirmed_to_developer' || marketItem.appwriteStatus === 'commission_deducted') && (
                             <Button className="w-full bg-blue-600 text-white h-9 text-xs" onClick={() => onAction(item.type === 'Transaction' ? "mark_delivered" : "start_work", item.id)}>
                                 {item.type === 'Transaction' ? 'Mark Delivered' : 'Start Work'}
                             </Button>
                         )}
+                        
+                        {/* PROVIDER: Mark Completed */}
                         {item.isUserProvider && marketItem.appwriteStatus === 'active' && (
                             <Button className="w-full bg-purple-600 text-white h-9 text-xs" onClick={() => onAction("deliver_work", item.id)}>
-                                <PackageCheck className="h-3 w-3 mr-2" /> Mark Completed
+                                <PackageCheck className="h-3 w-3 mr-2" /> Mark Completed / Delivered
                             </Button>
                         )}
+
+                        {/* PROVIDER: Waiting State (After marking delivered) */}
+                        {item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
+                            <Button variant="secondary" disabled className="w-full h-9 text-xs opacity-70">
+                                <Hourglass className="h-3 w-3 mr-2 animate-pulse" /> Waiting for Client Confirmation
+                            </Button>
+                        )}
+
+                        {/* CLIENT: Confirm & Release (Only when Provider has delivered) */}
                         {!item.isUserProvider && marketItem.appwriteStatus === 'seller_confirmed_delivery' && (
                             <Button className="w-full bg-green-600 text-white h-9 text-xs" onClick={() => onAction("confirm_receipt_sale", item.id, { productId: marketItem.productId })}>
                                 <CheckCircle className="h-3 w-3 mr-2" /> Confirm & Release Pay
@@ -311,13 +329,14 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
         )}
 
         {/* --- FOOD ACTIONS --- */}
-        {item.type === "Food Order" && !item.status.includes("Delivered") && (
+        {item.type === "Food Order" && !isCompleted && (
              <div className="mt-3 pt-3 border-t border-border/50 flex justify-end gap-2">
                 {item.isUserProvider ? (
                     <>
                         {(item as any).orderStatus === "Pending Confirmation" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Confirmed" })}>Accept Order</Button>}
                         {(item as any).orderStatus === "Confirmed" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Preparing" })}>Start Cooking</Button>}
                         {(item as any).orderStatus === "Preparing" && <Button size="sm" onClick={() => onAction("food_update", item.id, { status: "Out for Delivery" })}>Dispatch</Button>}
+                        {(item as any).orderStatus === "Out for Delivery" && <Button size="sm" disabled variant="secondary"><Hourglass className="mr-1 h-3 w-3"/> Waiting for Client</Button>}
                     </>
                 ) : (
                     (item as any).orderStatus === "Out for Delivery" && <Button size="sm" className="bg-green-600" onClick={() => onAction("food_update", item.id, { status: "Delivered" })}>Confirm Receipt</Button>
@@ -334,6 +353,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
             <PaymentVerificationModal isOpen={showPaymentModal} onClose={() => setShowPaymentModal(false)} onVerify={(utr) => { onAction("verify_payment", item.id, { utr }); setShowPaymentModal(false); }} amount={marketItem.amount} />
         )}
 
+        {/* Footer Info */}
         <div className="flex justify-between items-center text-[10px] text-muted-foreground/70 mt-3 pt-2 border-t border-border/30">
            <span>Role: {item.isUserProvider ? "Provider" : "Client"}</span>
            <span className="font-mono opacity-50">ID: {item.id.substring(0, 6)}</span>
@@ -358,7 +378,7 @@ const processTransactionDoc = (doc: any, currentUserId: string): MarketTransacti
         productTitle: doc.productTitle || "Untitled Item",
         description: doc.productTitle,
         status: mapAppwriteStatusToTrackingStatus(doc.status),
-        appwriteStatus: doc.status,
+        appwriteStatus: doc.status, // KEEP RAW STATUS FOR LOGIC
         date: new Date(doc.$createdAt).toLocaleDateString(),
         timestamp: new Date(doc.$createdAt).getTime(),
         amount: doc.amount,
@@ -541,10 +561,10 @@ const TrackingPage = () => {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "active" });
             toast.success("Started!");
         }
-        // FIXED: Isolated logic for marking delivered/completed
+        // MARK DELIVERED LOGIC
         else if (action === "deliver_work" || action === "mark_delivered") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "seller_confirmed_delivery" });
-            toast.success("Marked Delivered.");
+            toast.success("Marked Delivered. Waiting for Client.");
         }
         else if (action === "confirm_receipt_sale" || action === "confirm_completion") {
             // MARK COMPLETED -> LOCK CHAT
@@ -564,7 +584,6 @@ const TrackingPage = () => {
         }
     } catch (e: any) { 
         console.error("Action Failed:", e);
-        // UPDATED: Show specific error message from database
         toast.error("Action Failed: " + (e.message || "Unknown error")); 
     }
   };
