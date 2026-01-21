@@ -5,10 +5,11 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Star, Clock, Plus, Flame, Leaf, Beef } from "lucide-react";
+import { Star, Clock, Plus, Flame } from "lucide-react";
 import { ServicePost } from "@/hooks/useServiceListings";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PlaceFoodOrderForm from "./forms/PlaceFoodOrderForm"; 
+import { useNavigate } from "react-router-dom";
 
 interface FoodOfferingCardProps {
   offering: ServicePost;
@@ -20,6 +21,7 @@ interface FoodServicePost extends ServicePost {
 }
 
 const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
+  const navigate = useNavigate();
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const foodItem = offering as FoodServicePost;
 
@@ -34,10 +36,29 @@ const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
 
   const prepTime = foodItem.timeEstimate || "20-30 min";
 
+  /**
+   * ESCROW REDIRECTION LOGIC
+   * This is triggered after the PlaceFoodOrderForm successfully 
+   * creates a document in the Appwrite Food Orders collection.
+   */
+  const handleOrderSuccess = (orderData: { transactionId: string; totalAmount: number }) => {
+    setIsOrderDialogOpen(false);
+
+    // Construct query parameters for the new Escrow Gateway
+    const queryParams = new URLSearchParams({
+      amount: orderData.totalAmount.toString(),
+      txnId: orderData.transactionId,
+      title: foodItem.title
+    }).toString();
+
+    // Redirect to the bug-free payment page
+    navigate(`/escrow-payment?${queryParams}`);
+  };
+
   return (
     <Card className="group flex flex-col h-full relative overflow-hidden hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all duration-300 bg-card border-border/50 rounded-xl">
       
-      {/* ... (Image Header remains the same) ... */}
+      {/* Image Header */}
       <div className="relative h-44 w-full bg-muted overflow-hidden">
         <img 
           src={imageUrl} 
@@ -102,11 +123,10 @@ const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
                  <Flame className="h-5 w-5 text-orange-500" /> Order Details
               </DialogTitle>
             </DialogHeader>
-            {/* MODE = BUY */}
             <PlaceFoodOrderForm 
               mode="buy"
               offering={foodItem}
-              onOrderPlaced={() => setIsOrderDialogOpen(false)}
+              onOrderPlaced={(data) => handleOrderSuccess(data)}
               onCancel={() => setIsOrderDialogOpen(false)}
             />
           </DialogContent>
