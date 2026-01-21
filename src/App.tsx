@@ -47,6 +47,7 @@ import DeveloperDashboardPage from "./pages/DeveloperDashboardPage";
 import ImageToUrlHelpPage from "./pages/ImageToUrlHelpPage";
 import ServicePaymentConfirmationPage from "./pages/ServicePaymentConfirmationPage";
 import ChatPage from "./pages/ChatPage";
+import EscrowPayment from "./pages/EscrowPayment";
 
 // Import the Offline Game Page
 import OfflinePage from "./pages/OfflinePage";
