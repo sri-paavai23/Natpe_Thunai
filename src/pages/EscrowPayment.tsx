@@ -38,7 +38,7 @@ const EscrowPayment = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const amount = searchParams.get("amount") || "0";
-  const itemTitle = searchParams.get("title") || "Order Payment";
+  const itemTitle = searchParams.get("title") || "Order";
 
   const formattedAmount = Number(amount).toFixed(2);
 
@@ -50,17 +50,21 @@ const EscrowPayment = () => {
   };
 
   const triggerUPI = () => {
-    // --- CRITICAL FIX: MINIMALIST UPI STRING ---
-    // 1. Removed 'pn' (Payee Name): Forces app to fetch registered name from bank (Fixes "Invalid Merchant" error).
-    // 2. Removed 'cu', 'tr', 'mc': Removes non-merchant parameters that cause failures.
-    // 3. Simple Note: Keeps it clean.
+    // --- CRITICAL FIX: "Limit Exceeded" False Positive Fix ---
     
-    const cleanNote = itemTitle.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 20); 
-    const encodedNote = encodeURIComponent(cleanNote);
+    // 1. Sanitize the Note: Use a short alphanumeric string only.
+    // Complex notes like "Payment for X" can trigger business transaction filters on personal VPAs.
+    // We generate a short ref based on the title or random string.
+    const shortRef = itemTitle.replace(/[^a-zA-Z0-9]/g, "").substring(0, 10) || "NTOrder";
+    const encodedNote = encodeURIComponent(shortRef);
 
-    // BARE MINIMUM URL: Address + Amount + Note
+    // 2. Minimalist URL Construction
+    // - No 'pn' (Payee Name): Forces app to verify VPA with bank (Fixes "Invalid Merchant").
+    // - No 'tr' (Transaction Ref): Fixes "Limit Exceeded" on GPay for P2P.
+    // - No 'cu' (Currency): Defaults to INR, safer to omit.
     const upiUri = `upi://pay?pa=${DEVELOPER_UPI}&am=${formattedAmount}&tn=${encodedNote}`;
 
+    // 3. Open App
     window.location.href = upiUri;
 
     setPaymentStep('verifying');
@@ -68,6 +72,7 @@ const EscrowPayment = () => {
   };
 
   const handleVerifyPayment = async () => {
+    // Basic Validation
     if (!utrNumber || utrNumber.length < 4) {
         toast.error("Please enter a valid 12-digit UTR/Reference ID.");
         return;
@@ -81,23 +86,31 @@ const EscrowPayment = () => {
     setIsSubmitting(true);
 
     try {
+        // UPDATE APPWRITE DATABASE
+        // Using the transactionId from URL params to identify the document
         await databases.updateDocument(
             APPWRITE_DATABASE_ID,
             APPWRITE_TRANSACTIONS_COLLECTION_ID,
             transactionId, 
             {
-                transactionId: utrNumber, // User entered UTR
+                // We update the specific attributes as per your schema
+                // 'transactionId' is likely the field for UTR based on previous context
+                transactionId: utrNumber, 
                 status: "payment_confirmed_to_developer",
-                utrId: utrNumber // Dedicated column
+                utrId: utrNumber 
             }
         );
 
         toast.success("Payment Submitted for Verification!");
-        navigate("/activity/tracking"); 
+        
+        // Give a small delay for DB propagation before redirecting
+        setTimeout(() => {
+            navigate("/activity/tracking"); 
+        }, 1500);
 
     } catch (error: any) {
         console.error("Verification Failed:", error);
-        toast.error("Failed to update payment status. Please try again or contact support.");
+        toast.error("Verification Error: " + (error.message || "Please check connection"));
     } finally {
         setIsSubmitting(false);
     }
@@ -205,7 +218,7 @@ const EscrowPayment = () => {
         <div className="flex items-start gap-2 px-2 opacity-80">
             <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
             <p className="text-[10px] text-muted-foreground leading-snug">
-                <strong>Issue with payment?</strong> Take a screenshot of your payment and send it to the developer chat in your Profile. We will manually verify it within 10 minutes.
+                <strong>Still facing issues?</strong> If GPay fails, try sending manually to the UPI ID above and enter the UTR here. The status will update automatically once we verify.
             </p>
         </div>
 
