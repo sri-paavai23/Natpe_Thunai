@@ -14,7 +14,8 @@ import {
   Wallet,
   Info,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -38,9 +39,10 @@ const EscrowPayment = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const amount = searchParams.get("amount") || "0";
-  const itemTitle = searchParams.get("title") || "Order";
+  const itemTitle = searchParams.get("title") || "Order Payment";
 
-  const formattedAmount = Number(amount).toFixed(2);
+  // Force strict 2 decimal places (e.g., "10" -> "10.00")
+  const formattedAmount = parseFloat(amount).toFixed(2);
 
   const handleCopyUPI = () => {
     navigator.clipboard.writeText(DEVELOPER_UPI);
@@ -50,21 +52,14 @@ const EscrowPayment = () => {
   };
 
   const triggerUPI = () => {
-    // --- CRITICAL FIX: "Limit Exceeded" False Positive Fix ---
+    // --- NUCLEAR FIX: RAW UPI STRING ---
+    // We strictly use ONLY 'pa' (Address) and 'am' (Amount).
+    // Removing 'tn' (Note), 'pn' (Name), 'tr' (Ref), 'cu' (Currency).
+    // This makes the request look exactly like a manual P2P transfer, bypassing the business filter.
     
-    // 1. Sanitize the Note: Use a short alphanumeric string only.
-    // Complex notes like "Payment for X" can trigger business transaction filters on personal VPAs.
-    // We generate a short ref based on the title or random string.
-    const shortRef = itemTitle.replace(/[^a-zA-Z0-9]/g, "").substring(0, 10) || "NTOrder";
-    const encodedNote = encodeURIComponent(shortRef);
+    const upiUri = `upi://pay?pa=${DEVELOPER_UPI}&am=${formattedAmount}`;
 
-    // 2. Minimalist URL Construction
-    // - No 'pn' (Payee Name): Forces app to verify VPA with bank (Fixes "Invalid Merchant").
-    // - No 'tr' (Transaction Ref): Fixes "Limit Exceeded" on GPay for P2P.
-    // - No 'cu' (Currency): Defaults to INR, safer to omit.
-    const upiUri = `upi://pay?pa=${DEVELOPER_UPI}&am=${formattedAmount}&tn=${encodedNote}`;
-
-    // 3. Open App
+    // Redirect
     window.location.href = upiUri;
 
     setPaymentStep('verifying');
@@ -72,9 +67,8 @@ const EscrowPayment = () => {
   };
 
   const handleVerifyPayment = async () => {
-    // Basic Validation
     if (!utrNumber || utrNumber.length < 4) {
-        toast.error("Please enter a valid 12-digit UTR/Reference ID.");
+        toast.error("Please enter the 12-digit UTR from your UPI app.");
         return;
     }
 
@@ -87,14 +81,11 @@ const EscrowPayment = () => {
 
     try {
         // UPDATE APPWRITE DATABASE
-        // Using the transactionId from URL params to identify the document
         await databases.updateDocument(
             APPWRITE_DATABASE_ID,
             APPWRITE_TRANSACTIONS_COLLECTION_ID,
             transactionId, 
             {
-                // We update the specific attributes as per your schema
-                // 'transactionId' is likely the field for UTR based on previous context
                 transactionId: utrNumber, 
                 status: "payment_confirmed_to_developer",
                 utrId: utrNumber 
@@ -103,14 +94,13 @@ const EscrowPayment = () => {
 
         toast.success("Payment Submitted for Verification!");
         
-        // Give a small delay for DB propagation before redirecting
         setTimeout(() => {
             navigate("/activity/tracking"); 
         }, 1500);
 
     } catch (error: any) {
         console.error("Verification Failed:", error);
-        toast.error("Verification Error: " + (error.message || "Please check connection"));
+        toast.error("Error: " + (error.message || "Connection failed"));
     } finally {
         setIsSubmitting(false);
     }
@@ -145,7 +135,7 @@ const EscrowPayment = () => {
                     {/* STEP 1: INITIATE PAYMENT */}
                     <div className="text-center space-y-2">
                         <p className="text-sm text-muted-foreground">
-                            Pay securely via any UPI app. Your money is held in escrow until you confirm delivery.
+                            Click "Pay Now" to open your UPI app.
                         </p>
                     </div>
 
@@ -156,22 +146,26 @@ const EscrowPayment = () => {
                         <Wallet className="mr-2 h-5 w-5" /> Pay Now
                     </Button>
 
-                    <div className="relative">
+                    <div className="relative my-4">
                         <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
                         <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or pay manually</span></div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <div className="flex-1 bg-muted/50 border rounded-lg px-3 py-2 text-xs font-mono flex items-center justify-center overflow-hidden truncate">
+                    <div className="flex gap-2 items-center">
+                        <div className="flex-1 bg-muted/50 border rounded-lg px-3 py-3 text-sm font-mono flex items-center justify-center overflow-hidden truncate">
                             {DEVELOPER_UPI}
                         </div>
-                        <Button size="icon" variant="outline" onClick={handleCopyUPI} className="shrink-0">
-                            {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        <Button size="icon" variant="outline" onClick={handleCopyUPI} className="shrink-0 h-10 w-10">
+                            {copied ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
                         </Button>
                     </div>
                     
-                    <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground h-auto py-1" onClick={() => setPaymentStep('verifying')}>
-                        Already paid? Click here to enter UTR
+                    <p className="text-[10px] text-center text-muted-foreground mt-2">
+                        If the button fails, copy the ID above, pay in GPay/PhonePe, then click below.
+                    </p>
+
+                    <Button variant="link" size="sm" className="w-full text-xs text-blue-500 h-auto py-1" onClick={() => setPaymentStep('verifying')}>
+                        I have already paid → Enter UTR
                     </Button>
                 </>
             ) : (
@@ -179,14 +173,14 @@ const EscrowPayment = () => {
                     {/* STEP 2: ENTER UTR */}
                     <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-800 text-center animate-in fade-in zoom-in-95">
                         <Info className="h-6 w-6 text-blue-500 mx-auto mb-2" />
-                        <h3 className="text-sm font-bold text-blue-700 dark:text-blue-300">Payment Initiated</h3>
+                        <h3 className="text-sm font-bold text-blue-700 dark:text-blue-300">Final Step</h3>
                         <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                            Please paste the 12-digit <strong>UTR / Transaction ID</strong> from your UPI app below to confirm.
+                            Paste the 12-digit <strong>UTR / Transaction ID</strong> from your banking app to confirm.
                         </p>
                     </div>
 
                     <div className="space-y-3">
-                        <Label htmlFor="utr">Transaction ID (UTR)</Label>
+                        <Label htmlFor="utr">UTR / Transaction ID</Label>
                         <Input 
                             id="utr"
                             placeholder="e.g. 403928190291" 
@@ -195,7 +189,7 @@ const EscrowPayment = () => {
                             onChange={(e) => setUtrNumber(e.target.value.replace(/[^0-9]/g, ''))} // Numbers only
                             maxLength={12}
                         />
-                        <p className="text-[10px] text-center text-muted-foreground">Usually found under "Transfer Details" in GPay/PhonePe.</p>
+                        <p className="text-[10px] text-center text-muted-foreground">Do not enter the Google Pay Order ID. Look for "UTR" or "Bank Ref No".</p>
                     </div>
 
                     <div className="flex gap-3 pt-2">
@@ -205,7 +199,7 @@ const EscrowPayment = () => {
                             onClick={handleVerifyPayment}
                             disabled={isSubmitting || utrNumber.length < 4}
                         >
-                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & Finish"}
+                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify Payment"}
                         </Button>
                     </div>
                 </>
@@ -218,7 +212,7 @@ const EscrowPayment = () => {
         <div className="flex items-start gap-2 px-2 opacity-80">
             <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
             <p className="text-[10px] text-muted-foreground leading-snug">
-                <strong>Still facing issues?</strong> If GPay fails, try sending manually to the UPI ID above and enter the UTR here. The status will update automatically once we verify.
+                <strong>Pro Tip:</strong> If GPay still shows an error, try using PhonePe or Paytm with the "Pay Manually" option above.
             </p>
         </div>
 
