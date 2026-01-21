@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,118 +10,210 @@ import {
   ShieldCheck, 
   Copy, 
   CheckCircle2, 
-  ExternalLink, 
-  AlertCircle, 
   ArrowLeft,
   Wallet,
-  Info
+  Info,
+  Loader2,
+  AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { 
+    databases, 
+    APPWRITE_DATABASE_ID, 
+    APPWRITE_TRANSACTIONS_COLLECTION_ID 
+} from "@/lib/appwrite";
 
-const DEVELOPER_UPI = "8903480105@superyes";
-const DEVELOPER_NAME = "Natpe Thunai Escrow";
+// Config Constants
+const DEVELOPER_UPI = "8903480105@superyes"; // Replace if needed
+const DEVELOPER_NAME = "Natpe Thunai Dev";
 
-const EscrowPayment = () => {
+const PaymentConfirmationPage = () => {
+  const { transactionId } = useParams<{ transactionId: string }>(); // Appwrite Document ID
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  
+  // State
   const [copied, setCopied] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'initial' | 'verifying'>('initial');
+  const [utrNumber, setUtrNumber] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get data from URL
+  // Get data from URL params (passed from previous page)
+  // Note: We use searchParams for display data to avoid an extra fetch, 
+  // but the ID from useParams is critical for the DB update.
   const amount = searchParams.get("amount") || "0";
-  const txnId = searchParams.get("txnId") || "Unknown";
-  const itemTitle = searchParams.get("title") || "Campus Order";
+  const itemTitle = searchParams.get("title") || "Order Payment";
 
-  // Formatting amount for UPI standard
   const formattedAmount = Number(amount).toFixed(2);
 
   const handleCopyUPI = () => {
     navigator.clipboard.writeText(DEVELOPER_UPI);
     setCopied(true);
-    toast.success("UPI ID copied to clipboard");
+    toast.success("UPI ID copied!");
     setTimeout(() => setCopied(false), 2000);
   };
 
   const triggerUPI = () => {
-    // PRECISE PARAMETERS FOR PERSONAL ACCOUNTS
-    // pa: VPA, pn: Name, am: Amount, cu: Currency, tn: Note, tr: Unique Ref
+    // 1. CLEAN UPI LINK GENERATION
+    // Removing 'tr' (Transaction Ref) is crucial for P2P success.
+    // Keeping the Note ('tn') short and alphanumeric helps compatibility.
     const encodedName = encodeURIComponent(DEVELOPER_NAME);
-    const encodedNote = encodeURIComponent(`Pay for ${itemTitle}`);
-    const uniqueRef = `NT${Date.now()}`; 
+    const cleanNote = itemTitle.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 20); 
+    const encodedNote = encodeURIComponent(cleanNote);
 
-    const upiUri = `upi://pay?pa=${DEVELOPER_UPI}&pn=${encodedName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}&tr=${uniqueRef}`;
+    const upiUri = `upi://pay?pa=${DEVELOPER_UPI}&pn=${encodedName}&am=${formattedAmount}&cu=INR&tn=${encodedNote}`;
 
-    // Attempting redirection
+    // 2. OPEN UPI APP
     window.location.href = upiUri;
+
+    // 3. UPDATE UI TO ASK FOR UTR
+    setPaymentStep('verifying');
+    toast.info("App opened. Please complete payment and enter UTR here.");
+  };
+
+  const handleVerifyPayment = async () => {
+    if (!utrNumber || utrNumber.length < 4) {
+        toast.error("Please enter a valid 12-digit UTR/Reference ID.");
+        return;
+    }
+
+    if (!transactionId) {
+        toast.error("Invalid Order ID. Cannot verify.");
+        return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+        // UPDATE APPWRITE DATABASE
+        await databases.updateDocument(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_TRANSACTIONS_COLLECTION_ID,
+            transactionId, // The Document ID
+            {
+                transactionId: utrNumber, // Saving the User's UTR here
+                status: "payment_confirmed_to_developer",
+                utrId: utrNumber // Saving to dedicated UTR column if schema allows
+            }
+        );
+
+        toast.success("Payment Submitted for Verification!");
+        navigate("/activity/tracking"); // Redirect to tracking
+
+    } catch (error: any) {
+        console.error("Verification Failed:", error);
+        toast.error("Failed to update payment status. Please try again or contact support.");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 flex flex-col items-center">
-      {/* Header */}
-      <div className="w-full max-w-md flex items-center mb-6">
+    <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-center">
+      
+      {/* Header Navigation */}
+      <div className="w-full max-w-md flex items-center mb-6 absolute top-4 left-4">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="flex-1 text-center font-bold text-lg">Escrow Payment</h1>
       </div>
 
-      <div className="w-full max-w-md space-y-4">
-        {/* Transaction Summary Card */}
-        <Card className="border-2 border-secondary-neon/20 shadow-lg">
-          <CardHeader className="pb-2 text-center">
-            <div className="mx-auto bg-secondary-neon/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
-              <ShieldCheck className="h-6 w-6 text-secondary-neon" />
-            </div>
-            <CardTitle className="text-2xl font-black">₹{formattedAmount}</CardTitle>
-            <p className="text-xs text-muted-foreground uppercase tracking-widest">{itemTitle}</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-muted/30 p-3 rounded-lg flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Escrow ID</span>
-              <span className="font-mono font-bold">{txnId.substring(0, 10)}</span>
-            </div>
-
-            <Button 
-              onClick={triggerUPI} 
-              className="w-full h-14 bg-secondary-neon text-primary-foreground font-bold text-lg rounded-xl shadow-neon transition-transform active:scale-95"
-            >
-              <Wallet className="mr-2 h-5 w-5" /> Pay via UPI App
-            </Button>
-            <p className="text-[10px] text-center text-muted-foreground">
-              Supports GPay, PhonePe, Paytm, and more.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Manual Method Card */}
-        <Card className="border-dashed bg-muted/20">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Info className="h-4 w-4 text-blue-500" />
-              Manual Escrow Method
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              If the button above doesn't open your app, copy the UPI ID below and pay the exact amount manually in any UPI app.
-            </p>
-            
-            <div className="flex gap-2">
-              <div className="flex-1 bg-background border rounded-md px-3 py-2 text-xs font-mono flex items-center overflow-hidden">
-                {DEVELOPER_UPI}
-              </div>
-              <Button size="icon" variant="outline" onClick={handleCopyUPI}>
-                {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Safety Notice */}
-        <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl flex gap-3">
-          <ShieldCheck className="h-5 w-5 text-green-500 shrink-0" />
-          <div className="text-[11px] text-green-700 dark:text-green-400">
-            <strong>Escrow Protection:</strong> Your money stays with the developer. It is only released to the seller after YOU confirm receipt of the item/service.
+      <div className="w-full max-w-md space-y-5 mt-10">
+        
+        {/* Main Card */}
+        <Card className="border-2 border-secondary-neon/20 shadow-xl overflow-hidden">
+          <div className="bg-secondary-neon/10 p-4 text-center border-b border-secondary-neon/10">
+             <div className="mx-auto bg-background w-14 h-14 rounded-full flex items-center justify-center mb-2 shadow-sm">
+               <ShieldCheck className="h-7 w-7 text-secondary-neon" />
+             </div>
+             <h1 className="text-3xl font-black tracking-tight">₹{formattedAmount}</h1>
+             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">{itemTitle}</p>
           </div>
+
+          <CardContent className="p-6 space-y-6">
+            
+            {paymentStep === 'initial' ? (
+                <>
+                    {/* STEP 1: INITIATE PAYMENT */}
+                    <div className="text-center space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                            Pay securely via any UPI app. Your money is held in escrow until you confirm delivery.
+                        </p>
+                    </div>
+
+                    <Button 
+                        onClick={triggerUPI} 
+                        className="w-full h-14 bg-secondary-neon text-primary-foreground font-bold text-lg rounded-xl shadow-lg shadow-secondary-neon/20 hover:bg-secondary-neon/90 transition-all active:scale-[0.98]"
+                    >
+                        <Wallet className="mr-2 h-5 w-5" /> Pay Now
+                    </Button>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                        <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or pay manually</span></div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <div className="flex-1 bg-muted/50 border rounded-lg px-3 py-2 text-xs font-mono flex items-center justify-center overflow-hidden truncate">
+                            {DEVELOPER_UPI}
+                        </div>
+                        <Button size="icon" variant="outline" onClick={handleCopyUPI} className="shrink-0">
+                            {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                    </div>
+                    
+                    <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground h-auto py-1" onClick={() => setPaymentStep('verifying')}>
+                        Already paid? Click here to enter UTR
+                    </Button>
+                </>
+            ) : (
+                <>
+                    {/* STEP 2: ENTER UTR */}
+                    <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-800 text-center animate-in fade-in zoom-in-95">
+                        <Info className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                        <h3 className="text-sm font-bold text-blue-700 dark:text-blue-300">Payment Initiated</h3>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            Please paste the 12-digit <strong>UTR / Transaction ID</strong> from your UPI app below to confirm.
+                        </p>
+                    </div>
+
+                    <div className="space-y-3">
+                        <Label htmlFor="utr">Transaction ID (UTR)</Label>
+                        <Input 
+                            id="utr"
+                            placeholder="e.g. 403928190291" 
+                            className="text-center font-mono tracking-widest text-lg h-12 uppercase"
+                            value={utrNumber}
+                            onChange={(e) => setUtrNumber(e.target.value.replace(/[^0-9]/g, ''))} // Numbers only
+                            maxLength={12}
+                        />
+                        <p className="text-[10px] text-center text-muted-foreground">Usually found under "Transfer Details" in GPay/PhonePe.</p>
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                        <Button variant="outline" className="flex-1" onClick={() => setPaymentStep('initial')}>Back</Button>
+                        <Button 
+                            className="flex-[2] bg-green-600 hover:bg-green-700 text-white font-bold"
+                            onClick={handleVerifyPayment}
+                            disabled={isSubmitting || utrNumber.length < 4}
+                        >
+                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & Finish"}
+                        </Button>
+                    </div>
+                </>
+            )}
+
+          </CardContent>
+        </Card>
+
+        {/* Support Note */}
+        <div className="flex items-start gap-2 px-2 opacity-80">
+            <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-muted-foreground leading-snug">
+                <strong>Issue with payment?</strong> Take a screenshot of your payment and send it to the developer chat in your Profile. We will manually verify it within 10 minutes.
+            </p>
         </div>
+
       </div>
     </div>
   );
