@@ -11,8 +11,9 @@ import {
   Copy, 
   CheckCircle2, 
   ArrowLeft,
+  Wallet,
+  Info,
   Loader2,
-  AlertTriangle,
   QrCode,
   Smartphone
 } from "lucide-react";
@@ -23,29 +24,32 @@ import {
     APPWRITE_TRANSACTIONS_COLLECTION_ID 
 } from "@/lib/appwrite";
 
-// Config Constants
+// Config
 const DEVELOPER_UPI = "8903480105@superyes"; 
+const APP_NAME = "Natpe Thunai";
 
 const EscrowPayment = () => {
   const { transactionId } = useParams<{ transactionId: string }>(); 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  // State
   const [copied, setCopied] = useState(false);
   const [utrNumber, setUtrNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
 
+  // Data
   const amount = searchParams.get("amount") || "0";
   const itemTitle = searchParams.get("title") || "Order Payment";
   const formattedAmount = parseFloat(amount).toFixed(2);
 
-  // Generate UPI String (Standard Format)
-  // We use this for the QR Code data
-  const upiString = `upi://pay?pa=${DEVELOPER_UPI}&am=${formattedAmount}&pn=NatpeThunai`;
+  // --- 1. GENERATE ROBUST UPI DATA ---
+  // We use the simplest possible string to avoid GPay "Business" filters
+  // Format: upi://pay?pa=ADDRESS&am=AMOUNT&pn=NAME
+  const upiLink = `upi://pay?pa=${DEVELOPER_UPI}&am=${formattedAmount}&pn=${encodeURIComponent(APP_NAME)}`;
   
-  // Public API to generate QR Code image (No external libraries needed)
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiString)}`;
+  // High-Quality QR Code API (Google Charts is deprecated, using QuickChart/GoQR)
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiLink)}&bgcolor=ffffff`;
 
   const handleCopyUPI = () => {
     navigator.clipboard.writeText(DEVELOPER_UPI);
@@ -54,9 +58,15 @@ const EscrowPayment = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleOpenApp = () => {
+    window.location.href = upiLink;
+    setShowVerification(true); // Auto-show verification field after click
+    toast.info("Opening app... If it fails, scan the QR code.");
+  };
+
   const handleVerifyPayment = async () => {
-    if (!utrNumber || utrNumber.length < 4) {
-        toast.error("Please enter the 12-digit UTR from your UPI app.");
+    if (!utrNumber || utrNumber.length < 12) {
+        toast.error("Invalid UTR. Please check your banking app (usually 12 digits).");
         return;
     }
 
@@ -79,14 +89,14 @@ const EscrowPayment = () => {
             }
         );
 
-        toast.success("Payment Verified! Redirecting...");
+        toast.success("Payment Submitted! Verifying...");
         
         setTimeout(() => {
             navigate("/activity/tracking"); 
         }, 1500);
 
     } catch (error: any) {
-        console.error("Verification Failed:", error);
+        console.error("Verification Error:", error);
         toast.error("Error: " + (error.message || "Connection failed"));
     } finally {
         setIsSubmitting(false);
@@ -96,97 +106,102 @@ const EscrowPayment = () => {
   return (
     <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-center">
       
-      {/* Header */}
-      <div className="w-full max-w-md flex items-center mb-6 absolute top-4 left-4">
+      {/* Back Button */}
+      <div className="w-full max-w-md flex items-center mb-4 absolute top-4 left-4">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
       </div>
 
-      <div className="w-full max-w-md space-y-5 mt-8">
+      <div className="w-full max-w-md space-y-6 mt-8">
         
-        {/* Main Payment Card */}
-        <Card className="border-2 border-secondary-neon/20 shadow-xl overflow-hidden">
+        {/* === CARD 1: PAYMENT DETAILS (QR + LINK) === */}
+        <Card className="border-2 border-secondary-neon/30 shadow-xl overflow-hidden">
           <div className="bg-secondary-neon/10 p-4 text-center border-b border-secondary-neon/10">
-             <div className="mx-auto bg-background w-12 h-12 rounded-full flex items-center justify-center mb-2 shadow-sm">
-               <ShieldCheck className="h-6 w-6 text-secondary-neon" />
-             </div>
-             <h1 className="text-2xl font-black tracking-tight">₹{formattedAmount}</h1>
-             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{itemTitle}</p>
+             <h1 className="text-3xl font-black tracking-tight flex justify-center items-center gap-2">
+                ₹{formattedAmount} <ShieldCheck className="h-6 w-6 text-secondary-neon" />
+             </h1>
+             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">{itemTitle}</p>
           </div>
 
-          <CardContent className="p-6 space-y-6 flex flex-col items-center">
+          <CardContent className="p-6 space-y-6">
             
-            {/* 1. QR Code Display */}
-            <div className="bg-white p-2 rounded-xl shadow-sm border border-border/50">
-                <img 
-                    src={qrCodeUrl} 
-                    alt="Scan to Pay" 
-                    className="w-40 h-40 object-contain"
-                />
-            </div>
-            
-            <div className="text-center space-y-1">
-                <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center justify-center gap-1">
-                    <QrCode className="h-3 w-3" /> Scan with GPay / Paytm
+            {/* QR Code Section - The Most Reliable Method */}
+            <div className="flex flex-col items-center">
+                <div className="p-3 bg-white rounded-xl shadow-inner border border-border">
+                    <img 
+                        src={qrCodeUrl} 
+                        alt="Scan to Pay" 
+                        className="w-48 h-48 object-contain mix-blend-multiply" 
+                    />
                 </div>
-                <div className="text-[10px] text-muted-foreground">OR</div>
+                <div className="flex items-center gap-2 mt-3 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                    <QrCode className="h-4 w-4" /> Scan to Pay
+                </div>
             </div>
 
-            {/* 2. Manual Copy Section */}
-            <div className="w-full space-y-2">
-                <div className="flex gap-2 items-center w-full">
-                    <div className="flex-1 bg-muted/50 border rounded-lg px-3 py-3 text-sm font-mono flex items-center justify-center overflow-hidden text-center truncate">
+            {/* Actions: App Button & Copy */}
+            <div className="space-y-3">
+                <Button 
+                    onClick={handleOpenApp} 
+                    className="w-full h-12 bg-secondary-neon text-primary-foreground font-bold text-base shadow-md hover:bg-secondary-neon/90"
+                >
+                    <Wallet className="mr-2 h-5 w-5" /> Open Payment App
+                </Button>
+
+                <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-muted/50 border rounded-lg px-3 py-2.5 text-xs font-mono text-center truncate select-all">
                         {DEVELOPER_UPI}
                     </div>
-                    <Button size="icon" variant="outline" onClick={handleCopyUPI} className="shrink-0 h-11 w-11 bg-card hover:bg-secondary-neon/10 hover:text-secondary-neon transition-colors">
-                        {copied ? <CheckCircle2 className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                    <Button size="icon" variant="outline" onClick={handleCopyUPI} className="shrink-0 h-10 w-10">
+                        {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                     </Button>
                 </div>
                 <p className="text-[10px] text-center text-muted-foreground">
-                    Copy ID & pay manually if scanner fails.
+                    If the button fails, copy the ID or scan the QR code.
                 </p>
-            </div>
-
-            <div className="w-full border-t border-dashed border-border/60 my-2" />
-
-            {/* 3. Verification Section */}
-            <div className="w-full space-y-3 animate-in fade-in slide-in-from-bottom-2">
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-500/10 p-1.5 rounded-full">
-                        <Smartphone className="h-4 w-4 text-blue-500" />
-                    </div>
-                    <Label htmlFor="utr" className="text-sm font-bold">Paste UTR / Transaction ID</Label>
-                </div>
-                
-                <Input 
-                    id="utr"
-                    placeholder="Enter 12-digit UTR (e.g. 329104829102)" 
-                    className="text-center font-mono tracking-widest text-lg h-12 uppercase border-blue-500/20 focus-visible:ring-blue-500"
-                    value={utrNumber}
-                    onChange={(e) => setUtrNumber(e.target.value.replace(/[^0-9]/g, ''))} 
-                    maxLength={12}
-                />
-                
-                <Button 
-                    className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-base shadow-lg shadow-green-600/20 transition-all active:scale-[0.98]"
-                    onClick={handleVerifyPayment}
-                    disabled={isSubmitting || utrNumber.length < 12}
-                >
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify Payment"}
-                </Button>
             </div>
 
           </CardContent>
         </Card>
 
-        {/* Helper Footer */}
-        <div className="flex items-start gap-3 px-3 py-2 bg-yellow-500/5 border border-yellow-500/10 rounded-lg">
-            <AlertTriangle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
-            <p className="text-[10px] text-yellow-700/80 dark:text-yellow-400/80 leading-snug">
-                <strong>Why Manual?</strong> To keep fees low and secure, we verify payments manually via UTR. Your money is 100% safe in Escrow.
-            </p>
-        </div>
+        {/* === CARD 2: VERIFICATION (ALWAYS VISIBLE OR TOGGLED) === */}
+        <Card className="border border-border bg-card shadow-sm animate-in slide-in-from-bottom-4 fade-in duration-500">
+            <CardContent className="p-5 space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="bg-blue-500/10 p-2 rounded-full">
+                        <Smartphone className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-sm">Payment Confirmation</h3>
+                        <p className="text-xs text-muted-foreground">Required to process your order.</p>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <Label htmlFor="utr" className="text-xs font-bold uppercase text-muted-foreground">
+                        Enter UTR / Reference ID (12 Digits)
+                    </Label>
+                    <Input 
+                        id="utr"
+                        placeholder="e.g. 329104829102" 
+                        className="text-center font-mono tracking-widest text-lg h-12 border-blue-500/20 focus-visible:ring-blue-500 bg-background"
+                        value={utrNumber}
+                        onChange={(e) => setUtrNumber(e.target.value.replace(/[^0-9]/g, ''))} 
+                        maxLength={12}
+                    />
+                    
+                    <Button 
+                        className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold"
+                        onClick={handleVerifyPayment}
+                        disabled={isSubmitting || utrNumber.length < 12}
+                    >
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                        Verify & Complete Order
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
 
       </div>
     </div>
