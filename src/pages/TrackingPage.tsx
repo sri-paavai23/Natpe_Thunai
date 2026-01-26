@@ -8,14 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { 
   IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
   ShieldCheck, XCircle, PackageCheck,
   MessageCircle, Briefcase, Wallet, Ban, Hourglass,
-  Save, Edit3
+  Save, Zap, ArrowRight, UserCircle, Target
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -32,22 +32,6 @@ import { Query, ID } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
 
 // --- HELPERS ---
-const uploadToCloudinary = async (file: File): Promise<string> => {
-  const CLOUD_NAME = "dpusuqjvo";
-  const UPLOAD_PRESET = "natpe_thunai_preset";
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", UPLOAD_PRESET);
-  try {
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
-    if (!res.ok) throw new Error("Upload failed");
-    const data = await res.json();
-    return data.secure_url; 
-  } catch (error: any) {
-    throw new Error("Upload failed");
-  }
-};
-
 const mapAppwriteStatusToTrackingStatus = (status: string): string => {
   const map: Record<string, string> = {
     "negotiating": "Negotiating",
@@ -83,7 +67,6 @@ export interface MarketTransactionItem extends BaseTrackingItem {
   sellerId: string;
   buyerId: string;
   appwriteStatus: string;
-  handoverEvidenceUrl?: string;
 }
 
 export interface FoodOrderItem extends BaseTrackingItem {
@@ -101,17 +84,26 @@ type TrackingItem = MarketTransactionItem | FoodOrderItem;
 
 // --- COMPONENT: PROGRESS STEPPER ---
 const StatusStepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Ordered", "Paid", "In Progress", "Delivered", "Done"];
+    const steps = ["Order", "Pay", "Work", "Ship", "Done"];
     return (
-        <div className="flex items-center justify-between w-full px-1 my-4 relative">
-            <div className="absolute left-0 top-2.5 w-full h-0.5 bg-muted -z-10" />
-            <div className="absolute left-0 top-2.5 h-0.5 bg-secondary-neon transition-all duration-500 -z-10" style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }} />
+        <div className="flex items-center justify-between w-full px-2 my-6 relative">
+            <div className="absolute left-0 top-3 w-full h-[1px] bg-muted -z-10" />
+            <div 
+                className="absolute left-0 top-3 h-[2px] bg-secondary-neon transition-all duration-700 shadow-[0_0_8px_rgba(0,243,255,0.5)] -z-10" 
+                style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }} 
+            />
             {steps.map((label, index) => (
-                <div key={label} className="flex flex-col items-center gap-1.5">
-                    <div className={cn("w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-300 bg-background", index <= currentStep ? "border-secondary-neon text-secondary-neon" : "border-muted text-muted-foreground")}>
-                        {index <= currentStep ? <div className="w-2.5 h-2.5 bg-secondary-neon rounded-full" /> : <div className="w-2 h-2 bg-muted rounded-full" />}
+                <div key={label} className="flex flex-col items-center gap-2">
+                    <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all duration-500 bg-background text-[10px] font-black",
+                        index <= currentStep ? "border-secondary-neon text-secondary-neon shadow-[0_0_10px_rgba(0,243,255,0.2)]" : "border-muted text-muted-foreground"
+                    )}>
+                        {index < currentStep ? <CheckCircle className="h-3 w-3" /> : index + 1}
                     </div>
-                    <span className={cn("text-[9px] font-medium", index <= currentStep ? "text-foreground font-bold" : "text-muted-foreground")}>{label}</span>
+                    <span className={cn(
+                        "text-[8px] font-black uppercase tracking-tighter transition-colors", 
+                        index <= currentStep ? "text-foreground" : "text-muted-foreground"
+                    )}>{label}</span>
                 </div>
             ))}
         </div>
@@ -120,9 +112,6 @@ const StatusStepper = ({ currentStep }: { currentStep: number }) => {
 
 // --- COMPONENT: TRACKING CARD ---
 const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction: (action: string, id: string, payload?: any) => void, currentUser: any, onChat: (item: TrackingItem) => void }) => {
-  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
-  const [evidenceMode, setEvidenceMode] = useState<"upload_handover" | "upload_return" | "view_handover">("view_handover");
-  const [isUploading, setIsUploading] = useState(false);
   const [newAmount, setNewAmount] = useState<string>(item.type === 'Errand' ? (item as MarketTransactionItem).amount.toString() : "0");
   const navigate = useNavigate();
 
@@ -147,56 +136,141 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
 
   const initiatePayment = () => {
       if(!marketItem) return;
-      const queryParams = new URLSearchParams({ amount: marketItem.amount.toString(), txnId: marketItem.id, title: marketItem.productTitle }).toString();
+      const queryParams = new URLSearchParams({ 
+        amount: marketItem.amount.toString(), 
+        txnId: marketItem.id, 
+        title: marketItem.productTitle 
+      }).toString();
       navigate(`/escrow-payment?${queryParams}`);
   };
 
   const partnerName = item.isUserProvider ? (item as any).buyerName : (item.type === 'Food Order' ? (item as any).providerName : (item as any).sellerName);
 
   return (
-    <Card className={cn("border-l-4 transition-all bg-card shadow-sm mb-4 group hover:shadow-md animate-in fade-in zoom-in-95 duration-300", item.isUserProvider ? "border-l-secondary-neon" : "border-l-blue-500")}>
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
+    <Card className={cn(
+      "relative overflow-hidden border-2 transition-all bg-card shadow-sm mb-4 group hover:shadow-neon/10 animate-in fade-in zoom-in-95 duration-300 rounded-2xl", 
+      item.isUserProvider ? "border-secondary-neon/20" : "border-blue-500/20"
+    )}>
+      {/* Role Indicator Ribbon */}
+      <div className={cn(
+        "absolute top-0 left-0 w-1 h-full",
+        item.isUserProvider ? "bg-secondary-neon shadow-[2px_0_10px_rgba(0,243,255,0.4)]" : "bg-blue-500 shadow-[2px_0_10px_rgba(59,130,246,0.4)]"
+      )} />
+
+      <CardContent className="p-5">
+        <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-muted/50 rounded-xl border border-border/50">
-                {item.type === "Rental" ? <Clock className="h-5 w-5 text-purple-500" /> : <ShoppingBag className="h-5 w-5 text-blue-500" />}
+            <div className="p-3 bg-muted/30 rounded-2xl border border-border/50">
+                {item.type === "Rental" ? <Clock className="h-5 w-5 text-purple-500" /> : 
+                 item.type === "Food Order" ? <Utensils className="h-5 w-5 text-orange-500" /> :
+                 <ShoppingBag className="h-5 w-5 text-blue-500" />}
             </div>
             <div>
-              <h4 className="font-bold text-sm text-foreground leading-tight">{item.type === 'Food Order' ? foodItem?.offeringTitle : marketItem?.productTitle}</h4>
-              <p className="text-[10px] text-muted-foreground mt-1 font-mono">{item.type.toUpperCase()} • {item.date}</p>
+              <h4 className="font-black text-base text-foreground leading-tight tracking-tight uppercase italic">
+                {item.type === 'Food Order' ? foodItem?.offeringTitle : marketItem?.productTitle}
+              </h4>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary" className="text-[8px] font-black tracking-widest bg-muted/50 px-1.5 py-0">
+                  {item.type}
+                </Badge>
+                <span className="text-[10px] text-muted-foreground font-mono">{item.date}</span>
+              </div>
             </div>
           </div>
-          <Badge variant="outline" className="text-[9px] font-bold uppercase bg-muted">{item.status}</Badge>
+          <Badge className={cn(
+            "text-[9px] font-black uppercase tracking-widest px-2 py-1 border-0 shadow-sm",
+            isCompleted ? "bg-muted text-muted-foreground" : "bg-secondary-neon/10 text-secondary-neon animate-pulse"
+          )}>
+            {item.status}
+          </Badge>
         </div>
 
         {!isCompleted && <StatusStepper currentStep={currentStep} />}
 
-        {/* DYNAMIC PRICE FOR ERRANDS */}
+        {/* DYNAMIC ERRAND PRICE PANEL */}
         {!isCompleted && item.type === 'Errand' && marketItem && (
-          <div className="mb-4 p-3 bg-secondary-neon/5 rounded-xl border border-secondary-neon/20 space-y-2">
-              <Label className="text-[10px] font-black uppercase text-secondary-neon tracking-widest">Set Reward Amount</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                   <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                   <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} disabled={!item.isUserProvider || marketItem.appwriteStatus !== 'initiated'} className="h-9 pl-8 text-sm font-bold bg-background" />
-                </div>
+          <div className="mb-5 p-4 bg-secondary-neon/5 rounded-2xl border border-secondary-neon/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] font-black uppercase text-secondary-neon tracking-widest flex items-center gap-1.5">
+                  <Target className="h-3 w-3" /> Bounty Reward
+                </Label>
                 {item.isUserProvider && marketItem.appwriteStatus === 'initiated' && (
-                  <Button size="sm" className="h-9 bg-secondary-neon text-primary-foreground" onClick={() => onAction("update_errand_price", item.id, { amount: parseFloat(newAmount) })}><Save className="h-4 w-4" /></Button>
+                   <span className="text-[8px] font-bold text-muted-foreground animate-pulse underline">NEGOTIATE NOW</span>
                 )}
               </div>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                   <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary-neon" />
+                   <Input 
+                      type="number" 
+                      value={newAmount} 
+                      onChange={(e) => setNewAmount(e.target.value)} 
+                      disabled={!item.isUserProvider || marketItem.appwriteStatus !== 'initiated'} 
+                      className="h-12 pl-10 text-lg font-black bg-background border-2 border-border/50 rounded-xl focus:border-secondary-neon transition-all"
+                      placeholder="0.00"
+                   />
+                </div>
+                {item.isUserProvider && marketItem.appwriteStatus === 'initiated' && (
+                  <Button 
+                    size="icon" 
+                    className="h-12 w-12 bg-secondary-neon text-primary-foreground rounded-xl shadow-neon active:scale-90 transition-all" 
+                    onClick={() => onAction("update_errand_price", item.id, { amount: parseFloat(newAmount) })}
+                  >
+                    <Save className="h-5 w-5" />
+                  </Button>
+                )}
+              </div>
+              {!item.isUserProvider && marketItem.amount <= 0 && (
+                 <div className="flex items-center gap-2 text-muted-foreground animate-bounce mt-2">
+                    <Hourglass className="h-3 w-3" />
+                    <span className="text-[10px] font-bold italic">Waiting for Poster to set the bounty...</span>
+                 </div>
+              )}
           </div>
         )}
 
-        <div className="mb-3 w-full space-y-2">
-            <Button size="sm" variant="outline" className="h-8 gap-2 w-full border-secondary-neon/50 text-secondary-neon" onClick={() => onChat(item)} disabled={isCompleted}>
-                <MessageCircle className="h-4 w-4" /> {isCompleted ? "Closed" : `Chat with ${partnerName?.split(' ')[0]}`}
+        {/* ACTION BUTTONS */}
+        <div className="grid grid-cols-2 gap-3 mt-4">
+            <Button 
+              variant="outline" 
+              className={cn(
+                "h-11 gap-2 font-black text-xs uppercase transition-all rounded-xl border-2",
+                isCompleted ? "opacity-50 grayscale" : "border-secondary-neon/20 text-secondary-neon hover:bg-secondary-neon/5"
+              )} 
+              onClick={() => onChat(item)} 
+              disabled={isCompleted}
+            >
+                <MessageCircle className="h-4 w-4" /> Chat
             </Button>
 
-            {!isCompleted && marketItem && !item.isUserProvider && ['negotiating', 'initiated'].includes(marketItem.appwriteStatus) && (
-                <Button size="sm" className="h-8 w-full bg-green-600 text-white font-semibold" onClick={initiatePayment} disabled={marketItem.amount <= 0}>
-                    <Wallet className="h-3 w-3 mr-2" /> {marketItem.amount > 0 ? `Pay Escrow (₹${marketItem.amount})` : 'Waiting for Price'}
+            {!isCompleted && marketItem && !item.isUserProvider && ['negotiating', 'initiated'].includes(marketItem.appwriteStatus) ? (
+                <Button 
+                  className="h-11 bg-green-600 hover:bg-green-700 text-white font-black text-xs uppercase rounded-xl shadow-lg shadow-green-500/20 animate-in fade-in zoom-in-95" 
+                  onClick={initiatePayment} 
+                  disabled={marketItem.amount <= 0}
+                >
+                    {marketItem.amount > 0 ? (
+                      <span className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Pay ₹{marketItem.amount}</span>
+                    ) : (
+                      <span className="flex items-center gap-2 opacity-50"><Lock className="h-3 w-3" /> Locked</span>
+                    )}
                 </Button>
+            ) : (
+               <Button variant="ghost" disabled className="h-11 opacity-30 font-black text-[10px] uppercase border-2 border-dashed rounded-xl">
+                  {isCompleted ? "Deal Archived" : "Task in Progress"}
+               </Button>
             )}
+        </div>
+
+        {/* ROLE IDENTIFIER FOOTER */}
+        <div className="mt-5 pt-3 border-t border-border/30 flex justify-between items-center">
+            <div className="flex items-center gap-2 opacity-60">
+               <UserCircle className="h-3 w-3" />
+               <span className="text-[9px] font-black uppercase tracking-widest">
+                  Role: {item.isUserProvider ? "Provider" : "Client"}
+               </span>
+            </div>
+            <span className="text-[9px] font-mono text-muted-foreground opacity-40 uppercase">UID: {item.id.substring(item.id.length - 8)}</span>
         </div>
       </CardContent>
     </Card>
@@ -205,7 +279,7 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
 
 // --- MAIN PAGE ---
 const TrackingPage = () => {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const { orders: initialFoodOrders } = useFoodOrders();
   const [items, setItems] = useState<TrackingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -217,7 +291,7 @@ const TrackingPage = () => {
     try {
       const response = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, [
         Query.or([Query.equal('buyerId', user.$id), Query.equal('sellerId', user.$id)]),
-        Query.orderAsc('$createdAt')
+        Query.orderDesc('$createdAt')
       ]);
       
       const uniqueDealsMap = new Map<string, TrackingItem>();
@@ -251,22 +325,22 @@ const TrackingPage = () => {
     try {
         if (action === "update_errand_price") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { amount: payload.amount });
-            toast.success("Reward updated!");
+            toast.success("Hustle updated! Reward amount synced.");
+            refreshData();
         }
-        // ... Handle other actions (verify_payment, mark_delivered etc) ...
     } catch (e: any) { toast.error("Action failed"); }
   };
 
   const processTransactionDoc = (doc: any, currentUserId: string): MarketTransactionItem => {
     return {
         id: doc.$id,
-        type: doc.type === 'rent' ? 'Rental' : doc.type === 'errand' ? 'Errand' : 'Transaction',
+        type: doc.type === 'rent' ? 'Rental' : doc.type === 'errand' ? 'Errand' : doc.type === 'service' ? 'Service' : 'Transaction',
         productId: doc.productId,
-        productTitle: doc.productTitle || "Untitled",
+        productTitle: doc.productTitle || "Untitled Task",
         description: doc.productTitle,
         status: mapAppwriteStatusToTrackingStatus(doc.status),
         appwriteStatus: doc.status,
-        date: new Date(doc.$createdAt).toLocaleDateString(),
+        date: new Date(doc.$createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
         timestamp: new Date(doc.$createdAt).getTime(),
         amount: doc.amount || 0,
         sellerName: doc.sellerName,
@@ -292,23 +366,56 @@ const TrackingPage = () => {
         buyerId: doc.buyerId,
         isUserProvider: doc.providerId === currentUserId,
         timestamp: new Date(doc.$createdAt).getTime(),
-        date: new Date(doc.$createdAt).toLocaleDateString(),
+        date: new Date(doc.$createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
     };
   };
 
+  const activeTasks = items.filter(i => !i.status.toLowerCase().includes('completed') && i.status !== 'Cancelled');
+  const historyTasks = items.filter(i => i.status.toLowerCase().includes('completed') || i.status === 'Cancelled');
+
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 pb-20">
+    <div className="min-h-screen bg-background text-foreground p-4 pb-24 relative overflow-x-hidden">
+      
+      {/* HEADER */}
+      <div className="max-w-md mx-auto mb-8 flex items-center justify-between">
+        <div>
+           <h1 className="text-4xl font-black italic tracking-tighter uppercase">Activity<span className="text-secondary-neon">Log</span></h1>
+           <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] opacity-60">Real-time Task Pulse</p>
+        </div>
+        {isLoading && <Loader2 className="h-5 w-5 animate-spin text-secondary-neon" />}
+      </div>
+
       <div className="max-w-md mx-auto space-y-6">
-        <h1 className="text-3xl font-black italic tracking-tight uppercase">Activity<span className="text-secondary-neon">Log</span></h1>
-        <Tabs defaultValue="all">
-            <TabsList className="grid w-full grid-cols-2 bg-muted/30">
-                <TabsTrigger value="all" className="text-xs font-bold">Active</TabsTrigger>
-                <TabsTrigger value="history" className="text-xs font-bold">History</TabsTrigger>
+        <Tabs defaultValue="all" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 bg-muted/20 p-1 rounded-2xl border border-border/50 h-12">
+                <TabsTrigger value="all" className="text-[11px] font-black uppercase rounded-xl data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground transition-all">Active Deals ({activeTasks.length})</TabsTrigger>
+                <TabsTrigger value="history" className="text-[11px] font-black uppercase rounded-xl data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground transition-all">Past Gigs</TabsTrigger>
             </TabsList>
-            <TabsContent value="all" className="pt-4">
-                 {items.filter(i => !i.status.toLowerCase().includes('completed') && i.status !== 'Cancelled').map(item => (
-                    <TrackingCard key={item.id} item={item} onAction={handleAction} currentUser={user} onChat={(i) => navigate(`/chat/${i.id}`)} />
-                ))}
+            
+            <TabsContent value="all" className="pt-6 space-y-4">
+                 {activeTasks.length === 0 ? (
+                    <div className="text-center py-20 opacity-30 flex flex-col items-center">
+                        <Activity className="h-12 w-12 mb-4" />
+                        <p className="text-xs font-black uppercase tracking-widest">No Active Missions</p>
+                    </div>
+                 ) : (
+                    activeTasks.map(item => (
+                      <TrackingCard key={item.id} item={item} onAction={handleAction} currentUser={user} onChat={(i) => navigate(`/chat/${i.id}`)} />
+                    ))
+                 )}
+            </TabsContent>
+
+            <TabsContent value="history" className="pt-6 space-y-4">
+                 {historyTasks.length === 0 ? (
+                    <div className="text-center py-20 opacity-30 flex flex-col items-center">
+                        <PackageCheck className="h-12 w-12 mb-4" />
+                        <p className="text-xs font-black uppercase tracking-widest">History Empty</p>
+                    </div>
+                 ) : (
+                    historyTasks.map(item => (
+                      <TrackingCard key={item.id} item={item} onAction={handleAction} currentUser={user} onChat={(i) => navigate(`/chat/${i.id}`)} />
+                    ))
+                 )}
             </TabsContent>
         </Tabs>
       </div>
