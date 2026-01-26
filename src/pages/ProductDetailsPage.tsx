@@ -1,584 +1,378 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Loader2, IndianRupee, Wallet, X, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 import { 
   databases, 
   APPWRITE_DATABASE_ID, 
-  APPWRITE_PRODUCTS_COLLECTION_ID, 
-  APPWRITE_SERVICE_REVIEWS_COLLECTION_ID, 
-  APPWRITE_TRANSACTIONS_COLLECTION_ID,
-  APPWRITE_BARGAIN_REQUESTS_COLLECTION_ID 
+  APPWRITE_FOOD_ORDERS_COLLECTION_ID, // Ensure this is imported
+  APPWRITE_TRANSACTIONS_COLLECTION_ID 
 } from "@/lib/appwrite";
-import { Query, ID } from "appwrite";
-import { DEVELOPER_UPI_ID } from '@/lib/config';
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { 
-  Loader2, ArrowLeft, MapPin, Star, ShieldCheck, 
-  ShoppingCart, MessageCircle, AlertTriangle, ChevronDown, Gavel, ImageOff, DollarSign, Percent, PenTool 
-} from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption"; 
-import { useBargainRequests } from '@/hooks/useBargainRequests'; 
+import { ID } from "appwrite";
+import { DEVELOPER_UPI_ID } from "@/lib/config";
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
 
-// --- HELPER: IMAGE OPTIMIZER ---
-const getOptimizedImageUrl = (url?: string) => {
-  if (!url) return null;
-  if (url.includes("drive.google.com") && url.includes("/view")) {
-    const idMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (idMatch && idMatch[1]) {
-      return `https://drive.google.com/uc?export=view&id=${idMatch[1]}`;
-    }
-  }
-  return url;
-};
+interface PlaceFoodOrderFormProps {
+  mode: "buy" | "sell" | "request";
+  offering?: any; 
+  onSubmit?: (data: any) => void; 
+  onOrderPlaced?: () => void;
+  onCancel: () => void;
+}
 
-const ProductDetailsPage = () => {
-  const { productId } = useParams<{ productId: string }>();
-  const navigate = useNavigate();
-  const { user, userProfile, incrementAmbassadorDeliveriesCount } = useAuth();
-  
-  const { sendBargainRequest } = useBargainRequests();
-
-  // Data State
-  const [product, setProduct] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Image State
-  const [imageStatus, setImageStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [displayImage, setDisplayImage] = useState<string>("");
-
-  // Bargain State
-  const [myBargainRequest, setMyBargainRequest] = useState<any>(null);
-  
-  // Transaction State
-  const [isBuyDialogOpen, setIsBuyDialogOpen] = useState(false);
-  const [isBargainDialogOpen, setIsBargainDialogOpen] = useState(false);
+const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ 
+  mode, 
+  offering, 
+  onSubmit, 
+  onOrderPlaced, 
+  onCancel 
+}) => {
+  const { user, userProfile } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // BUY MODE STATE
+  const [quantity, setQuantity] = useState(1);
+  const [deliveryLocation, setDeliveryLocation] = useState("");
+  const [notes, setNotes] = useState(""); 
+  const [paymentStep, setPaymentStep] = useState<'initial' | 'verify'>('initial');
+  const [transactionId, setTransactionId] = useState("");
   
   // Ambassador State
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
-  // Review State
-  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  // SELL/REQUEST MODE STATE
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [category, setCategory] = useState("homemade-meals");
+  const [dietaryType, setDietaryType] = useState("veg");
+  const [timeEstimate, setTimeEstimate] = useState("30 min");
 
-  // --- INITIAL FETCH ---
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!productId) return;
-      try {
-        const productDoc = await databases.getDocument(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_PRODUCTS_COLLECTION_ID,
-          productId
-        );
-        setProduct(productDoc);
-        
-        // Handle Image
-        const optimizedUrl = getOptimizedImageUrl(productDoc.imageUrl);
-        if (optimizedUrl) {
-            setDisplayImage(optimizedUrl);
-            setImageStatus('loading');
-        } else {
-            setImageStatus('error');
-        }
+  // --- HELPER: ROBUST PRICE PARSER ---
+  const parsePrice = (priceStr: string | number): number => {
+    if (typeof priceStr === 'number') return priceStr;
+    if (!priceStr) return 0;
+    const numericPart = priceStr.toString().replace(/[^0-9.]/g, '');
+    return parseFloat(numericPart) || 0;
+  };
 
-        // Fetch Reviews
-        const reviewsRes = await databases.listDocuments(
-          APPWRITE_DATABASE_ID,
-          APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
-          [Query.equal("serviceId", productId), Query.orderDesc("$createdAt")]
-        );
-        setReviews(reviewsRes.documents);
-
-      } catch (error) {
-        console.error("Error:", error);
-        toast.error("Product not found.");
-        navigate("/market");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [productId, navigate]);
-
-  // --- FETCH BARGAIN STATUS ---
-  useEffect(() => {
-    if (!user || !productId) return;
-
-    const fetchMyBargain = async () => {
-        try {
-            const res = await databases.listDocuments(
-                APPWRITE_DATABASE_ID,
-                'bargain_requests', 
-                [
-                    Query.equal('productId', productId),
-                    Query.equal('buyerId', user.$id)
-                ]
-            );
-            if (res.documents.length > 0) {
-                setMyBargainRequest(res.documents[0]);
-            }
-        } catch (error) {
-            console.error("Error fetching bargain", error);
-        }
-    };
-
-    fetchMyBargain();
-
-    // Subscribe to changes
-    const unsubscribe = databases.client.subscribe(
-        `databases.${APPWRITE_DATABASE_ID}.collections.bargain_requests.documents`,
-        (response) => {
-            const payload = response.payload as any;
-            if (payload.productId === productId && payload.buyerId === user.$id) {
-                setMyBargainRequest(payload);
-                if (payload.status === 'accepted') toast.success("Offer accepted!");
-                if (payload.status === 'denied') toast.error("Offer denied.");
-            }
-        }
-    );
-
-    return () => { unsubscribe(); };
-  }, [user, productId]);
-
-
-  // --- CALCULATE PRICES ---
-  const originalPriceVal = product ? parseFloat(product.price.toString().replace(/[₹,]/g, '').split('/')[0].trim()) : 0;
-  const isBargainAccepted = myBargainRequest?.status === 'accepted';
-  
-  const discountAmount = originalPriceVal * 0.15;
-  const bargainPrice = originalPriceVal - discountAmount;
-  const finalPrice = isBargainAccepted ? bargainPrice : originalPriceVal;
-  
-  const bargainStatus = myBargainRequest?.status || 'none';
-
-  // --- SEND 15% BARGAIN REQUEST ---
-  const handleSendFixedBargain = async () => {
-    if (!user || !product) return;
+  // --- BUY LOGIC (ORDERING) ---
+  const handleInitiatePayment = () => {
+    if (!user || !offering) return;
     
-    setIsProcessing(true);
+    if (!deliveryLocation.trim()) {
+        toast.error("Please enter a delivery spot (e.g., Room 304).");
+        return;
+    }
+
+    // Generic UPI Intent (No parameters to ensure app opens successfully)
+    const upiLink = "upi://pay";
+    
+    // Create hidden link for robust mobile launching
+    const link = document.createElement('a');
+    link.href = upiLink;
+    link.rel = 'noreferrer';
+    document.body.appendChild(link);
+    
     try {
-        await sendBargainRequest(product, parseFloat(bargainPrice.toFixed(0)));
-        
-        setIsBargainDialogOpen(false);
-        toast.success("15% Discount Request Sent!", {
-            description: "Wait for the seller to accept via the Buzz tab."
+        link.click();
+        toast.info("Opening App...", {
+            description: "Please paste the UPI ID and enter the amount manually."
         });
+        setPaymentStep('verify');
+    } catch (e) {
+        toast.error("Could not open UPI app. Please pay manually.");
+        setPaymentStep('verify');
+    } finally {
+        document.body.removeChild(link);
+    }
+  };
+
+  const handleConfirmOrder = async () => {
+    if (isProcessing) return; // Prevent double click
+    if (!user || !offering) return;
+    if (!transactionId.trim()) {
+        toast.error("Please enter the Transaction ID (UTR).");
+        return;
+    }
+
+    setIsProcessing(true); // LOCK UI
+    try {
+        const priceVal = parsePrice(offering.price);
+        const totalAmount = priceVal * quantity;
         
-        setMyBargainRequest({ status: 'pending', requestedAmount: bargainPrice });
+        // 1. Prepare Order Data for 'food_orders' collection
+        const orderData = {
+            offeringId: String(offering.$id),
+            offeringTitle: String(offering.title).substring(0, 99),
+            providerId: String(offering.posterId),
+            providerName: String(offering.posterName),
+            buyerId: String(user.$id),
+            buyerName: String(user.name),
+            quantity: Number(quantity),
+            totalAmount: Number(totalAmount.toFixed(2)),
+            deliveryLocation: String(deliveryLocation),
+            status: "Pending Confirmation",
+            transactionId: String(transactionId),
+            collegeName: String(userProfile?.collegeName || "Unknown"),
+            notes: String(notes), 
+            ambassadorDelivery: Boolean(ambassadorDelivery), 
+            ambassadorMessage: String(ambassadorMessage)
+        };
+
+        // 2. Prepare Transaction Data for 'transactions' ledger
+        const transactionData = {
+            productId: orderData.offeringId,
+            productTitle: `Food: ${orderData.offeringTitle} (x${quantity})`,
+            buyerId: orderData.buyerId,
+            buyerName: orderData.buyerName,
+            sellerId: orderData.providerId,
+            sellerName: orderData.providerName,
+            sellerUpiId: offering.sellerUpiId || "default@upi",
+            amount: orderData.totalAmount,
+            status: "payment_confirmed_to_developer",
+            type: "food",
+            collegeName: orderData.collegeName,
+            ambassadorDelivery: orderData.ambassadorDelivery,
+            utrId: orderData.transactionId,
+            isBargain: false
+        };
+
+        // 3. Parallel Writes to Correct Collections
+        await Promise.all([
+            // Primary Order Record -> 'food_orders'
+            databases.createDocument(
+                APPWRITE_DATABASE_ID, 
+                APPWRITE_FOOD_ORDERS_COLLECTION_ID, // <--- EXPLICITLY USING FOOD ORDERS
+                ID.unique(), 
+                orderData
+            ),
+            // Financial Record -> 'transactions'
+            databases.createDocument(
+                APPWRITE_DATABASE_ID, 
+                APPWRITE_TRANSACTIONS_COLLECTION_ID, 
+                ID.unique(), 
+                transactionData
+            )
+        ]);
+
+        toast.success("Order Placed Successfully!");
+        if (onOrderPlaced) onOrderPlaced();
 
     } catch (error: any) {
-        toast.error(error.message || "Failed to send offer.");
-    } finally {
-        setIsProcessing(false);
+        console.error("Order Error:", error);
+        toast.error(`Order Failed: ${error.message || "Unknown error"}`);
+        setIsProcessing(false); // Unlock only on error
     }
   };
 
-  /**
-   * ESCROW INTEGRATION: PAYMENT ACTION
-   * Replaced window.open logic with navigation to /escrow-payment
-   */
-  const handleInitiatePayment = async () => {
-    if (!user || !userProfile || !product) return;
-    setIsProcessing(true);
+  // --- SELL/REQUEST LOGIC ---
+  const handlePostSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isProcessing) return; 
 
-    const transactionType = product.type === 'sell' ? 'buy' : 'rent';
-
-    try {
-      // 1. Create the transaction record in Appwrite first
-      const newTransaction = await databases.createDocument(
-        APPWRITE_DATABASE_ID,
-        APPWRITE_TRANSACTIONS_COLLECTION_ID,
-        ID.unique(),
-        {
-          productId: product.$id,
-          productTitle: product.title,
-          buyerId: user.$id,
-          buyerName: user.name,
-          sellerId: product.userId,
-          sellerName: product.sellerName,
-          sellerUpiId: product.sellerUpiId || "default@upi",
-          amount: parseFloat(finalPrice.toFixed(2)),
-          status: "initiated",
-          type: transactionType,
-          isBargain: isBargainAccepted,
-          collegeName: userProfile.collegeName,
-          ambassadorDelivery: ambassadorDelivery,
-          ambassadorMessage: ambassadorMessage || null,
-        }
-      );
-
-      const transactionId = newTransaction.$id;
-      
-      if (ambassadorDelivery && incrementAmbassadorDeliveriesCount) {
-        await incrementAmbassadorDeliveriesCount();
-      }
-
-      // 2. Redirect to Escrow Gateway with proper parameters
-      const queryParams = new URLSearchParams({
-        amount: finalPrice.toFixed(2),
-        txnId: transactionId,
-        title: product.title
-      }).toString();
-
-      setIsBuyDialogOpen(false);
-      navigate(`/escrow-payment?${queryParams}`);
-
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Failed to initiate transaction.");
-    } finally {
-      setIsProcessing(false);
+    if (!title || !price || !description) {
+      toast.error("Please fill all fields.");
+      return;
     }
+
+    setIsProcessing(true); 
+    const postData = {
+      title, description, price, category, dietaryType, timeEstimate,
+      isCustomOrder: mode === "request", status: "active"
+    };
+    
+    // Pass data up to parent (which handles writing to 'services' collection)
+    if (onSubmit) onSubmit(postData);
+    
+    // Simulate delay or wait for parent to close
+    setTimeout(() => setIsProcessing(false), 3000); 
   };
 
-  // --- REVIEW ACTION ---
-  const handleSubmitReview = async () => {
-    if (!user || !product) {
-        toast.error("You must be logged in to leave a review.");
-        return;
-    }
-    if (!reviewComment.trim()) {
-        toast.error("Please write a comment.");
-        return;
-    }
+  // --- RENDER: BUY MODE ---
+  if (mode === "buy" && offering) {
+    const priceVal = parsePrice(offering.price);
+    const total = (priceVal * quantity).toFixed(0);
 
-    setIsSubmittingReview(true);
-    try {
-        await databases.createDocument(
-            APPWRITE_DATABASE_ID,
-            APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
-            ID.unique(),
-            {
-                serviceId: productId,
-                reviewerId: user.$id,
-                reviewerName: user.name,
-                rating: reviewRating,
-                comment: reviewComment,
-            }
-        );
-
-        toast.success("Review submitted successfully!");
-        setIsReviewDialogOpen(false);
-        setReviewComment("");
-        setReviewRating(5);
-
-        const reviewsRes = await databases.listDocuments(
-            APPWRITE_DATABASE_ID,
-            APPWRITE_SERVICE_REVIEWS_COLLECTION_ID,
-            [Query.equal("serviceId", productId || ''), Query.orderDesc("$createdAt")]
-        );
-        setReviews(reviewsRes.documents);
-
-    } catch (error: any) {
-        console.error("Review Error:", error);
-        toast.error(error.message || "Failed to submit review.");
-    } finally {
-        setIsSubmittingReview(false);
-    }
-  };
-
-  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-secondary-neon" />
+      <div className="space-y-5 pt-2">
+        {paymentStep === 'initial' ? (
+            <>
+                <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-lg p-3 flex items-start gap-3">
+                    <div className="p-1 bg-red-100 dark:bg-red-900/30 rounded-full mt-0.5">
+                        <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-red-700 dark:text-red-400">No Cancellation</h4>
+                        <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5 leading-snug">
+                            Orders cannot be cancelled once preparation starts.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-[80px_1fr] gap-4">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-foreground/80">Qty</Label>
+                        <div className="flex items-center justify-center border-2 border-primary/20 rounded-xl h-11 relative overflow-hidden bg-background focus-within:border-secondary-neon transition-colors">
+                            <Input 
+                                type="number" 
+                                min="1" 
+                                value={quantity} 
+                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="absolute inset-0 w-full h-full text-center text-lg font-bold bg-transparent border-none focus-visible:ring-0 px-0 z-10"
+                            />
+                            <div className="absolute inset-0 bg-secondary-neon/5 pointer-events-none" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-foreground/80">Delivery Spot</Label>
+                        <Input 
+                            placeholder="e.g. Block C, Room 404" 
+                            className="h-11 rounded-xl bg-muted/30 border-border/50 focus-visible:ring-secondary-neon"
+                            value={deliveryLocation}
+                            onChange={(e) => setDeliveryLocation(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-foreground/80">Instructions</Label>
+                    <Textarea 
+                        placeholder="e.g. Extra spicy, don't ring bell..." 
+                        className="min-h-[80px] rounded-xl bg-muted/30 border-border/50 resize-none focus-visible:ring-secondary-neon"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                    />
+                </div>
+
+                <div className="py-2">
+                    <AmbassadorDeliveryOption 
+                        ambassadorDelivery={ambassadorDelivery}
+                        setAmbassadorDelivery={setAmbassadorDelivery}
+                        ambassadorMessage={ambassadorMessage}
+                        setAmbassadorMessage={setAmbassadorMessage}
+                    />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold border-border/60 hover:bg-muted" onClick={onCancel}>
+                        <X className="w-4 h-4 mr-2" /> Close
+                    </Button>
+                    <Button 
+                        onClick={handleInitiatePayment} 
+                        className="flex-[2] h-12 rounded-xl bg-[#22c55e] hover:bg-[#16a34a] text-white font-black text-lg shadow-lg shadow-green-500/20"
+                    >
+                        Pay ₹{total}
+                    </Button>
+                </div>
+            </>
+        ) : (
+            <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 pt-2">
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-800 text-center space-y-2">
+                    <Wallet className="h-8 w-8 text-yellow-600 mx-auto mb-1" />
+                    <h4 className="text-base font-bold text-yellow-800 dark:text-yellow-200">Payment Initiated</h4>
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
+                        Manually transfer <strong>₹{total}</strong> using your UPI app and paste the UTR (Transaction ID) below.
+                    </p>
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Transaction ID (UTR)</Label>
+                    <Input 
+                        placeholder="e.g. 329104829102" 
+                        value={transactionId}
+                        onChange={(e) => setTransactionId(e.target.value)}
+                        className="h-12 text-center font-mono text-lg tracking-widest uppercase rounded-xl border-border/60 bg-muted/30 focus-visible:ring-secondary-neon"
+                    />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setPaymentStep('initial')} disabled={isProcessing}>Back</Button>
+                    <Button 
+                        onClick={handleConfirmOrder} 
+                        disabled={isProcessing || !transactionId} 
+                        className="flex-[2] h-12 rounded-xl bg-secondary-neon text-primary-foreground font-bold hover:bg-secondary-neon/90"
+                    >
+                        {isProcessing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirm Order"}
+                    </Button>
+                </div>
+            </div>
+        )}
       </div>
     );
   }
 
-  if (!product) return null;
-  const isOwner = user?.$id === product.userId;
-
+  // --- RENDER: SELL / REQUEST MODE ---
   return (
-    <div className="min-h-screen bg-background pb-32 relative">
-      
-      {/* HEADER */}
-      <div className="sticky top-0 z-20 flex items-center p-3 bg-background/80 backdrop-blur-xl border-b border-border">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="-ml-2">
-          <ArrowLeft className="h-5 w-5" />
+    <form onSubmit={handlePostSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label>Dish Name {mode === 'request' && "(What do you want?)"}</Label>
+        <Input placeholder="e.g. Chicken Biryani / Ginger Tea" value={title} onChange={(e) => setTitle(e.target.value)} disabled={isProcessing} />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Price (₹)</Label>
+          <div className="relative">
+             <IndianRupee className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+             <Input type="number" placeholder="50" className="pl-8" value={price} onChange={(e) => setPrice(e.target.value)} disabled={isProcessing} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Prep Time</Label>
+          <Select value={timeEstimate} onValueChange={setTimeEstimate} disabled={isProcessing}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10 min">10 min</SelectItem>
+              <SelectItem value="20 min">20 min</SelectItem>
+              <SelectItem value="30 min">30 min</SelectItem>
+              <SelectItem value="1 hour">1 hour</SelectItem>
+              <SelectItem value="Pre-order">Pre-order Only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Dietary Type</Label>
+        <RadioGroup value={dietaryType} onValueChange={setDietaryType} className="flex gap-4" disabled={isProcessing}>
+          <div className="flex items-center space-x-2 border p-2 rounded-md w-full cursor-pointer hover:bg-green-50/50 border-green-200">
+            <RadioGroupItem value="veg" id="veg" className="text-green-600 border-green-600" />
+            <Label htmlFor="veg" className="text-green-700 font-bold cursor-pointer">Veg</Label>
+          </div>
+          <div className="flex items-center space-x-2 border p-2 rounded-md w-full cursor-pointer hover:bg-red-50/50 border-red-200">
+            <RadioGroupItem value="non-veg" id="non-veg" className="text-red-600 border-red-600" />
+            <Label htmlFor="non-veg" className="text-red-700 font-bold cursor-pointer">Non-Veg</Label>
+          </div>
+        </RadioGroup>
+      </div>
+      <div className="space-y-2">
+        <Label>Description & Ingredients</Label>
+        <Textarea 
+          placeholder="Describe the taste, ingredients, and portion size..." 
+          className="h-20"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          disabled={isProcessing}
+        />
+      </div>
+      <div className="flex gap-2 pt-2">
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isProcessing}>Cancel</Button>
+        <Button type="submit" className="flex-[2] bg-primary text-primary-foreground font-bold" disabled={isProcessing}>
+           {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+           {mode === 'sell' ? 'List Dish' : 'Post Request'}
         </Button>
-        <span className="font-semibold text-sm ml-2 truncate">Product Details</span>
       </div>
-
-      <div className="max-w-3xl mx-auto">
-        
-        {/* PRODUCT IMAGE */}
-        <div className="w-full aspect-square sm:aspect-video bg-muted/30 relative overflow-hidden group flex items-center justify-center bg-secondary/5">
-          {imageStatus === 'loading' && (
-             <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
-                <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
-             </div>
-          )}
-          
-          {imageStatus !== 'error' && (
-              <img 
-                src={displayImage}
-                alt={product.title}
-                className={`w-full h-full object-contain transition-opacity duration-500 ${imageStatus === 'success' ? 'opacity-100' : 'opacity-0'}`}
-                onLoad={() => setImageStatus('success')}
-                onError={() => setImageStatus('error')} 
-              />
-          )}
-
-          {/* FALLBACK: APP LOGO */}
-          {imageStatus === 'error' && (
-             <div className="flex flex-col items-center justify-center opacity-80">
-                <img src="/app-logo.png" alt="App Logo" className="h-24 w-24 object-contain drop-shadow-md mb-2" />
-                <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <ImageOff className="h-3 w-3" /> No Preview
-                </span>
-             </div>
-          )}
-
-          <div className="absolute top-4 left-4 z-10">
-             <Badge className="bg-background/90 text-foreground backdrop-blur border border-border/50 shadow-sm uppercase tracking-wider text-[10px]">
-                {product.type}
-             </Badge>
-          </div>
-        </div>
-
-        {/* INFO */}
-        <div className="p-5 space-y-6">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-foreground leading-tight">{product.title}</h1>
-            <div className="flex items-center gap-2">
-               <p className={isBargainAccepted ? "text-3xl font-black text-green-500 animate-pulse" : "text-3xl font-black text-secondary-neon"}>
-                  ₹{finalPrice.toFixed(0)}
-               </p>
-               {isBargainAccepted && (
-                   <>
-                     <span className="text-sm text-muted-foreground line-through decoration-destructive">₹{originalPriceVal}</span>
-                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Accepted</Badge>
-                   </>
-               )}
-            </div>
-            {product.condition && <Badge variant="secondary" className="mt-2 text-xs font-medium">Condition: {product.condition}</Badge>}
-          </div>
-
-          <Separator />
-
-          {/* SELLER */}
-          <div className="flex items-center justify-between bg-card border border-border/50 p-4 rounded-xl shadow-sm">
-             <div className="flex items-center gap-3">
-                <Avatar className="h-12 w-12 border-2 border-secondary-neon/20">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${product.sellerName}`} />
-                  <AvatarFallback>S</AvatarFallback>
-                </Avatar>
-                <div>
-                   <div className="flex items-center gap-1">
-                      <p className="text-sm font-bold">{product.sellerName}</p>
-                      <ShieldCheck className="h-3 w-3 text-blue-500" />
-                   </div>
-                   <p className="text-xs text-muted-foreground">Verified Student</p>
-                </div>
-             </div>
-             <Button variant="outline" size="sm" onClick={() => toast.info("Open tracking page to enable chat.")} className="h-8 text-xs border-secondary-neon/30 text-secondary-neon hover:bg-secondary-neon/10">
-                <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> Chat
-             </Button>
-          </div>
-
-          {/* MEETING SPOT */}
-          <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 p-4 rounded-xl">
-             <div className="flex items-start gap-3">
-                <div className="p-2 bg-background rounded-full shadow-sm shrink-0 text-blue-500">
-                   <MapPin className="h-5 w-5" />
-                </div>
-                <div>
-                   <h3 className="font-bold text-sm text-foreground">Meeting Spot</h3>
-                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                     {product.location ? product.location : "Contact seller for meeting details"}
-                   </p>
-                   <p className="text-[10px] text-blue-500/80 mt-2 font-medium flex items-center">
-                     <ShieldCheck className="h-3 w-3 mr-1" /> Safe Exchange Zone Verified
-                   </p>
-                </div>
-             </div>
-          </div>
-
-          {/* DESC */}
-          <div className="space-y-2">
-            <h3 className="font-bold text-lg">About this item</h3>
-            <p className="text-sm text-muted-foreground leading-7 whitespace-pre-wrap">
-              {product.description || "No description provided."}
-            </p>
-          </div>
-
-          {/* REVIEWS SECTION */}
-          <div className="space-y-4 pt-2">
-            <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg">Reviews ({reviews.length})</h3>
-                {!isOwner && (
-                    <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 border-dashed">
-                                <PenTool className="h-3 w-3" /> Write Review
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[400px]">
-                            <DialogHeader>
-                                <DialogTitle>Leave a Review</DialogTitle>
-                                <DialogDescription>Share your experience with this item/seller.</DialogDescription>
-                            </DialogHeader>
-                            <div className="py-4 space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Rating</Label>
-                                    <div className="flex gap-2 justify-center">
-                                        {[1, 2, 3, 4, 5].map((star) => (
-                                            <Star 
-                                                key={star} 
-                                                className={`h-8 w-8 cursor-pointer transition-all hover:scale-110 ${star <= reviewRating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`}
-                                                onClick={() => setReviewRating(star)}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Comment</Label>
-                                    <textarea 
-                                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        placeholder="Was the item as described? smooth transaction?"
-                                        value={reviewComment}
-                                        onChange={(e) => setReviewComment(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsReviewDialogOpen(false)}>Cancel</Button>
-                                <Button onClick={handleSubmitReview} disabled={isSubmittingReview} className="bg-secondary-neon text-primary-foreground">
-                                    {isSubmittingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Review"}
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                )}
-            </div>
-
-            {reviews.length === 0 ? (
-               <div className="text-center py-8 border border-dashed border-border rounded-lg bg-muted/10">
-                  <Star className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No reviews yet.</p>
-               </div>
-            ) : (
-               <div className="grid gap-3">
-                  {reviews.map((review) => (
-                     <div key={review.$id} className="p-3 bg-card border border-border/40 rounded-lg shadow-sm">
-                        <div className="flex justify-between items-center mb-1">
-                           <span className="font-bold text-xs">{review.reviewerName || "Student"}</span>
-                           <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1.5 py-0.5 rounded text-yellow-600 text-[10px] font-bold">
-                              {review.rating} <Star className="h-3 w-3 fill-current" />
-                           </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{review.comment}</p>
-                     </div>
-                  ))}
-               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* --- STICKY ACTION BAR --- */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border z-[100] shadow-[0_-5px_30px_rgba(0,0,0,0.1)]">
-         <div className="max-w-3xl mx-auto flex gap-3 h-12">
-            {!isOwner ? (
-                <>
-                    {!isBargainAccepted && (
-                      <Dialog open={isBargainDialogOpen} onOpenChange={setIsBargainDialogOpen}>
-                          <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                className="flex-1 h-full border-secondary-neon text-secondary-neon hover:bg-secondary-neon/10 font-bold"
-                                disabled={bargainStatus === 'pending'} 
-                              >
-                                  <Percent className="mr-2 h-4 w-4" /> 
-                                  {bargainStatus === 'pending' ? 'Offer Pending' : bargainStatus === 'denied' ? 'Fixed Price Only' : 'Get 15% Off'}
-                              </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[400px]">
-                              <DialogHeader>
-                                  <DialogTitle>Request Discount</DialogTitle>
-                                  <DialogDescription>
-                                      Send a request to buy this for <b>₹{bargainPrice.toFixed(0)}</b> (15% Off).
-                                  </DialogDescription>
-                              </DialogHeader>
-                              <div className="py-4 bg-secondary/5 rounded-lg p-3">
-                                  <div className="flex justify-between items-center">
-                                      <span className="text-sm text-muted-foreground line-through">₹{originalPriceVal}</span>
-                                      <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-                                      <span className="text-lg font-bold text-green-500">₹{bargainPrice.toFixed(0)}</span>
-                                  </div>
-                              </div>
-                              <DialogFooter>
-                                  <Button onClick={handleSendFixedBargain} disabled={isProcessing} className="w-full bg-secondary-neon text-primary-foreground font-bold">
-                                      {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send 15% Offer"}
-                                  </Button>
-                              </DialogFooter>
-                          </DialogContent>
-                      </Dialog>
-                    )}
-
-                    <Dialog open={isBuyDialogOpen} onOpenChange={setIsBuyDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="flex-[1.5] h-full bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold text-base shadow-lg shadow-secondary-neon/20">
-                                <ShoppingCart className="mr-2 h-5 w-5" /> 
-                                {isBargainAccepted ? `Buy Now @ ₹${finalPrice.toFixed(0)}` : 'Buy Now'}
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                    <DollarSign className="h-5 w-5 text-secondary-neon" /> Confirm Purchase
-                                </DialogTitle>
-                                <DialogDescription>Review details before payment.</DialogDescription>
-                            </DialogHeader>
-                            
-                            <div className="space-y-4 py-2">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-muted-foreground">Total Price:</span>
-                                    <span className="font-bold text-lg">₹{finalPrice.toFixed(2)}</span>
-                                </div>
-                                <AmbassadorDeliveryOption 
-                                    ambassadorDelivery={ambassadorDelivery}
-                                    setAmbassadorDelivery={setAmbassadorDelivery}
-                                    ambassadorMessage={ambassadorMessage}
-                                    setAmbassadorMessage={setAmbassadorMessage}
-                                />
-                            </div>
-
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setIsBuyDialogOpen(false)}>Cancel</Button>
-                                <Button onClick={handleInitiatePayment} disabled={isProcessing} className="bg-secondary-neon text-primary-foreground">
-                                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Pay Now"}
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                </>
-            ) : (
-                <Button disabled className="w-full h-full bg-muted text-muted-foreground font-bold border border-border">
-                    This is your listing
-                </Button>
-            )}
-         </div>
-      </div>
-    </div>
+    </form>
   );
 };
 
-export default ProductDetailsPage;
+export default PlaceFoodOrderForm;
