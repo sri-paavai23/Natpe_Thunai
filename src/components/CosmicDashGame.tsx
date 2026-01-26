@@ -7,11 +7,11 @@ import { cn } from '@/lib/utils';
 
 // --- CONFIGURATION ---
 const PHYSICS = {
-  PLAYER_SIZE: 30, // Slightly larger for better visibility
+  PLAYER_SIZE: 30, 
   GRAVITY_FLY: 0.25,
   GRAVITY_RUN: 0.7,
   JUMP_FLY: -6,
-  JUMP_RUN: -12, // Stronger jump
+  JUMP_RUN: -12,
   SPEED_BASE: 5,
   SPEED_MAX: 10,
   PHASE_SCORE: 10, 
@@ -58,7 +58,6 @@ const CosmicDashGame: React.FC = () => {
     lastTime: 0,
     frameId: 0,
     scoreRef: 0,
-    // Store logical dimensions to sync render & logic
     logicalWidth: 0,
     logicalHeight: 0
   });
@@ -82,11 +81,10 @@ const CosmicDashGame: React.FC = () => {
         canvas.style.width = `${parent.clientWidth}px`;
         canvas.style.height = `${parent.clientHeight}px`;
         
-        // 3. Scale Context (so 1 unit = 1 CSS pixel)
+        // 3. Scale Context
         const ctx = canvas.getContext('2d');
         if(ctx) {
             ctx.scale(dpr, dpr);
-            // Optimization: Disable text rendering during resizing
             ctx.imageSmoothingEnabled = false; 
         }
 
@@ -94,7 +92,7 @@ const CosmicDashGame: React.FC = () => {
         engine.current.logicalWidth = parent.clientWidth;
         engine.current.logicalHeight = parent.clientHeight;
 
-        // Reset positions if IDLE to prevent getting stuck
+        // Reset positions if IDLE
         if (gameState === 'IDLE') {
             engine.current.playerY = parent.clientHeight / 2;
             engine.current.floorY = parent.clientHeight + 200;
@@ -103,19 +101,23 @@ const CosmicDashGame: React.FC = () => {
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Init immediately
+    // Slight delay to ensure container is mounted
+    setTimeout(handleResize, 100); 
 
     return () => window.removeEventListener('resize', handleResize);
   }, [gameState]);
 
   // --- 2. GAME ENGINE ---
   const spawnObstacle = (width: number, height: number, mode: 'FLY' | 'RUN') => {
-    const minGap = 200; // Wider gap for better playability
+    // Safety check: Don't spawn if width is 0
+    if (width === 0) return;
+
+    const minGap = 200; 
     
     if (mode === 'FLY') {
       const pipeHeight = Math.random() * (height * 0.3) + 50;
       const gap = Math.random() * 100 + minGap;
-      const safeGap = Math.min(gap, height - pipeHeight - 50); // Ensure bottom pipe fits
+      const safeGap = Math.min(gap, height - pipeHeight - 50); 
 
       // Top Pipe
       engine.current.obstacles.push({
@@ -130,7 +132,7 @@ const CosmicDashGame: React.FC = () => {
     } else {
       // Runner Mode
       const isFlyingEnemy = Math.random() > 0.6;
-      const floorLevel = height - 50; // Floor is 50px from bottom
+      const floorLevel = height - 50; 
 
       if (isFlyingEnemy) {
         engine.current.obstacles.push({
@@ -165,6 +167,9 @@ const CosmicDashGame: React.FC = () => {
     const width = st.logicalWidth;
     const height = st.logicalHeight;
     
+    // Safety: If dimensions aren't ready, skip frame
+    if (width === 0 || height === 0) return 'OK';
+
     // --- MODE SWITCH ---
     const targetMode = st.scoreRef >= PHYSICS.PHASE_SCORE ? 'RUN' : 'FLY';
     if (targetMode !== activeMode) {
@@ -200,14 +205,18 @@ const CosmicDashGame: React.FC = () => {
     }
 
     // --- OBSTACLES ---
-    const lastObs = st.obstacles[st.obstacles.length - 1];
-    const spawnBuffer = targetMode === 'RUN' ? 450 : 300;
-    
-    // Safe Zone during transition (Score 8-12) to prevent cheap deaths
-    const transitionZone = st.scoreRef >= 8 && st.scoreRef < 11;
-    
-    if (!transitionZone && (!lastObs || (width - lastObs.x > spawnBuffer))) {
-      spawnObstacle(width, height, targetMode);
+    // Force first spawn if empty
+    if (st.obstacles.length === 0) {
+        spawnObstacle(width, height, targetMode);
+    } else {
+        const lastObs = st.obstacles[st.obstacles.length - 1];
+        const spawnBuffer = targetMode === 'RUN' ? 450 : 300;
+        // Safe Zone
+        const transitionZone = st.scoreRef >= 8 && st.scoreRef < 11;
+        
+        if (!transitionZone && (width - lastObs.x > spawnBuffer)) {
+          spawnObstacle(width, height, targetMode);
+        }
     }
 
     // Update Obstacles
@@ -228,7 +237,7 @@ const CosmicDashGame: React.FC = () => {
       // Cleanup
       if (o.x + o.w < -100) st.obstacles.splice(i, 1);
 
-      // Collision (Smaller Hitbox for fairness)
+      // Collision
       const pX = width * 0.15;
       const hitboxBuffer = 8; 
       if (
@@ -280,7 +289,6 @@ const CosmicDashGame: React.FC = () => {
         ctx.fillRect(0, st.floorY, width, 6);
         ctx.shadowBlur = 0;
         
-        // Dark fill below
         ctx.fillStyle = '#020617';
         ctx.fillRect(0, st.floorY + 6, width, height - st.floorY);
     }
@@ -295,10 +303,8 @@ const CosmicDashGame: React.FC = () => {
         ctx.rotate(rot);
     } else {
         if (st.playerY >= st.floorY - PHYSICS.PLAYER_SIZE - 2) {
-            // Running Bob
             ctx.scale(1, 1 - Math.sin(Date.now()/60)*0.15); 
         } else {
-            // Spin Jump
             ctx.rotate(st.velocity * 0.1); 
         }
     }
@@ -307,7 +313,6 @@ const CosmicDashGame: React.FC = () => {
     ctx.shadowColor = activeMode === 'FLY' ? '#38bdf8' : '#e879f9';
     ctx.fillStyle = '#ffffff';
     
-    // Player Body
     const s = PHYSICS.PLAYER_SIZE;
     ctx.beginPath();
     ctx.roundRect(-s/2, -s/2, s, s, 8);
@@ -351,7 +356,6 @@ const CosmicDashGame: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if(!ctx) return;
 
-    // Time Delta Cap
     const rawDelta = (time - engine.current.lastTime) / 16;
     const dt = Math.min(rawDelta, 2.0); 
     engine.current.lastTime = time;
@@ -385,13 +389,17 @@ const CosmicDashGame: React.FC = () => {
     if (containerRef.current) {
         const h = containerRef.current.clientHeight;
         const w = containerRef.current.clientWidth;
+        
+        // Ensure non-zero dimensions
+        if (h === 0 || w === 0) return;
+
         engine.current = {
             ...engine.current,
             playerY: h / 2,
             velocity: 0,
             floorY: h + 200,
             targetFloorY: h + 200,
-            obstacles: [],
+            obstacles: [], // Clear old obstacles
             particles: [],
             scoreRef: 0,
             speed: PHYSICS.SPEED_BASE,
@@ -399,6 +407,9 @@ const CosmicDashGame: React.FC = () => {
             logicalWidth: w,
             lastTime: performance.now()
         };
+        
+        // Spawn first obstacle immediately
+        spawnObstacle(w, h, 'FLY');
     }
     setScore(0);
     setGameState('PLAYING');
