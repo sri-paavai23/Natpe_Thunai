@@ -17,19 +17,23 @@ interface ProductListingCardProps {
 const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
   const navigate = useNavigate();
   
-  // Image State handling
-  const [imageSrc, setImageSrc] = useState<string>("");
-  const [hasError, setHasError] = useState(false);
+  // LOGIC: Determine initial valid URL. If empty/null, use fallback immediately.
+  const initialUrl = (product.imageUrl && product.imageUrl.trim() !== "") 
+    ? product.imageUrl 
+    : "/app-logo.png";
 
-  // Effect to sync prop changes and reset error state
+  const [imageSrc, setImageSrc] = useState<string>(initialUrl);
+  const [hasError, setHasError] = useState<boolean>(initialUrl === "/app-logo.png");
+
+  // RE-SYNC: If the parent passes a new product to this card (e.g. in a list filter),
+  // we must reset the state to the new product's URL.
   useEffect(() => {
-    if (product.imageUrl && product.imageUrl.trim() !== "") {
-        setImageSrc(product.imageUrl);
-        setHasError(false); // Reset error if URL changes
-    } else {
-        setImageSrc("/app-logo.png"); // Fallback for missing URL
-        setHasError(true);
-    }
+    const validUrl = (product.imageUrl && product.imageUrl.trim() !== "") 
+        ? product.imageUrl 
+        : "/app-logo.png";
+    
+    setImageSrc(validUrl);
+    setHasError(validUrl === "/app-logo.png");
   }, [product.imageUrl]);
 
   const getTypeBadgeStyle = (type: string) => {
@@ -54,15 +58,20 @@ const ProductListingCard: React.FC<ProductListingCardProps> = ({ product }) => {
       {/* IMAGE SECTION */}
       <div className="relative h-48 w-full bg-muted/30 overflow-hidden flex items-center justify-center">
         <img 
+          // KEY FIX: Forces React to remount the img element if URL changes.
+          // This clears browser "broken image" cache for this component instance.
+          key={product.imageUrl} 
           src={imageSrc} 
           alt={product.title}
           className={cn(
             "w-full h-full transition-transform duration-700 group-hover:scale-105",
-            hasError ? "object-contain p-10 opacity-80" : "object-cover"
+            // Use 'object-cover' for valid images, 'object-contain' only for the logo fallback
+            hasError ? "object-contain p-10 opacity-50 grayscale" : "object-cover"
           )}
-          onError={() => { 
-            // Only switch if we aren't already on the fallback to prevent infinite loops
+          onError={(e) => { 
+            // Only fallback if not already using the logo
             if (imageSrc !== "/app-logo.png") {
+                // console.log("Image Load Failed:", imageSrc); // Debugging
                 setImageSrc("/app-logo.png");
                 setHasError(true);
             }
