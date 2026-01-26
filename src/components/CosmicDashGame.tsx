@@ -2,439 +2,533 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Trophy, Play, RotateCcw, WifiOff, Zap, ChevronsUp } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Zap, Activity, ChevronUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // --- CONFIGURATION ---
-const CANVAS_WIDTH = window.innerWidth;
-const CANVAS_HEIGHT = window.innerHeight;
-const PLAYER_SIZE = 30;
+const PHYSICS = {
+  PLAYER_SIZE: 24,
+  GRAVITY_FLY: 0.25,
+  GRAVITY_RUN: 0.6,
+  JUMP_FLY: -6,
+  JUMP_RUN: -11,
+  SPEED_BASE: 4,
+  SPEED_MAX: 9,
+  PHASE_SCORE: 10, // Score to switch modes
+};
 
-// Phase Thresholds
-const PHASE_RUNNER_SCORE = 10; // Switch to Dino Run at 10
-const PHASE_HYPER_SCORE = 25;  // Switch to Hard Mode at 25
-
-interface Entity {
+interface GameEntity {
   x: number;
   y: number;
-  width: number;
-  height: number;
-  type: 'PIPE' | 'BLOCK' | 'DRONE'; // Different obstacle types
+  w: number;
+  h: number;
+  type: 'PIPE' | 'BLOCK' | 'FLYER';
   passed: boolean;
+}
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
 }
 
 const CosmicDashGame: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // React State for UI
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // UI State
   const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAME_OVER'>('IDLE');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [gameMode, setGameMode] = useState<'FLY' | 'RUN'>('FLY'); // Tracks logic mode
-  const [showTutorial, setShowTutorial] = useState(true);
+  const [activeMode, setActiveMode] = useState<'FLY' | 'RUN'>('FLY');
 
-  // Mutable Game State (Refs for performance)
-  const physics = useRef({
-    playerY: CANVAS_HEIGHT / 2,
+  // Mutable Game Engine State
+  const engine = useRef({
+    // Physics
+    playerY: 0,
     velocity: 0,
-    obstacles: [] as Entity[],
-    particles: [] as { x: number; y: number; vx: number; vy: number; life: number; color: string }[],
-    stars: [] as { x: number; y: number; size: number; speed: number }[],
+    floorY: 0, // Dynamic floor position
+    targetFloorY: 0,
+    speed: PHYSICS.SPEED_BASE,
     
-    // Dynamic Physics
-    speed: 4,
-    gravity: 0.4,
-    jumpStrength: -7,
-    floorY: CANVAS_HEIGHT + 100, // Starts below screen
+    // Entities
+    obstacles: [] as GameEntity[],
+    particles: [] as Particle[],
+    bgOffset: 0,
     
-    frameId: 0,
+    // Loop
     lastTime: 0,
+    frameId: 0,
+    scoreRef: 0,
   });
 
-  // --- INITIALIZATION ---
+  // --- 1. SETUP & RESIZE ---
   useEffect(() => {
-    // Load High Score
-    const saved = localStorage.getItem('cosmic_high_score');
+    const saved = localStorage.getItem('cosmic_dash_hs');
     if (saved) setHighScore(parseInt(saved));
 
-    // Init Background Stars
-    physics.current.stars = Array.from({ length: 60 }, () => ({
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      size: Math.random() * 2 + 0.5,
-      speed: Math.random() * 0.5 + 0.2
-    }));
-
-    // Handle Resize
     const handleResize = () => {
-        if(canvasRef.current) {
-            canvasRef.current.width = window.innerWidth;
-            canvasRef.current.height = window.innerHeight;
-        }
+      if (canvasRef.current && containerRef.current) {
+        const canvas = canvasRef.current;
+        const parent = containerRef.current;
+        const dpr = window.devicePixelRatio || 1;
+        
+        // Match CSS size
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.width = parent.clientWidth * dpr;
+        canvas.height = parent.clientHeight * dpr;
+        
+        const ctx = canvas.getContext('2d');
+        if(ctx) ctx.scale(dpr, dpr);
+
+        // Reset Player Position on Resize
+        engine.current.playerY = parent.clientHeight / 2;
+        engine.current.floorY = parent.clientHeight + 200; // Start floor off-screen
+      }
     };
+
     window.addEventListener('resize', handleResize);
+    handleResize(); // Init
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- GAME LOGIC ---
-
-  const spawnObstacle = () => {
-    const { width, height } = canvasRef.current || { width: window.innerWidth, height: window.innerHeight };
-    const p = physics.current;
-    const mode = score >= PHASE_RUNNER_SCORE ? 'RUN' : 'FLY';
-
+  // --- 2. GAME ENGINE ---
+  const spawnObstacle = (width: number, height: number, mode: 'FLY' | 'RUN') => {
+    const minGap = 180;
+    
     if (mode === 'FLY') {
-        // Flappy Style Pipes
-        const gap = 200; // Easy gap
-        const minHeight = 100;
-        const topHeight = Math.random() * (height - gap - minHeight * 2) + minHeight;
-        
-        p.obstacles.push({ x: width, y: 0, width: 60, height: topHeight, type: 'PIPE', passed: false });
-        p.obstacles.push({ x: width, y: topHeight + gap, width: 60, height: height - (topHeight + gap), type: 'PIPE', passed: false });
+      const pipeHeight = Math.random() * (height * 0.4) + 50;
+      const gap = Math.random() * 100 + minGap;
+      
+      // Top Pipe
+      engine.current.obstacles.push({
+        x: width, y: 0, w: 50, h: pipeHeight, 
+        type: 'PIPE', passed: false 
+      });
+      // Bottom Pipe
+      engine.current.obstacles.push({
+        x: width, y: pipeHeight + gap, w: 50, h: height - (pipeHeight + gap), 
+        type: 'PIPE', passed: false 
+      });
     } else {
-        // Dino Run Style Blocks
-        const isDrone = Math.random() > 0.7 && score > PHASE_HYPER_SCORE; // Flying enemies in hard mode
-        
-        if (isDrone) {
-            // Mid-air obstacle
-            p.obstacles.push({ x: width, y: height - 150, width: 40, height: 40, type: 'DRONE', passed: false });
-        } else {
-            // Ground obstacle
-            const h = Math.random() * 40 + 40;
-            p.obstacles.push({ x: width, y: height - 100 - h, width: 40, height: h, type: 'BLOCK', passed: false });
-        }
+      // Runner Mode Obstacles
+      const isFlyingEnemy = Math.random() > 0.7;
+      const floorLevel = height - 50;
+
+      if (isFlyingEnemy) {
+        engine.current.obstacles.push({
+          x: width, y: floorLevel - 90, w: 40, h: 40, 
+          type: 'FLYER', passed: false 
+        });
+      } else {
+        const h = Math.random() * 40 + 30;
+        engine.current.obstacles.push({
+          x: width, y: floorLevel - h, w: 30, h: h, 
+          type: 'BLOCK', passed: false 
+        });
+      }
     }
   };
 
-  const spawnParticles = (x: number, y: number, color: string, count: number = 10) => {
+  const createParticles = (x: number, y: number, color: string, burst: boolean) => {
+    const count = burst ? 15 : 3;
     for (let i = 0; i < count; i++) {
-      physics.current.particles.push({
+      engine.current.particles.push({
         x, y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
+        vx: (Math.random() - 0.5) * (burst ? 12 : 5),
+        vy: (Math.random() - 0.5) * (burst ? 12 : 5),
         life: 1.0,
         color
       });
     }
   };
 
-  const resetGame = () => {
-    const { height, width } = canvasRef.current || { width: window.innerWidth, height: window.innerHeight };
-    physics.current = {
-      ...physics.current,
-      playerY: height / 2,
-      velocity: 0,
-      obstacles: [],
-      particles: [],
-      speed: 5, // Start easy
-      gravity: 0.4, // Floaty gravity start
-      floorY: height + 100, // Reset floor
-      lastTime: performance.now(),
-    };
-    setScore(0);
-    setGameMode('FLY');
-    setGameState('PLAYING');
-    setShowTutorial(false);
-    spawnObstacle();
+  const updatePhysics = (deltaTime: number, width: number, height: number) => {
+    const st = engine.current;
+    
+    // --- MODE SWITCH LOGIC ---
+    const targetMode = st.scoreRef >= PHYSICS.PHASE_SCORE ? 'RUN' : 'FLY';
+    
+    if (targetMode !== activeMode) {
+      setActiveMode(targetMode); // React State Sync
+      if (targetMode === 'RUN') {
+        createParticles(width/2, height/2, '#00f3ff', true); // Visual Boom
+      }
+    }
+
+    // Floor Animation
+    st.targetFloorY = targetMode === 'RUN' ? height - 50 : height + 200;
+    st.floorY += (st.targetFloorY - st.floorY) * 0.05; // Smooth Lerp
+
+    // Gravity & Velocity
+    const gravity = targetMode === 'FLY' ? PHYSICS.GRAVITY_FLY : PHYSICS.GRAVITY_RUN;
+    st.velocity += gravity * deltaTime;
+    st.playerY += st.velocity * deltaTime;
+
+    // Floor Collision
+    if (st.playerY + PHYSICS.PLAYER_SIZE > st.floorY) {
+      if (targetMode === 'RUN') {
+        st.playerY = st.floorY - PHYSICS.PLAYER_SIZE;
+        st.velocity = 0;
+      } else {
+        return 'CRASH'; // Die if hitting bottom in Fly mode
+      }
+    }
+
+    // Ceiling Collision
+    if (st.playerY < 0) {
+      st.playerY = 0;
+      st.velocity = 0;
+    }
+
+    // --- OBSTACLES ---
+    // Spawn Logic
+    const lastObs = st.obstacles[st.obstacles.length - 1];
+    const spawnBuffer = targetMode === 'RUN' ? 400 : 250;
+    
+    // Don't spawn pipes if we are about to switch to run mode (Score 8-10)
+    const transitionZone = st.scoreRef >= 8 && st.scoreRef < 10;
+    
+    if (!transitionZone && (!lastObs || (width - lastObs.x > spawnBuffer))) {
+      spawnObstacle(width, height, targetMode);
+    }
+
+    // Update Obstacles
+    for (let i = st.obstacles.length - 1; i >= 0; i--) {
+      let o = st.obstacles[i];
+      o.x -= st.speed * deltaTime;
+
+      // Score Counting
+      if (!o.passed && o.x + o.w < width * 0.15) {
+        o.passed = true;
+        // Only add score once per column
+        if(o.type !== 'PIPE' || o.y === 0) {
+           st.scoreRef += 1;
+           setScore(st.scoreRef);
+           // Increase speed slightly
+           st.speed = Math.min(st.speed + 0.05, PHYSICS.SPEED_MAX);
+        }
+      }
+
+      // Cleanup
+      if (o.x + o.w < -100) st.obstacles.splice(i, 1);
+
+      // COLLISION DETECTION (AABB with buffer)
+      const pX = width * 0.15; // Player X position fixed at 15% screen width
+      const buffer = 6; 
+      if (
+        pX + buffer < o.x + o.w &&
+        pX + PHYSICS.PLAYER_SIZE - buffer > o.x &&
+        st.playerY + buffer < o.y + o.h &&
+        st.playerY + PHYSICS.PLAYER_SIZE - buffer > o.y
+      ) {
+        return 'CRASH';
+      }
+    }
+
+    // --- PARTICLES ---
+    for (let i = st.particles.length - 1; i >= 0; i--) {
+      let p = st.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.03;
+      if (p.life <= 0) st.particles.splice(i, 1);
+    }
+
+    return 'OK';
+  };
+
+  const drawGame = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const st = engine.current;
+    
+    // Clear
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Dynamic Background
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    if (activeMode === 'FLY') {
+        gradient.addColorStop(0, '#0f172a'); // Slate 900
+        gradient.addColorStop(1, '#1e293b'); // Slate 800
+    } else {
+        gradient.addColorStop(0, '#2e1065'); // Violet 950
+        gradient.addColorStop(1, '#4c1d95'); // Violet 900
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // Grid Effect (Runner Mode)
+    if (activeMode === 'RUN' || st.floorY < height) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        const gridSize = 50;
+        st.bgOffset = (st.bgOffset - st.speed) % gridSize;
+        
+        ctx.beginPath();
+        // Vertical moving lines
+        for (let x = st.bgOffset; x < width; x += gridSize) {
+            ctx.moveTo(x, st.floorY);
+            ctx.lineTo(x - (height - st.floorY) * 2, height); // Perspective slant
+        }
+        // Horizontal lines below floor
+        for (let y = st.floorY; y < height; y += 20) {
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+        }
+        ctx.stroke();
+    }
+
+    // 2. Draw Floor
+    ctx.fillStyle = activeMode === 'RUN' ? '#a855f7' : '#38bdf8'; // Purple or Blue
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.fillRect(0, st.floorY, width, 4);
+    ctx.shadowBlur = 0;
+    
+    // Fill below floor
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(0, st.floorY + 4, width, height - st.floorY);
+
+    // 3. Draw Player
+    const pX = width * 0.15;
+    ctx.save();
+    ctx.translate(pX + PHYSICS.PLAYER_SIZE/2, st.playerY + PHYSICS.PLAYER_SIZE/2);
+    
+    // Visual Rotation
+    if (activeMode === 'FLY') {
+        const rot = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (st.velocity * 0.1)));
+        ctx.rotate(rot);
+    } else {
+        // Bobbing while running
+        if (st.playerY >= st.floorY - PHYSICS.PLAYER_SIZE - 1) {
+            ctx.scale(1, 1 - Math.sin(Date.now()/50)*0.1); 
+        } else {
+            ctx.rotate(st.velocity * 0.05); // Spin jump
+        }
+    }
+
+    // Neon Glow
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = activeMode === 'FLY' ? '#38bdf8' : '#e879f9';
+    ctx.fillStyle = '#ffffff';
+    
+    // Player Shape (Rounded Box)
+    const s = PHYSICS.PLAYER_SIZE;
+    ctx.beginPath();
+    ctx.roundRect(-s/2, -s/2, s, s, 6);
+    ctx.fill();
+    ctx.restore();
+
+    // 4. Draw Obstacles
+    st.obstacles.forEach(o => {
+        ctx.shadowBlur = 10;
+        if (o.type === 'PIPE') {
+            ctx.fillStyle = '#38bdf8'; // Blue
+            ctx.shadowColor = '#0ea5e9';
+        } else if (o.type === 'FLYER') {
+            ctx.fillStyle = '#f43f5e'; // Red
+            ctx.shadowColor = '#e11d48';
+        } else {
+            ctx.fillStyle = '#c084fc'; // Purple
+            ctx.shadowColor = '#a855f7';
+        }
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+    });
+    ctx.shadowBlur = 0;
+
+    // 5. Draw Particles
+    st.particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.random() * 4, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
+  };
+
+  // --- 3. LOOP & INPUT ---
+  const loop = (time: number) => {
+    if (gameState !== 'PLAYING') return;
+
+    const canvas = canvasRef.current;
+    if(!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return;
+
+    // Delta Time Logic
+    const rawDelta = (time - engine.current.lastTime) / 16;
+    const dt = Math.min(rawDelta, 2.5); // Cap delta to prevent skipping
+    engine.current.lastTime = time;
+
+    const result = updatePhysics(dt, canvas.width, canvas.height);
+    
+    if (result === 'CRASH') {
+        gameOver();
+    } else {
+        drawGame(ctx, canvas.width, canvas.height);
+        engine.current.frameId = requestAnimationFrame(loop);
+    }
   };
 
   const jump = useCallback(() => {
     if (gameState !== 'PLAYING') return;
-    const p = physics.current;
-    
-    // Logic varies by mode
-    if (gameMode === 'FLY') {
-        p.velocity = -7; // Flap
-        spawnParticles(window.innerWidth * 0.2, p.playerY + PLAYER_SIZE, '#00f3ff', 3);
+    const st = engine.current;
+
+    if (activeMode === 'FLY') {
+        st.velocity = PHYSICS.JUMP_FLY;
+        createParticles(window.innerWidth * 0.15, st.playerY + PHYSICS.PLAYER_SIZE, '#fff', false);
     } else {
-        // Only jump if on floor (Dino mode)
-        const { height } = canvasRef.current || { height: window.innerHeight };
-        const floorLevel = height - 100;
-        
-        // Allow jump if basically on the ground
-        if (p.playerY >= floorLevel - PLAYER_SIZE - 5) {
-            p.velocity = -12; // High jump
-            spawnParticles(window.innerWidth * 0.2 + PLAYER_SIZE/2, p.playerY + PLAYER_SIZE, '#ff00ff', 5);
+        // Can only jump if on floor in Run mode
+        if (st.playerY >= st.floorY - PHYSICS.PLAYER_SIZE - 5) {
+            st.velocity = PHYSICS.JUMP_RUN;
+            createParticles(window.innerWidth * 0.15 + 10, st.floorY, '#a855f7', true); // Dust kick
         }
     }
-  }, [gameState, gameMode]);
+  }, [gameState, activeMode]);
 
-  // --- RENDER LOOP ---
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) return;
-
-    const loop = (time: number) => {
-      // Delta Time (cap at 60fps equivalent to prevent huge jumps)
-      const rawDelta = (time - physics.current.lastTime) / 16;
-      const deltaTime = Math.min(rawDelta, 2); 
-      physics.current.lastTime = time;
-
-      const { width, height } = canvas;
-      const p = physics.current;
-
-      // 1. CLEAR & BACKGROUND
-      // Gradient background based on mode
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      if (gameMode === 'FLY') {
-          gradient.addColorStop(0, '#050510');
-          gradient.addColorStop(1, '#1a0b2e');
-      } else {
-          // Redder/More intense background for Runner mode
-          gradient.addColorStop(0, '#1a0510');
-          gradient.addColorStop(1, '#2e0b1a');
-      }
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-
-      // Stars
-      ctx.fillStyle = '#ffffff';
-      p.stars.forEach(star => {
-        if (gameState === 'PLAYING') star.x -= star.speed * (p.speed * 0.5) * deltaTime;
-        if (star.x < 0) star.x = width;
-        ctx.globalAlpha = Math.random() * 0.5 + 0.3;
-        ctx.fillRect(star.x, star.y, star.size, star.size);
-      });
-      ctx.globalAlpha = 1.0;
-
-      if (gameState === 'PLAYING') {
-        // --- PHASE SHIFT LOGIC ---
-        const targetMode = score >= PHASE_RUNNER_SCORE ? 'RUN' : 'FLY';
-        
-        // Transition to RUNNER
-        if (targetMode === 'RUN') {
-            // Animate floor up
-            const targetFloor = height - 100;
-            if (p.floorY > targetFloor) p.floorY -= 2 * deltaTime;
-            else p.floorY = targetFloor;
-
-            // Adjust physics for Runner
-            p.gravity = 0.8; // Heavier
-            if (gameMode === 'FLY') {
-                setGameMode('RUN'); // Trigger React State once
-                spawnParticles(width/2, height/2, '#ffffff', 50); // Flash effect
-            }
-        } 
-        
-        // Speed scaling
-        const speedCap = score > PHASE_HYPER_SCORE ? 12 : 8;
-        if (p.speed < speedCap) p.speed += 0.005 * deltaTime;
-
-
-        // --- PHYSICS ---
-        p.velocity += p.gravity * deltaTime;
-        p.playerY += p.velocity * deltaTime;
-
-        // Floor Collision
-        const floorLevel = p.floorY;
-        if (p.playerY + PLAYER_SIZE > floorLevel) {
-            if (gameMode === 'FLY') {
-                // In Fly mode, touching bottom is death (unless floor is rising)
-                if (score < PHASE_RUNNER_SCORE) {
-                    endGame();
-                    return;
-                }
-            } 
-            // In Run mode, touching floor is walking
-            p.playerY = floorLevel - PLAYER_SIZE;
-            p.velocity = 0;
-        }
-
-        // Ceiling Collision
-        if (p.playerY < 0) {
-            p.playerY = 0;
-            p.velocity = 0;
-        }
-
-        // --- OBSTACLES ---
-        // Spawn
-        const lastObs = p.obstacles[p.obstacles.length - 1];
-        if (!lastObs || (width - lastObs.x > (gameMode === 'RUN' ? 400 : 300))) {
-            spawnObstacle();
-        }
-
-        for (let i = p.obstacles.length - 1; i >= 0; i--) {
-            const obs = p.obstacles[i];
-            obs.x -= p.speed * deltaTime;
-
-            // Score
-            if (!obs.passed && obs.x + obs.width < width * 0.2) {
-                obs.passed = true;
-                // Only count score once per vertical set (pipe pair)
-                if (obs.type !== 'PIPE' || obs.y === 0) {
-                    setScore(s => s + 1);
-                }
-            }
-
-            // Draw Obstacles
-            ctx.fillStyle = obs.type === 'PIPE' ? '#00f3ff' : (obs.type === 'DRONE' ? '#ff0055' : '#ff00ff');
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = ctx.fillStyle;
-            ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-            ctx.shadowBlur = 0;
-
-            // Collision
-            const pX = width * 0.2;
-            const buffer = 4; // Hitbox forgiveness
-            if (
-                pX + buffer < obs.x + obs.width &&
-                pX + PLAYER_SIZE - buffer > obs.x &&
-                p.playerY + buffer < obs.y + obs.height &&
-                p.playerY + PLAYER_SIZE - buffer > obs.y
-            ) {
-                spawnParticles(pX, p.playerY, '#ff0000');
-                endGame();
-                return;
-            }
-
-            if (obs.x + obs.width < -50) p.obstacles.splice(i, 1);
-        }
-
-        // Draw Floor (if visible)
-        if (p.floorY < height) {
-            ctx.fillStyle = '#ff00ff';
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#ff00ff';
-            ctx.fillRect(0, p.floorY, width, 2); // Neon Line
-            ctx.fillStyle = '#1a0510'; // Fill below
-            ctx.fillRect(0, p.floorY + 2, width, height - p.floorY);
-            ctx.shadowBlur = 0;
-        }
-      }
-
-      // --- RENDER PLAYER ---
-      const pX = width * 0.2;
-      ctx.save();
-      ctx.translate(pX + PLAYER_SIZE/2, p.playerY + PLAYER_SIZE/2);
-      
-      // Rotate based on mode
-      if (gameMode === 'FLY') {
-          ctx.rotate(Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (p.velocity * 0.1))));
-      } else {
-          // Running wobble
-          if (p.playerY > p.floorY - PLAYER_SIZE - 5) {
-             // On ground
-             ctx.rotate(Math.sin(Date.now() / 100) * 0.1); 
-          } else {
-             // Jumping spin
-             ctx.rotate(Date.now() / 100);
-          }
-      }
-
-      // Player Shape
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = gameMode === 'FLY' ? '#00f3ff' : '#ffe600';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(-PLAYER_SIZE/2, -PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
-      ctx.restore();
-
-      // --- PARTICLES ---
-      for (let i = p.particles.length - 1; i >= 0; i--) {
-        const part = p.particles[i];
-        part.x += part.vx;
-        part.y += part.vy;
-        part.life -= 0.02;
-        ctx.globalAlpha = part.life;
-        ctx.fillStyle = part.color;
-        ctx.beginPath();
-        ctx.arc(part.x, part.y, Math.random() * 3, 0, Math.PI * 2);
-        ctx.fill();
-        if (part.life <= 0) p.particles.splice(i, 1);
-      }
-      ctx.globalAlpha = 1.0;
-
-      p.frameId = requestAnimationFrame(loop);
-    };
-
-    const endGame = () => {
-        setGameState('GAME_OVER');
-        setScore(prev => {
-            if (prev > highScore) {
-                setHighScore(prev);
-                localStorage.setItem('cosmic_high_score', prev.toString());
-            }
-            return prev;
-        });
-    };
-
-    physics.current.lastTime = performance.now();
-    physics.current.frameId = requestAnimationFrame(loop);
-
-    return () => cancelAnimationFrame(physics.current.frameId);
-  }, [gameState, gameMode, highScore, score]);
-
-  // Input Handling
-  const handleInput = (e: any) => {
-      e.preventDefault(); 
-      e.stopPropagation();
-      if (gameState === 'IDLE' || gameState === 'GAME_OVER') resetGame();
-      else jump();
+  const startGame = () => {
+    if (containerRef.current) {
+        const h = containerRef.current.clientHeight;
+        engine.current = {
+            ...engine.current,
+            playerY: h / 2,
+            velocity: 0,
+            floorY: h + 200,
+            obstacles: [],
+            particles: [],
+            scoreRef: 0,
+            speed: PHYSICS.SPEED_BASE,
+            lastTime: performance.now()
+        };
+    }
+    setScore(0);
+    setGameState('PLAYING');
+    setActiveMode('FLY');
+    engine.current.frameId = requestAnimationFrame(loop);
   };
 
+  const gameOver = () => {
+    setGameState('GAME_OVER');
+    cancelAnimationFrame(engine.current.frameId);
+    if (engine.current.scoreRef > highScore) {
+        setHighScore(engine.current.scoreRef);
+        localStorage.setItem('cosmic_dash_hs', engine.current.scoreRef.toString());
+    }
+  };
+
+  // --- INPUT LISTENERS ---
   useEffect(() => {
-    const keyHandler = (e: KeyboardEvent) => { if (e.code === 'Space' || e.code === 'ArrowUp') handleInput(e); };
-    window.addEventListener('keydown', keyHandler);
-    return () => window.removeEventListener('keydown', keyHandler);
-  }, [gameState, jump]);
+    const handleKey = (e: KeyboardEvent) => {
+        if (e.code === 'Space' || e.code === 'ArrowUp') {
+            e.preventDefault();
+            if (gameState === 'IDLE' || gameState === 'GAME_OVER') startGame();
+            else jump();
+        }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [gameState, activeMode]); // Dependencies matter for jump logic
 
   return (
-    <div className="fixed inset-0 w-full h-[100dvh] bg-[#050510] touch-none select-none overflow-hidden" onMouseDown={handleInput} onTouchStart={handleInput}>
+    <div 
+      ref={containerRef}
+      className="relative w-full h-[100dvh] overflow-hidden bg-slate-950 select-none touch-none"
+      onMouseDown={(e) => { e.preventDefault(); if (gameState === 'PLAYING') jump(); }}
+      onTouchStart={(e) => { e.preventDefault(); if (gameState === 'PLAYING') jump(); }}
+    >
+      {/* CANVAS LAYER */}
       <canvas ref={canvasRef} className="block w-full h-full" />
-      
-      {/* UI OVERLAY */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-between pointer-events-none">
-         <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 px-3 py-1.5 rounded-full backdrop-blur-md">
-                <WifiOff className="w-4 h-4 text-red-400" />
-                <span className="text-xs text-red-100 font-bold tracking-wider">OFFLINE MODE</span>
+
+      {/* --- HUD OVERLAY --- */}
+      <div className="absolute top-0 left-0 w-full p-6 flex justify-between pointer-events-none z-10">
+         <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-4">
+            <div className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border shadow-lg transition-colors duration-500",
+                activeMode === 'FLY' 
+                    ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400" 
+                    : "bg-purple-500/10 border-purple-500/30 text-purple-400"
+            )}>
+                <Activity className="w-4 h-4 animate-pulse" />
+                <span className="text-xs font-black tracking-widest">{activeMode} MODE</span>
             </div>
-            {gameMode === 'RUN' && (
-                <div className="flex items-center gap-2 bg-purple-500/20 border border-purple-500/50 px-3 py-1.5 rounded-full animate-in slide-in-from-left">
-                    <Zap className="w-4 h-4 text-purple-300" />
-                    <span className="text-xs text-purple-100 font-bold">GRAVITY: HIGH</span>
-                </div>
-            )}
          </div>
+
          <div className="text-right">
-            <div className="flex items-center justify-end gap-2 text-yellow-400 font-mono text-sm font-bold opacity-80 mb-1">
-                <Trophy className="w-4 h-4" /> HI: {highScore}
+            <div className="flex items-center justify-end gap-1 text-yellow-500/80 font-mono text-xs font-bold mb-1">
+                <Trophy className="w-3 h-3" /> HI: {highScore}
             </div>
-            <div className="text-6xl font-black italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">
+            <div className="text-5xl font-black italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] tabular-nums">
                 {score}
             </div>
          </div>
       </div>
 
-      {/* START SCREEN */}
+      {/* --- MENUS --- */}
       {gameState === 'IDLE' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none text-center p-4">
-          <h1 className="text-5xl md:text-7xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-purple-500 mb-6 drop-shadow-2xl">
-            NEON SHIFT
-          </h1>
-          <div className="animate-pulse flex items-center gap-3 text-white font-mono bg-white/10 px-8 py-4 rounded-full border border-white/20 mb-4">
-            <Play className="w-6 h-6 fill-white" /> TAP TO START
-          </div>
-          <div className="space-y-1 text-slate-400 text-sm font-mono">
-             <p>Score 0-10: <span className="text-cyan-400">Fly (Tap to Float)</span></p>
-             <p>Score 10+: <span className="text-purple-400">Run (Tap to Jump)</span></p>
-          </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-20">
+           <div className="text-center animate-in zoom-in-95 duration-300">
+              <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 via-white to-purple-500 drop-shadow-2xl mb-2">
+                 COSMIC
+              </h1>
+              <h2 className="text-2xl md:text-4xl font-light text-white tracking-[0.5em] mb-8 opacity-90">SHIFT</h2>
+              
+              <Button 
+                onClick={(e) => { e.stopPropagation(); startGame(); }}
+                className="group relative px-10 py-8 bg-white text-black hover:bg-cyan-50 rounded-full font-black text-xl tracking-widest shadow-[0_0_40px_rgba(34,211,238,0.6)] transition-all hover:scale-105 active:scale-95"
+              >
+                 <Play className="w-6 h-6 mr-2 fill-black" /> START
+                 <div className="absolute inset-0 rounded-full ring-2 ring-white animate-ping opacity-50" />
+              </Button>
+
+              <div className="mt-8 flex gap-4 text-xs font-mono text-slate-400 bg-black/50 px-6 py-3 rounded-xl border border-white/10">
+                 <div className="flex items-center gap-1"><span className="text-cyan-400">●</span> Tap to Fly</div>
+                 <div className="w-[1px] h-4 bg-slate-600" />
+                 <div className="flex items-center gap-1"><span className="text-purple-400">■</span> Tap to Jump</div>
+              </div>
+           </div>
         </div>
       )}
 
-      {/* GAME OVER */}
       {gameState === 'GAME_OVER' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md z-20 pointer-events-none">
-          <h2 className="text-4xl font-black text-red-500 tracking-widest mb-6 drop-shadow-[0_0_25px_rgba(255,0,0,0.6)]">SYNC FAILED</h2>
-          <div className="bg-slate-900/90 p-8 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center mb-8 w-72">
-             <span className="text-slate-400 text-xs uppercase tracking-widest mb-2">Distance</span>
-             <span className="text-6xl font-mono font-bold text-white mb-2">{score}</span>
-             {score >= highScore && score > 0 && <div className="text-yellow-400 text-sm font-bold flex gap-1 animate-pulse"><Trophy className="w-4 h-4"/> NEW BEST</div>}
-          </div>
-          <Button variant="default" size="lg" className="pointer-events-auto bg-white text-black hover:bg-slate-200 font-bold text-xl px-10 py-8 rounded-full shadow-2xl transition-transform active:scale-95">
-            <RotateCcw className="w-6 h-6 mr-2" /> RECONNECT
-          </Button>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md z-30">
+           <div className="bg-slate-900/80 p-8 rounded-3xl border border-white/10 shadow-2xl text-center w-[90%] max-w-sm animate-in fade-in slide-in-from-bottom-8">
+              <h3 className="text-3xl font-black text-red-500 tracking-widest mb-1">CRASHED</h3>
+              <p className="text-slate-400 text-xs uppercase tracking-widest mb-6">Synchronization Lost</p>
+              
+              <div className="flex justify-center items-end gap-1 mb-8">
+                 <span className="text-7xl font-black text-white leading-none">{score}</span>
+                 <span className="text-sm font-bold text-slate-500 mb-1">PTS</span>
+              </div>
+
+              {score >= highScore && score > 0 && (
+                 <div className="absolute top-[-15px] left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-4 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-lg animate-bounce">
+                    <Trophy className="w-3 h-3 fill-black" /> NEW RECORD
+                 </div>
+              )}
+
+              <Button 
+                onClick={(e) => { e.stopPropagation(); startGame(); }}
+                className="w-full py-7 bg-white text-black hover:bg-slate-200 font-bold text-lg rounded-xl shadow-xl transition-transform active:scale-95"
+              >
+                 <RotateCcw className="w-5 h-5 mr-2" /> TRY AGAIN
+              </Button>
+           </div>
         </div>
+      )}
+
+      {/* --- MOBILE CONTROL HINT (Bottom Fade) --- */}
+      {gameState === 'PLAYING' && (
+         <div className="absolute bottom-10 left-0 w-full text-center pointer-events-none opacity-40 animate-pulse">
+            <span className="text-white/50 text-xs font-black uppercase tracking-widest bg-black/20 px-4 py-2 rounded-full backdrop-blur-sm">
+               {activeMode === 'FLY' ? 'Tap to Float' : 'Tap to Jump'}
+            </span>
+         </div>
       )}
     </div>
   );
