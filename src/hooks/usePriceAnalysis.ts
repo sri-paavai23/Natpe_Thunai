@@ -9,6 +9,7 @@ interface PriceRange {
   min: number;
   max: number;
   label: string;
+  isPremium?: boolean; // If true, allows higher variance
 }
 
 interface PriceAnalysisResult {
@@ -19,41 +20,59 @@ interface PriceAnalysisResult {
   analyzePrice: (
     title: string,
     priceValue: string,
-    categoryOrCondition?: string, // Can be category (Sell) or condition (Sports)
+    categoryOrCondition?: string, 
     rentUnit?: "day" | "hour"
   ) => void;
   resetAnalysis: () => void;
 }
 
-// Configuration for "Smart" Price Ranges
-// We use regex for title matching to handle plurals and variations easily.
-const PRICE_CONFIG: Record<string, PriceRange> = {
-  // Electronics
-  laptop: { min: 8000, max: 80000, label: "used laptop" },
-  macbook: { min: 25000, max: 150000, label: "used MacBook" }, // Premium item
-  phone: { min: 2000, max: 30000, label: "used smartphone" },
-  iphone: { min: 8000, max: 80000, label: "used iPhone" }, // Premium item
+// --- INDIAN MARKET DATASETS (INR) ---
+// Calibrated for TIER-2/3 City College Students
+const MARKET_DATA: Record<string, PriceRange> = {
+  // 💻 Electronics
+  laptop: { min: 5000, max: 60000, label: "used laptop" },
+  gaming_laptop: { min: 30000, max: 120000, label: "gaming laptop", isPremium: true },
+  macbook: { min: 25000, max: 150000, label: "used MacBook", isPremium: true },
+  phone: { min: 2000, max: 25000, label: "used smartphone" },
+  iphone: { min: 8000, max: 80000, label: "used iPhone", isPremium: true },
+  android: { min: 3000, max: 30000, label: "Android phone" },
   tablet: { min: 3000, max: 40000, label: "used tablet" },
-  ipad: { min: 10000, max: 60000, label: "used iPad" }, // Premium item
-  calculator: { min: 100, max: 1000, label: "scientific calculator" },
+  ipad: { min: 8000, max: 60000, label: "used iPad", isPremium: true },
+  calculator: { min: 200, max: 1200, label: "scientific calculator" }, // Casio fx-991ES range
   headphones: { min: 300, max: 15000, label: "headphones" },
+  earbuds: { min: 500, max: 8000, label: "TWS earbuds" },
+  smartwatch: { min: 500, max: 20000, label: "smartwatch" },
+  charger: { min: 100, max: 2000, label: "charger/adapter" },
 
-  // Books
-  textbook: { min: 100, max: 1500, label: "used textbook" },
-  novel: { min: 50, max: 500, label: "used novel" },
-  notes: { min: 0, max: 500, label: "study notes" }, // 0 allows free
+  // 📚 Education
+  textbook: { min: 100, max: 1500, label: "academic textbook" },
+  engineering_book: { min: 200, max: 2000, label: "engineering book" },
+  medical_book: { min: 500, max: 4000, label: "medical textbook", isPremium: true },
+  novel: { min: 50, max: 500, label: "novel/fiction" },
+  notes: { min: 0, max: 500, label: "handwritten notes" }, 
+  drafter: { min: 200, max: 800, label: "engineering drafter" },
+  apron: { min: 100, max: 500, label: "lab apron" },
 
-  // Sports (Generic baselines)
-  cricket: { min: 300, max: 5000, label: "cricket gear" },
+  // 🏏 Sports & Hobby
+  cricket_bat: { min: 300, max: 5000, label: "cricket bat" },
   football: { min: 200, max: 2000, label: "football" },
-  badminton: { min: 300, max: 3000, label: "badminton racket" },
-  cycle: { min: 2000, max: 15000, label: "bicycle" },
+  badminton: { min: 300, max: 4000, label: "badminton racket" },
+  cycle: { min: 2000, max: 8000, label: "student bicycle" },
+  gear_cycle: { min: 4000, max: 15000, label: "gear cycle", isPremium: true },
+  guitar: { min: 1500, max: 10000, label: "acoustic guitar" },
+  camera: { min: 5000, max: 80000, label: "DSLR/Mirrorless camera", isPremium: true },
+
+  // 🏠 Hostel Essentials
+  kettle: { min: 300, max: 1200, label: "electric kettle" },
+  induction: { min: 800, max: 2500, label: "induction stove" },
+  mattress: { min: 500, max: 3000, label: "mattress" },
+  bucket: { min: 50, max: 300, label: "plastic bucket" },
 };
 
-// Rental Multipliers (vs Sell Price) - Rough estimates for logic
-const RENT_CONFIG = {
-  hour: { min: 10, max: 200, label: "hourly rent" },
-  day: { min: 50, max: 1000, label: "daily rent" },
+// Rental Logic (Multiplier of Buy Price approx)
+const RENT_MULTIPLIERS = {
+  hour: { min: 20, max: 500, label: "hourly" },
+  day: { min: 50, max: 2000, label: "daily" },
 };
 
 export const usePriceAnalysis = (): PriceAnalysisResult => {
@@ -82,158 +101,149 @@ export const usePriceAnalysis = (): PriceAnalysisResult => {
       setIsPriceReasonable(false);
       setAiSuggestion("");
 
-      // 2. Simulate "Thinking" (Reduced to 800ms for snappier feel)
+      // 2. Simulate AI Processing Delay (randomized for realism)
+      const delay = Math.floor(Math.random() * 500) + 600;
+
       setTimeout(() => {
-        // --- INPUT CLEANING ---
-        // Remove commas and spaces (e.g., "1,500" -> "1500")
+        // --- INPUT NORMALIZATION ---
         const cleanPriceString = priceValue.toString().replace(/,/g, "").trim();
         const price = parseFloat(cleanPriceString);
         const lowerTitle = title.toLowerCase();
         
-        let reasonable = true;
-        let suggestion = "";
-        let matchedCategoryKey: string | null = null;
-
-        // --- VALIDATION ---
+        // --- EDGE CASE: INVALID INPUT ---
         if (isNaN(price)) {
-          setAiLoading(false); // Stop if empty/invalid
+          setAiLoading(false);
           return;
         }
 
-        if (price <= 0 && !lowerTitle.includes("free")) {
-          // Allow 0 only if title says "free", otherwise flag it
-          reasonable = false;
-          suggestion = "Price is zero. Did you mean to list this as free?";
-        } else {
-          // --- SMART DETECTION LOGIC ---
-          
-          // 1. Identify Item Type from Title
-          // We check specific premium keywords first (e.g., "macbook" before "laptop")
-          const keys = Object.keys(PRICE_CONFIG);
-          for (const key of keys) {
-            if (lowerTitle.includes(key)) {
-              // If we found a match, check if we already have a more specific match
-              // (Simple heuristic: longer keys are usually more specific, e.g. "iphone" > "phone")
-              if (!matchedCategoryKey || key.length > matchedCategoryKey.length) {
-                matchedCategoryKey = key;
-              }
-            }
-          }
-
-          // 2. Logic Branching
-          if (rentUnit) {
-            // --- RENTAL LOGIC ---
-            // If we identified the item (e.g. "cycle"), we can try to be specific,
-            // otherwise use generic rental limits.
-            const genericRent = RENT_CONFIG[rentUnit];
-            
-            if (matchedCategoryKey === "cycle" || lowerTitle.includes("bike")) {
-               // Cycles rent for more than generic items
-               const cycleMin = rentUnit === 'hour' ? 20 : 100;
-               const cycleMax = rentUnit === 'hour' ? 100 : 500;
-               
-               if (price < cycleMin || price > cycleMax) {
-                 reasonable = false;
-                 suggestion = `For a bicycle, reasonable rent is usually ₹${cycleMin}-₹${cycleMax} per ${rentUnit}.`;
-               }
-            } else if (matchedCategoryKey && (matchedCategoryKey.includes("laptop") || matchedCategoryKey.includes("macbook"))) {
-                // Laptops rent higher
-               const lapMin = rentUnit === 'hour' ? 50 : 300;
-               const lapMax = rentUnit === 'hour' ? 200 : 1500;
-
-               if (price < lapMin || price > lapMax) {
-                 reasonable = false;
-                 suggestion = `For a laptop, reasonable rent is usually ₹${lapMin}-₹${lapMax} per ${rentUnit}.`;
-               }
-            } else {
-               // Fallback Generic Rent
-               if (price < genericRent.min || price > genericRent.max) {
-                 reasonable = false;
-                 suggestion = `Typical ${genericRent.label} rates are between ₹${genericRent.min} and ₹${genericRent.max}.`;
-               } else {
-                 suggestion = "Rental price looks standard for student exchanges.";
-               }
-            }
-
+        // --- EDGE CASE: FREE ITEMS ---
+        if (price <= 0) {
+          if (lowerTitle.includes("free") || lowerTitle.includes("giveaway") || lowerTitle.includes("donate")) {
+             setIsPriceReasonable(true);
+             setAiSuggestion("That's generous of you! Listing as free.");
+             toast.success("Listed as Free Item!");
           } else {
-            // --- SELLING LOGIC ---
-            
-            if (matchedCategoryKey) {
-              const range = PRICE_CONFIG[matchedCategoryKey];
-              let min = range.min;
-              let max = range.max;
-
-              // Apply Condition Modifiers (if provided)
-              if (categoryOrCondition) {
-                const cond = categoryOrCondition.toLowerCase();
-                if (cond === "new" || cond === "like new" || cond === "open box") {
-                  max *= 1.5; // Allow higher price for new items
-                  min *= 1.2;
-                } else if (cond === "heavily used" || cond === "damaged") {
-                  max *= 0.6; // Expect lower price
-                  min *= 0.5;
-                }
-              }
-
-              // Evaluate Price
-              if (price > max) {
-                reasonable = false;
-                suggestion = `This price seems high for a ${range.label}. Market average is ₹${range.min} - ₹${range.max}.`;
-              } else if (price < min) {
-                // Determine if "Good Deal" or "Suspicious"
-                if (price < min * 0.3) {
-                   reasonable = false; // Flag if it's < 30% of min value (Scam risk)
-                   suggestion = `This price is suspiciously low for a ${range.label}. Ensure it's not a mistake.`;
-                } else {
-                   reasonable = true; // It's just a good deal
-                   suggestion = `Great price! This is a very competitive deal for a ${range.label}.`;
-                }
-              } else {
-                suggestion = `Price is within the fair market range for a ${range.label}.`;
-              }
-
-            } else {
-              // --- FALLBACK (No keyword match) ---
-              // Use categoryOrCondition as a hint if it's a broad category
-              if (categoryOrCondition === "electronics" && price > 50000) {
-                 suggestion = "High-value electronics. Ensure you verify the buyer/seller reputation.";
-              } else if (categoryOrCondition === "books" && price > 2000) {
-                 reasonable = false;
-                 suggestion = "This seems very expensive for a used book unless it's a rare edition.";
-              } else if (!categoryOrCondition) {
-                 // Likely Gift/Craft or Misc
-                 if (price > 2000) {
-                   suggestion = "For custom/handmade items, pricing is subjective. Ensure description justifies the cost.";
-                 } else {
-                   suggestion = "Price seems acceptable.";
-                 }
-              } else {
-                 suggestion = "Price looks okay based on general category standards.";
-              }
-            }
+             setIsPriceReasonable(false);
+             setAiSuggestion("Price is zero. Did you mean to list this as a giveaway?");
+             toast.warning("Price Alert: Value is 0");
           }
+          setAiLoading(false);
+          setIsPriceAnalyzed(true);
+          return;
         }
 
-        // 3. Update State
+        // --- INTELLIGENT MATCHING ---
+        let matchedKey: string | null = null;
+        let matchQuality = 0; // 0 = no match, 1 = partial, 2 = exact
+
+        const keys = Object.keys(MARKET_DATA);
+        
+        // Advanced Keyword Search
+        for (const key of keys) {
+           // Direct match (e.g. "laptop")
+           if (lowerTitle.includes(key.replace('_', ' '))) {
+              // Prefer specific matches (e.g., "gaming laptop" over "laptop")
+              if (key.length > (matchedKey?.length || 0)) {
+                 matchedKey = key;
+                 matchQuality = 2;
+              }
+           }
+        }
+
+        // --- DECISION ENGINE ---
+        let reasonable = true;
+        let suggestion = "";
+
+        if (rentUnit) {
+            // === RENTAL MODE ===
+            const limits = RENT_MULTIPLIERS[rentUnit];
+            
+            // Adjust limits based on item value (Heuristic)
+            let adjustedMax = limits.max;
+            if (matchedKey && MARKET_DATA[matchedKey].isPremium) {
+                adjustedMax *= 3; // Allow higher rent for MacBooks/DSLRs
+            } else if (matchedKey && matchedKey.includes("cycle")) {
+                adjustedMax = rentUnit === 'hour' ? 50 : 200; // Cycles are cheap to rent
+            }
+
+            if (price > adjustedMax) {
+                reasonable = false;
+                suggestion = `₹${price}/${rentUnit} seems high. Students typically pay up to ₹${adjustedMax} for this.`;
+            } else if (price < 10 && rentUnit === 'hour') {
+                reasonable = true;
+                suggestion = "Very affordable rental rate!";
+            } else {
+                reasonable = true;
+                suggestion = "Rental rate looks fair for campus standards.";
+            }
+
+        } else {
+            // === SELLING MODE ===
+            
+            if (matchedKey) {
+                // 1. KNOWN ITEM FOUND
+                const range = MARKET_DATA[matchedKey];
+                let min = range.min;
+                let max = range.max;
+
+                // Context Modifiers
+                if (lowerTitle.includes("pro") || lowerTitle.includes("ultra") || lowerTitle.includes("plus")) {
+                    max *= 1.3; // Allow premium variants
+                }
+                if (lowerTitle.includes("broken") || lowerTitle.includes("parts") || lowerTitle.includes("not working")) {
+                    max *= 0.3; // Scrap value
+                    min = 0;
+                }
+
+                // Condition Modifiers
+                const cond = categoryOrCondition?.toLowerCase() || "";
+                if (cond.includes("new") || cond.includes("box")) {
+                    min *= 1.2;
+                    max *= 1.2;
+                }
+
+                // Validation
+                if (price > max) {
+                    reasonable = false;
+                    suggestion = `A bit high for a used ${range.label}. Market avg: ₹${range.min} - ₹${range.max}.`;
+                } else if (price < min * 0.4) { // Significantly below min
+                    reasonable = true; // Still allow it, but warn
+                    suggestion = `Unbelievable price! Just ensure you're not underselling your ${range.label}.`;
+                } else {
+                    reasonable = true;
+                    suggestion = "Spot on! This price is competitive for the Indian market.";
+                }
+
+            } else {
+                // 2. UNKNOWN ITEM (The "User Choice" Logic)
+                // If we don't know what it is, we trust the user unless it's absurd.
+                
+                if (price > 100000) {
+                    reasonable = true;
+                    suggestion = "High-value item detected. Ensure description justifies the cost.";
+                } else {
+                    reasonable = true;
+                    suggestion = "Price set based on your preference (Custom Item).";
+                }
+            }
+        }
+
+        // --- FINALIZATION ---
         setIsPriceAnalyzed(true);
         setIsPriceReasonable(reasonable);
         setAiSuggestion(suggestion);
         setAiLoading(false);
 
-        // 4. Feedback Toast
+        // Toast Feedback
         if (reasonable) {
-          // Don't show toast for "default" reasonable to avoid spam, 
-          // only show if we have a specific positive comment (Great Deal) 
-          // or just a generic success.
-          if (suggestion.includes("Great price")) {
-             toast.success(suggestion);
-          } else {
-             toast.success("Price analysis complete: Looks reasonable!");
-          }
+           if (suggestion.includes("Unbelievable")) toast.success("Wow! That's a steal deal!");
+           else if (matchedKey) toast.success("Price Verified: Within Market Range ✅");
+           else toast.info("Custom Price Accepted 👍");
         } else {
-          toast.warning(`Price Alert: ${suggestion}`);
+           toast.warning("Price Advice: Consider lowering for faster sale.");
         }
-      }, 800);
+
+      }, delay);
     },
     []
   );
