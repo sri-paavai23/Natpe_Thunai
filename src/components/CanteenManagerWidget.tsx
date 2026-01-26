@@ -7,16 +7,19 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RefreshCw, Utensils, Plus, Trash2, Loader2, Store, CheckCircle2, XCircle } from "lucide-react";
+import { 
+  RefreshCw, Utensils, Plus, Trash2, Loader2, Store, 
+  CheckCircle2, XCircle, Zap, Power, Package 
+} from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AddCanteenForm from "./forms/AddCanteenForm";
 import { useCanteenData } from "@/hooks/useCanteenData"; 
-import { useAuth } from "@/context/AuthContext"; // 1. Import Auth
+import { useAuth } from "@/context/AuthContext"; 
 import { cn } from "@/lib/utils";
 
 const CanteenManagerWidget = () => {
-  const { userProfile } = useAuth(); // 2. Get User Profile
+  const { userProfile } = useAuth(); 
   const { allCanteens, isLoading, error, refetch, updateCanteen, addCanteen } = useCanteenData();
   
   const [selectedCanteenId, setSelectedCanteenId] = useState<string | null>(null);
@@ -38,36 +41,46 @@ const CanteenManagerWidget = () => {
 
   const handleAddCanteen = async (canteenName: string) => {
     if (!userProfile?.collegeName) {
-        toast.error("User profile not loaded. Cannot add canteen.");
+        toast.error("Profile not loaded.");
         return;
     }
-
     setIsAddingCanteen(true);
     try {
-      // 3. FIX: Pass collegeName as the second argument
       const newCanteen = await addCanteen(canteenName, userProfile.collegeName);
-      
       if (newCanteen) {
-        toast.success(`"${canteenName}" is ready for business!`);
+        toast.success(`"${canteenName}" launched!`);
         setSelectedCanteenId(newCanteen.$id);
       }
       setIsAddCanteenDialogOpen(false);
     } catch (e) {
-      console.error(e);
       toast.error("Failed to create canteen");
     } finally {
       setIsAddingCanteen(false);
     }
   };
 
+  /**
+   * ENHANCEMENT: CASCADING STATUS TOGGLE
+   * When canteen opens/closes, all items follow suit instantly.
+   */
   const handleToggleCanteenStatus = async (checked: boolean) => {
-    if (!selectedCanteenId) return;
+    if (!selectedCanteenId || !selectedCanteen) return;
     setIsUpdating(true);
+    
+    // Sync all items with the canteen status
+    const synchronizedItems = selectedCanteen.items.map(item => ({
+      ...item,
+      available: checked
+    }));
+
     try {
-      await updateCanteen(selectedCanteenId, { isOpen: checked });
-      toast.success(checked ? "We are open! Students can now order." : "Outlet closed. Orders paused.");
+      await updateCanteen(selectedCanteenId, { 
+        isOpen: checked, 
+        items: synchronizedItems 
+      });
+      toast.success(checked ? "Outlet Active: All items online." : "Outlet Inactive: All items offline.");
     } catch (e) {
-      console.error(e);
+      toast.error("Sync failed.");
     } finally {
       setIsUpdating(false);
     }
@@ -91,14 +104,14 @@ const CanteenManagerWidget = () => {
   const handleAddItem = async () => {
     if (!selectedCanteen || !selectedCanteenId) return;
     if (newItemName.trim() === "") {
-      toast.error("Please name the dish.");
+      toast.error("Name the dish first!");
       return;
     }
     setIsUpdating(true);
     try {
-      const newItems = [...selectedCanteen.items, { name: newItemName.trim(), available: true }];
+      const newItems = [...selectedCanteen.items, { name: newItemName.trim(), available: selectedCanteen.isOpen }];
       await updateCanteen(selectedCanteenId, { items: newItems });
-      toast.success(`Delicious! "${newItemName.trim()}" added.`);
+      toast.success(`"${newItemName.trim()}" added to menu.`);
       setNewItemName("");
       setIsAddingItem(false);
     } catch (e) {
@@ -114,7 +127,7 @@ const CanteenManagerWidget = () => {
     try {
       const newItems = selectedCanteen.items.filter((_, i) => i !== index);
       await updateCanteen(selectedCanteenId, { items: newItems });
-      toast.info("Item removed from menu.");
+      toast.info("Item removed.");
     } catch (e) {
       console.error(e);
     } finally {
@@ -124,19 +137,12 @@ const CanteenManagerWidget = () => {
 
   if (isLoading) {
     return (
-      <Card className="bg-card/50 backdrop-blur-sm border-border p-8 flex flex-col items-center justify-center min-h-[300px]">
-        <Loader2 className="h-8 w-8 animate-spin text-secondary-neon mb-4" />
-        <p className="text-muted-foreground font-medium">Setting up the kitchen...</p>
-      </Card>
-    );
-  }
-  
-  if (error) {
-    return (
-      <Card className="bg-destructive/10 border-destructive p-6 text-center">
-        <p className="text-destructive font-semibold mb-2">Failed to load canteen data</p>
-        <p className="text-sm text-destructive/80 mb-4">{error}</p>
-        <Button onClick={refetch} variant="outline" className="border-destructive text-destructive hover:bg-destructive/10">Retry Connection</Button>
+      <Card className="bg-card/50 backdrop-blur-md border-border p-8 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="relative">
+          <Loader2 className="h-12 w-12 animate-spin text-secondary-neon mb-4" />
+          <Zap className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-4 w-4 text-secondary-neon animate-pulse" />
+        </div>
+        <p className="text-secondary-neon font-black italic tracking-tighter uppercase animate-pulse">Syncing Kitchen...</p>
       </Card>
     );
   }
@@ -145,28 +151,31 @@ const CanteenManagerWidget = () => {
   const items = selectedCanteen?.items ?? [];
 
   return (
-    <Card className="bg-card text-card-foreground shadow-xl border-border overflow-hidden">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-secondary-neon/10 to-transparent p-6 border-b border-border">
+    <Card className="bg-card text-card-foreground shadow-2xl border-border overflow-hidden group">
+      {/* Dynamic Header Section */}
+      <div className={cn(
+        "transition-colors duration-500 p-6 border-b border-border relative",
+        isOpen ? "bg-secondary-neon/5" : "bg-destructive/5 grayscale-[0.5]"
+      )}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <Store className="h-6 w-6 text-secondary-neon" /> 
-              Campus Bites Manager
+          <div className="space-y-1">
+            <CardTitle className="text-3xl font-black italic tracking-tighter flex items-center gap-2 uppercase">
+              <Store className={cn("h-7 w-7 transition-colors", isOpen ? "text-secondary-neon" : "text-muted-foreground")} /> 
+              Kitchen<span className="text-secondary-neon">Control</span>
             </CardTitle>
-            <CardDescription>Manage menus and availability in real-time.</CardDescription>
+            <CardDescription className="font-medium text-xs uppercase tracking-widest opacity-70">Live Menu Management</CardDescription>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Dialog open={isAddCanteenDialogOpen} onOpenChange={setIsAddCanteenDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 shadow-sm">
-                  <Plus className="h-4 w-4 mr-1" /> New Outlet
+                <Button size="sm" className="bg-secondary-neon text-primary-foreground font-bold shadow-neon hover:shadow-none active:scale-95 transition-all">
+                  <Plus className="h-4 w-4 mr-1 stroke-[3px]" /> NEW OUTLET
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>Launch New Outlet</DialogTitle>
+                  <DialogTitle className="font-black italic uppercase">Register New Canteen</DialogTitle>
                 </DialogHeader>
                 <AddCanteenForm 
                   onSubmit={handleAddCanteen} 
@@ -175,46 +184,56 @@ const CanteenManagerWidget = () => {
                 />
               </DialogContent>
             </Dialog>
-            <Button variant="outline" size="icon" onClick={refetch} disabled={isUpdating}>
-              <RefreshCw className={cn("h-4 w-4", isUpdating && "animate-spin")} />
+            <Button variant="outline" size="icon" onClick={refetch} disabled={isUpdating} className="rounded-full border-secondary-neon/20 hover:border-secondary-neon">
+              <RefreshCw className={cn("h-4 w-4 text-secondary-neon", isUpdating && "animate-spin")} />
             </Button>
           </div>
         </div>
       </div>
 
-      <CardContent className="p-6">
+      <CardContent className="p-6 space-y-8">
         {allCanteens.length > 0 ? (
-          <div className="space-y-6">
+          <div className="space-y-8">
             
-            {/* Canteen Selector & Status Panel */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end bg-muted/30 p-4 rounded-xl border border-border/50">
+            {/* Control Panel */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
               <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Select Outlet</Label>
+                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest ml-1">Active Outlet</Label>
                 <Select value={selectedCanteenId || ""} onValueChange={setSelectedCanteenId} disabled={isUpdating}>
-                  <SelectTrigger className="w-full h-10 font-medium">
-                    <SelectValue placeholder="Choose a Canteen" />
+                  <SelectTrigger className="w-full h-12 font-bold text-base border-2 bg-muted/20">
+                    <SelectValue placeholder="Choose Canteen" />
                   </SelectTrigger>
                   <SelectContent>
                     {allCanteens.map(canteen => (
-                      <SelectItem key={canteen.$id} value={canteen.$id}>{canteen.name}</SelectItem>
+                      <SelectItem key={canteen.$id} value={canteen.$id} className="font-bold">{canteen.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               {selectedCanteen && (
-                <div className="flex items-center justify-between bg-card p-2 px-4 rounded-lg border border-border shadow-sm">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Live Status</span>
-                    <span className={cn("font-bold flex items-center gap-1.5", isOpen ? "text-green-500" : "text-red-500")}>
-                      {isOpen ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                      {isOpen ? "Accepting Orders" : "Currently Closed"}
-                    </span>
+                <div className={cn(
+                  "flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-500 shadow-sm",
+                  isOpen ? "border-secondary-neon/30 bg-secondary-neon/5" : "border-destructive/20 bg-muted/50 opacity-80"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "p-2.5 rounded-xl transition-colors",
+                      isOpen ? "bg-secondary-neon text-primary-foreground shadow-neon" : "bg-muted text-muted-foreground"
+                    )}>
+                      <Power className="h-5 w-5 stroke-[3px]" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Kitchen Master Switch</span>
+                      <p className={cn("text-sm font-black uppercase", isOpen ? "text-secondary-neon" : "text-destructive")}>
+                        {isOpen ? "Online & Serving" : "Kitchen Offline"}
+                      </p>
+                    </div>
                   </div>
                   <Switch
                     checked={isOpen}
                     onCheckedChange={handleToggleCanteenStatus}
-                    className="data-[state=checked]:bg-green-500"
+                    className="data-[state=checked]:bg-secondary-neon scale-110"
                     disabled={isUpdating}
                   />
                 </div>
@@ -222,36 +241,19 @@ const CanteenManagerWidget = () => {
             </div>
 
             {selectedCanteen && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Utensils className="h-4 w-4 text-muted-foreground" /> Today's Menu
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                    <Package className="h-4 w-4 text-secondary-neon" /> DISH LISTINGS
                   </h3>
-                  <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-secondary-neon hover:bg-secondary-neon/10 hover:text-secondary-neon">
-                        <Plus className="h-4 w-4 mr-1" /> Add Dish
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add to Menu</DialogTitle>
-                      </DialogHeader>
-                      <div className="py-4">
-                        <Label>Item Name</Label>
-                        <Input 
-                          value={newItemName} 
-                          onChange={(e) => setNewItemName(e.target.value)} 
-                          placeholder="e.g. Spicy Chicken Wrap"
-                          className="mt-2"
-                        />
-                      </div>
-                      <DialogFooter>
-                        <Button variant="ghost" onClick={() => setIsAddingItem(false)}>Cancel</Button>
-                        <Button onClick={handleAddItem} className="bg-secondary-neon text-primary-foreground">Add to Menu</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setIsAddingItem(true)}
+                    className="text-secondary-neon hover:bg-secondary-neon/10 font-bold h-8 text-[10px] uppercase tracking-tighter"
+                  >
+                    <Plus className="h-3 w-3 mr-1 stroke-[3px]" /> Add Item
+                  </Button>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
@@ -260,39 +262,39 @@ const CanteenManagerWidget = () => {
                       <div 
                         key={index} 
                         className={cn(
-                          "group flex items-center justify-between p-3 rounded-lg border transition-all duration-200",
+                          "group flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-300",
                           item.available 
-                            ? "bg-card border-border shadow-sm hover:border-secondary-neon/50" 
-                            : "bg-muted/30 border-transparent opacity-70"
+                            ? "bg-card border-secondary-neon/10 shadow-sm hover:border-secondary-neon/40" 
+                            : "bg-muted/10 border-transparent opacity-50 grayscale"
                         )}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
                           <div className={cn(
-                            "h-2 w-2 rounded-full",
-                            item.available ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-500"
+                            "h-3 w-3 rounded-full transition-all duration-500",
+                            item.available ? "bg-secondary-neon shadow-neon scale-110" : "bg-muted"
                           )} />
-                          <span className={cn("font-medium", !item.available && "line-through text-muted-foreground")}>
+                          <span className={cn("text-sm font-bold tracking-tight uppercase transition-all", !item.available && "text-muted-foreground")}>
                             {item.name}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground hidden sm:inline-block">
-                              {item.available ? "In Stock" : "Sold Out"}
+                          <div className="flex items-center gap-3">
+                            <span className={cn("text-[9px] font-black uppercase tracking-widest hidden sm:inline-block", item.available ? "text-secondary-neon" : "text-muted-foreground")}>
+                              {item.available ? "AVAILABLE" : "OUT OF STOCK"}
                             </span>
                             <Switch
                               checked={item.available}
                               onCheckedChange={() => handleToggleAvailability(index)}
                               className="data-[state=checked]:bg-secondary-neon h-5 w-9"
-                              disabled={isUpdating}
+                              disabled={isUpdating || !isOpen} // Disable if canteen is closed
                             />
                           </div>
                           <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleRemoveItem(index)}
-                            className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive hover:bg-destructive/10"
+                            className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive hover:bg-destructive/10 rounded-full"
                             disabled={isUpdating}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -301,10 +303,9 @@ const CanteenManagerWidget = () => {
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-10 border-2 border-dashed border-border rounded-xl">
-                      <Utensils className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-50" />
-                      <p className="text-muted-foreground font-medium">Menu is empty</p>
-                      <p className="text-xs text-muted-foreground/70">Add items to start selling.</p>
+                    <div className="text-center py-12 border-2 border-dashed border-border rounded-3xl bg-muted/5 opacity-50">
+                      <Utensils className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em]">Menu Empty</p>
                     </div>
                   )}
                 </div>
@@ -312,20 +313,46 @@ const CanteenManagerWidget = () => {
             )}
           </div>
         ) : (
-          <div className="text-center py-16 flex flex-col items-center">
-            <div className="h-16 w-16 bg-secondary-neon/10 rounded-full flex items-center justify-center mb-4">
-              <Store className="h-8 w-8 text-secondary-neon" />
+          <div className="text-center py-20 flex flex-col items-center animate-in zoom-in-95 duration-500">
+            <div className="h-20 w-20 bg-secondary-neon/10 rounded-3xl flex items-center justify-center mb-6 rotate-6 shadow-neon">
+              <Store className="h-10 w-10 text-secondary-neon" />
             </div>
-            <h3 className="text-xl font-bold mb-2">No Outlets Configured</h3>
-            <p className="text-muted-foreground max-w-sm mb-6">
-              Get started by adding your first canteen or food outlet to manage orders.
+            <h3 className="text-2xl font-black italic uppercase tracking-tighter mb-2">No Active Outlets</h3>
+            <p className="text-muted-foreground text-xs font-medium max-w-xs mb-8 uppercase tracking-widest leading-relaxed">
+              Launch your first canteen to start dominating campus hunger.
             </p>
-            <Button onClick={() => setIsAddCanteenDialogOpen(true)} className="bg-secondary-neon text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Create First Outlet
+            <Button onClick={() => setIsAddCanteenDialogOpen(true)} className="bg-secondary-neon text-primary-foreground font-black px-8 py-6 rounded-2xl shadow-neon hover:shadow-none active:scale-95 transition-all uppercase tracking-widest">
+              Create First Outlet
             </Button>
           </div>
         )}
       </CardContent>
+
+      {/* Item Addition Dialog */}
+      <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="font-black italic uppercase">Add Dish to Menu</DialogTitle>
+          </DialogHeader>
+          <div className="py-6 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Dish Identity</Label>
+              <Input 
+                value={newItemName} 
+                onChange={(e) => setNewItemName(e.target.value)} 
+                placeholder="e.g. EXTRA CHEESE DOSA"
+                className="h-12 font-bold uppercase"
+                autoFocus
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground font-bold italic">* New items will match the current kitchen status ({isOpen ? 'LIVE' : 'OFFLINE'})</p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsAddingItem(false)} className="font-bold">ABORT</Button>
+            <Button onClick={handleAddItem} className="bg-secondary-neon text-primary-foreground font-bold px-8">CONFIRM DISH</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
