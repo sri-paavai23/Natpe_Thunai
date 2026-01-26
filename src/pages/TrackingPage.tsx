@@ -8,15 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { 
   IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, Camera, 
   ShieldCheck, XCircle, PackageCheck,
   MessageCircle, Briefcase, Wallet, Ban, Hourglass,
-  Save, Zap, ArrowRight, UserCircle, Target
+  Save, Zap, ArrowRight, UserCircle, Target, 
+  Lock as LockIcon // ALIASED TO AVOID TS CONFLICTS
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { 
   databases, 
@@ -195,7 +195,7 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
                   <Target className="h-3 w-3" /> Bounty Reward
                 </Label>
                 {item.isUserProvider && marketItem.appwriteStatus === 'initiated' && (
-                   <span className="text-[8px] font-bold text-muted-foreground animate-pulse underline">NEGOTIATE NOW</span>
+                   <span className="text-[8px] font-bold text-muted-foreground animate-pulse underline uppercase">Set Negotiated Price</span>
                 )}
               </div>
               <div className="flex gap-2">
@@ -245,14 +245,14 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
 
             {!isCompleted && marketItem && !item.isUserProvider && ['negotiating', 'initiated'].includes(marketItem.appwriteStatus) ? (
                 <Button 
-                  className="h-11 bg-green-600 hover:bg-green-700 text-white font-black text-xs uppercase rounded-xl shadow-lg shadow-green-500/20 animate-in fade-in zoom-in-95" 
+                  className="h-11 bg-green-600 hover:bg-green-700 text-white font-black text-xs uppercase rounded-xl shadow-lg shadow-green-500/20" 
                   onClick={initiatePayment} 
                   disabled={marketItem.amount <= 0}
                 >
                     {marketItem.amount > 0 ? (
                       <span className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Pay ₹{marketItem.amount}</span>
                     ) : (
-                      <span className="flex items-center gap-2 opacity-50"><Lock className="h-3 w-3" /> Locked</span>
+                      <span className="flex items-center gap-2 opacity-50"><LockIcon className="h-3 w-3" /> Locked</span>
                     )}
                 </Button>
             ) : (
@@ -325,7 +325,7 @@ const TrackingPage = () => {
     try {
         if (action === "update_errand_price") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { amount: payload.amount });
-            toast.success("Hustle updated! Reward amount synced.");
+            toast.success("Bounty reward updated!");
             refreshData();
         }
     } catch (e: any) { toast.error("Action failed"); }
@@ -388,8 +388,8 @@ const TrackingPage = () => {
       <div className="max-w-md mx-auto space-y-6">
         <Tabs defaultValue="all" className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-muted/20 p-1 rounded-2xl border border-border/50 h-12">
-                <TabsTrigger value="all" className="text-[11px] font-black uppercase rounded-xl data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground transition-all">Active Deals ({activeTasks.length})</TabsTrigger>
-                <TabsTrigger value="history" className="text-[11px] font-black uppercase rounded-xl data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground transition-all">Past Gigs</TabsTrigger>
+                <TabsTrigger value="all" className="text-[11px] font-black uppercase rounded-xl data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground transition-all">Active ({activeTasks.length})</TabsTrigger>
+                <TabsTrigger value="history" className="text-[11px] font-black uppercase rounded-xl data-[state=active]:bg-secondary-neon data-[state=active]:text-primary-foreground transition-all">History</TabsTrigger>
             </TabsList>
             
             <TabsContent value="all" className="pt-6 space-y-4">
