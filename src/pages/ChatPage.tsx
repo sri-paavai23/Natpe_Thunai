@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-  Loader2, MessageSquareText, Send, ArrowLeft, 
-  ShieldCheck, AlertTriangle, Info, MoreVertical, Link2, Cloud
+  Loader2, Send, ArrowLeft, ShieldCheck, AlertTriangle, 
+  Info, MoreVertical, Link2, Cloud, Plus, Image as ImageIcon, X 
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -19,12 +19,18 @@ import {
   APPWRITE_DATABASE_ID, 
   APPWRITE_CHAT_ROOMS_COLLECTION_ID, 
   APPWRITE_CHAT_MESSAGES_COLLECTION_ID,
-  APPWRITE_REPORTS_COLLECTION_ID // Imported Reports Collection
+  APPWRITE_REPORTS_COLLECTION_ID
 } from "@/lib/appwrite";
 import { Models, ID, Query } from "appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { MadeWithDyad } from "@/components/made-with-dyad";
+import imageCompression from 'browser-image-compression';
+
+// --- CLOUDINARY CONFIG ---
+const CLOUDINARY_CLOUD_NAME = "dpusuqjvo"; 
+const CLOUDINARY_UPLOAD_PRESET = "natpe_thunai_preset"; 
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 // --- INTERFACES ---
 interface ChatRoom extends Models.Document {
@@ -43,7 +49,8 @@ interface ChatMessage extends Models.Document {
   senderId: string;
   senderUsername: string;
   content: string;
-  type?: "text" | "safety_alert" | "system";
+  type?: "text" | "image" | "safety_alert" | "system";
+  imageUrl?: string;
 }
 
 const ChatPage = () => {
@@ -58,6 +65,11 @@ const ChatPage = () => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   
+  // Image Upload State
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // --- 1. INITIAL FETCH & REALTIME SUBSCRIPTION ---
@@ -69,14 +81,12 @@ const ChatPage = () => {
     const setupChat = async () => {
       setIsLoadingChat(true);
       try {
-        // A. Fetch Room Details
         const roomDoc = await databases.getDocument(
           APPWRITE_DATABASE_ID,
           APPWRITE_CHAT_ROOMS_COLLECTION_ID,
           chatRoomId
         ) as unknown as ChatRoom;
 
-        // Security Check
         if (roomDoc.buyerId !== user.$id && roomDoc.providerId !== user.$id) {
           toast.error("Access denied.");
           navigate("/activity"); 
@@ -84,7 +94,6 @@ const ChatPage = () => {
         }
         setChatRoom(roomDoc);
 
-        // B. Fetch Message History
         const messagesResponse = await databases.listDocuments(
           APPWRITE_DATABASE_ID,
           APPWRITE_CHAT_MESSAGES_COLLECTION_ID,
@@ -96,7 +105,6 @@ const ChatPage = () => {
         );
         setMessages(messagesResponse.documents as unknown as ChatMessage[]);
 
-        // C. Subscribe to NEW Messages
         unsubscribe = databases.client.subscribe(
           `databases.${APPWRITE_DATABASE_ID}.collections.${APPWRITE_CHAT_MESSAGES_COLLECTION_ID}.documents`,
           (response) => {
@@ -132,17 +140,61 @@ const ChatPage = () => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages, isLoadingChat]);
+  }, [messages, isLoadingChat, previewUrl]); // Scroll when preview appears too
 
-  // --- 3. SEND MESSAGE ---
+  // --- 3. HANDLE IMAGE SELECTION ---
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 5 * 1024 * 1024) { // 5MB Limit Check
+              toast.error("Image too large. Max 5MB allowed.");
+              return;
+          }
+          setSelectedImage(file);
+          setPreviewUrl(URL.createObjectURL(file));
+      }
+  };
+
+  const clearImageSelection = () => {
+      setSelectedImage(null);
+      setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // --- 4. SEND MESSAGE (TEXT or IMAGE) ---
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedMessage = newMessage.trim();
 
-    if (!trimmedMessage || !user || !chatRoomId) return;
+    if ((!trimmedMessage && !selectedImage) || !user || !chatRoomId) return;
 
     setIsSendingMessage(true);
+    
     try {
+      let finalImageUrl = "";
+      let messageType = "text";
+
+      // A. Upload Image if Selected
+      if (selectedImage) {
+          messageType = "image";
+          
+          // Compress
+          const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1024, useWebWorker: true };
+          const compressedFile = await imageCompression(selectedImage, options);
+
+          // Upload to Cloudinary
+          const formData = new FormData();
+          formData.append("file", compressedFile);
+          formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+          const uploadRes = await fetch(CLOUDINARY_URL, { method: "POST", body: formData });
+          if (!uploadRes.ok) throw new Error("Image upload failed");
+          
+          const uploadData = await uploadRes.json();
+          finalImageUrl = uploadData.secure_url;
+      }
+
+      // B. Save to Database
       await databases.createDocument(
         APPWRITE_DATABASE_ID,
         APPWRITE_CHAT_MESSAGES_COLLECTION_ID,
@@ -151,11 +203,16 @@ const ChatPage = () => {
           chatRoomId: chatRoomId,
           senderId: user.$id,
           senderUsername: user.name,
-          content: trimmedMessage,
-          type: "text"
+          content: trimmedMessage || (selectedImage ? "Sent an image" : ""), // Fallback text
+          type: messageType,
+          imageUrl: finalImageUrl 
         }
       );
+
+      // C. Reset State
       setNewMessage(""); 
+      clearImageSelection();
+
     } catch (error: any) {
       console.error("Send Message Failed:", error);
       toast.error(`Failed to send: ${error.message || "Unknown error"}`);
@@ -164,11 +221,9 @@ const ChatPage = () => {
     }
   };
 
-  // --- 4. REPORT USER LOGIC (CONNECTED TO BACKEND) ---
+  // --- 5. REPORT USER LOGIC ---
   const handleReportUser = async (reason: string) => {
     if (!user || !chatRoom) return;
-
-    // Identify the "Other" person being reported
     const reportedUserId = user.$id === chatRoom.buyerId ? chatRoom.providerId : chatRoom.buyerId;
     const reportedUserName = user.$id === chatRoom.buyerId ? chatRoom.providerUsername : chatRoom.buyerUsername;
 
@@ -180,20 +235,17 @@ const ChatPage = () => {
             {
                 reporterId: user.$id,
                 reporterName: user.name,
-                sellerId: reportedUserId, // Using 'sellerId' field for the reported user's ID to match Schema
-                productTitle: `Chat Report: ${reportedUserName}`, // Context
+                sellerId: reportedUserId, 
+                productTitle: `Chat Report: ${reportedUserName}`, 
                 reason: reason,
                 message: `Reported from chat room ID: ${chatRoom.$id}. Transaction Ref: ${chatRoom.transactionId}`,
                 status: "Pending",
                 collegeName: chatRoom.collegeName
             }
         );
-        toast.success("User reported successfully.", {
-            description: "Our safety team has been notified and will review the chat logs."
-        });
+        toast.success("User reported successfully.");
     } catch (error: any) {
-        console.error("Report Error:", error);
-        toast.error("Failed to submit report. Please try again.");
+        toast.error("Failed to submit report.");
     } finally {
         setIsReportDialogOpen(false);
     }
@@ -224,7 +276,7 @@ const ChatPage = () => {
         
         <Card className="bg-card text-card-foreground shadow-xl border-border h-[80vh] flex flex-col overflow-hidden">
           
-          {/* --- HEADER: IDENTITY & SAFETY --- */}
+          {/* --- HEADER --- */}
           <CardHeader className="p-3 border-b border-border/50 bg-secondary/5 flex flex-row items-center justify-between space-y-0">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -269,7 +321,6 @@ const ChatPage = () => {
             {/* Messages Area */}
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-background">
               
-              {/* --- 1. SAFETY BANNER --- */}
               <div className="mx-auto max-w-[95%] bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-lg p-3 text-center">
                 <p className="text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center justify-center gap-1.5 mb-1">
                   <ShieldCheck className="h-3 w-3" /> Safe Exchange Zone
@@ -279,26 +330,12 @@ const ChatPage = () => {
                 </p>
               </div>
 
-              {/* --- 2. DRIVE LINK TIP --- */}
-              <div className="mx-auto max-w-[95%] bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800 rounded-lg p-2 flex items-start gap-2.5">
-                 <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-full shrink-0 mt-0.5">
-                    <Cloud className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                 </div>
-                 <div className="text-left">
-                    <p className="text-[10px] text-amber-700 dark:text-amber-300 font-medium leading-tight">
-                        Sharing large files?
-                    </p>
-                    <p className="text-[10px] text-amber-600 dark:text-amber-400/80 leading-tight mt-0.5">
-                        Please paste <strong>Google Drive / OneDrive</strong> links here instead of switching to WhatsApp. This keeps your number private and the transaction verified.
-                    </p>
-                 </div>
-              </div>
-
-              {/* Messages List */}
               {messages.length === 0 ? (
                 <div className="h-20 flex flex-col items-center justify-center text-muted-foreground opacity-50 mt-4">
-                    <MessageSquareText className="h-8 w-8 mb-2" />
-                    <p className="text-xs">Start the conversation...</p>
+                    <div className="bg-muted p-4 rounded-full mb-2">
+                        <ImageIcon className="h-6 w-6" />
+                    </div>
+                    <p className="text-xs">No messages yet. Say hello!</p>
                 </div>
               ) : (
                 messages.map((msg) => {
@@ -313,16 +350,16 @@ const ChatPage = () => {
                       )}>
                         {!isMe && <p className="text-[9px] font-bold opacity-70 mb-0.5 text-secondary-neon">{msg.senderUsername}</p>}
                         
-                        {/* Auto-detect Links */}
-                        <p className="leading-relaxed whitespace-pre-wrap">
-                            {msg.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) => (
-                                part.match(/https?:\/\/[^\s]+/) ? (
-                                    <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="underline text-blue-300 hover:text-white flex items-center gap-1">
-                                        <Link2 className="h-3 w-3 inline" /> link
-                                    </a>
-                                ) : part
-                            ))}
-                        </p>
+                        {/* IMAGE RENDERING */}
+                        {msg.type === 'image' && msg.imageUrl && (
+                            <div className="mb-2 rounded-lg overflow-hidden border border-white/20">
+                                <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
+                                    <img src={msg.imageUrl} alt="Shared content" className="max-w-full h-auto object-cover" />
+                                </a>
+                            </div>
+                        )}
+
+                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         
                         <p className="text-[9px] text-right mt-1 opacity-60">
                           {new Date(msg.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -336,28 +373,63 @@ const ChatPage = () => {
             
             {/* Input Area */}
             <div className="p-3 bg-card border-t border-border">
+                {/* PREVIEW AREA */}
+                {previewUrl && (
+                    <div className="mb-2 relative inline-block">
+                        <img src={previewUrl} alt="Preview" className="h-20 w-20 object-cover rounded-lg border border-border" />
+                        <button 
+                            onClick={clearImageSelection}
+                            className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-0.5 shadow-md hover:scale-110 transition-transform"
+                        >
+                            <X className="h-3 w-3" />
+                        </button>
+                    </div>
+                )}
+
                 <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
-                <Input
-                    placeholder="Type a message or paste a Drive link..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    className="flex-grow bg-input text-foreground border-border focus:ring-secondary-neon transition-all min-h-[44px]"
-                    disabled={isSendingMessage}
-                />
-                <Button 
-                    type="submit" 
-                    size="icon" 
-                    className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 shadow-md h-11 w-11 shrink-0" 
-                    disabled={isSendingMessage || !newMessage.trim()}
-                >
-                    {isSendingMessage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                </Button>
+                    {/* HIDDEN FILE INPUT */}
+                    <input 
+                        type="file" 
+                        ref={fileInputRef}
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileSelect}
+                    />
+                    
+                    {/* + BUTTON */}
+                    <Button 
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-secondary-neon h-11 w-11 shrink-0 rounded-full bg-muted/30"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isSendingMessage}
+                    >
+                        <Plus className="h-6 w-6" />
+                    </Button>
+
+                    <Input
+                        placeholder="Type a message..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        className="flex-grow bg-input text-foreground border-border focus:ring-secondary-neon transition-all min-h-[44px] rounded-2xl"
+                        disabled={isSendingMessage}
+                    />
+                    
+                    <Button 
+                        type="submit" 
+                        size="icon" 
+                        className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 shadow-md h-11 w-11 shrink-0 rounded-full" 
+                        disabled={isSendingMessage || (!newMessage.trim() && !selectedImage)}
+                    >
+                        {isSendingMessage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5 ml-0.5" />}
+                    </Button>
                 </form>
             </div>
           </CardContent>
         </Card>
 
-        {/* Report Dialog - Connected to Backend */}
+        {/* Report Dialog */}
         <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
