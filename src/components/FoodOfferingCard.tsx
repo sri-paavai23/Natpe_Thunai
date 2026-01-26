@@ -5,12 +5,13 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Star, Clock, Plus, Flame, ArrowRight } from "lucide-react";
+import { Star, Clock, Flame, ArrowRight, User } from "lucide-react";
 import { ServicePost } from "@/hooks/useServiceListings";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import PlaceFoodOrderForm from "./forms/PlaceFoodOrderForm"; 
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext"; // Import Auth Context
 
 interface FoodOfferingCardProps {
   offering: ServicePost;
@@ -22,11 +23,12 @@ interface FoodServicePost extends ServicePost {
 }
 
 const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
+  const { user } = useAuth(); // Get current user
   const navigate = useNavigate();
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
   const foodItem = offering as FoodServicePost;
 
-  // Visual Logic
+  // Logic
   const isMeal = foodItem.category === "homemade-meals";
   const imageKeyword = isMeal ? "curry" : "tea";
   const imageUrl = `https://source.unsplash.com/400x300/?food,${imageKeyword}&sig=${foodItem.$id}`;
@@ -36,17 +38,13 @@ const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
       foodItem.title.toLowerCase().includes("chicken");
 
   const prepTime = foodItem.timeEstimate || "20-30 min";
+  
+  // FIX: Check if current user is the poster
+  const isOwner = user?.$id === foodItem.posterId;
 
-  /**
-   * UNIVERSAL FLOW REDIRECTION
-   * After the PlaceFoodOrderForm successfully creates a document in the 
-   * 'food_orders' collection, we lock the deal and jump to tracking.
-   */
   const handleOrderSuccess = () => {
     setIsOrderDialogOpen(false);
     toast.success("Order Locked! Redirecting to tracking log...");
-    
-    // Jump directly to Tracking to handle payment and status updates
     navigate("/tracking");
   };
 
@@ -110,27 +108,34 @@ const FoodOfferingCard: React.FC<FoodOfferingCardProps> = ({ offering }) => {
             <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter -mt-1">per plate</span>
         </div>
 
-        <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 h-10 px-6 font-black uppercase text-xs shadow-neon transition-all active:scale-95 rounded-xl">
-              GET FOOD <ArrowRight className="ml-2 h-4 w-4" />
+        {/* FIX: Prevent owner from buying own food */}
+        {isOwner ? (
+            <Button size="sm" variant="secondary" disabled className="h-10 px-6 font-bold text-xs opacity-70">
+                <User className="mr-2 h-4 w-4" /> Your Listing
             </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[95%] sm:max-w-[425px] bg-card text-card-foreground border-border rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 font-black italic text-xl">
-                 <Flame className="h-6 w-6 text-orange-500 fill-orange-500" /> ORDER SUMMARY
-              </DialogTitle>
-            </DialogHeader>
-            
-            <PlaceFoodOrderForm 
-              mode="buy"
-              offering={foodItem}
-              onOrderPlaced={handleOrderSuccess} 
-              onCancel={() => setIsOrderDialogOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
+        ) : (
+            <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 h-10 px-6 font-black uppercase text-xs shadow-neon transition-all active:scale-95 rounded-xl">
+                  GET FOOD <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[95%] sm:max-w-[425px] bg-card text-card-foreground border-border rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 font-black italic text-xl">
+                      <Flame className="h-6 w-6 text-orange-500 fill-orange-500" /> ORDER SUMMARY
+                  </DialogTitle>
+                </DialogHeader>
+                
+                <PlaceFoodOrderForm 
+                  mode="buy"
+                  offering={foodItem}
+                  onOrderPlaced={handleOrderSuccess} 
+                  onCancel={() => setIsOrderDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+        )}
       </CardFooter>
     </Card>
   );
