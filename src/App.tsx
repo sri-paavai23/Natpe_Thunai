@@ -47,10 +47,12 @@ import DeveloperDashboardPage from "./pages/DeveloperDashboardPage";
 import ImageToUrlHelpPage from "./pages/ImageToUrlHelpPage";
 import ServicePaymentConfirmationPage from "./pages/ServicePaymentConfirmationPage";
 import ChatPage from "./pages/ChatPage";
-import EscrowPayment from "./pages/EscrowPayment"; // Updated Payment Page
+import EscrowPayment from "./pages/EscrowPayment";
 
 // Import the Offline Game Page
 import OfflinePage from "./pages/OfflinePage";
+
+// REMOVED: import PlaceFoodOrderForm (This caused the error because it's a component, not a page)
 
 const queryClient = new QueryClient();
 
