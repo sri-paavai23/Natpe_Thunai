@@ -30,7 +30,6 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Query, ID } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
-import { DEVELOPER_UPI_ID } from "@/lib/config";
 
 // --- CONFIG ---
 const CLOUD_NAME = "dpusuqjvo";
@@ -192,6 +191,7 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [evidenceMode, setEvidenceMode] = useState<"upload_handover" | "upload_return" | "view_handover">("view_handover");
   const [isUploading, setIsUploading] = useState(false);
+  const navigate = useNavigate();
 
   const handleEvidenceUpload = async (file: File) => {
     setIsUploading(true);
@@ -238,29 +238,20 @@ const TrackingCard = ({ item, onAction, currentUser, onChat }: { item: TrackingI
   };
 
   /**
-   * BUG FIX: UPI REDIRECTION REFACTOR
-   * 1. Added encodeURIComponent to handle special characters/spaces in titles and names.
-   * 2. Added .toFixed(2) to Amount (Strictly required by most UPI apps).
-   * 3. Added 'tr' (Transaction Reference) using timestamp to prevent "Duplicate Transaction" errors.
-   * 4. Switched to window.location.href for better mobile intent handling.
+   * REFACTOR: UNIVERSAL ESCROW REDIRECTION
+   * Uses the centralized EscrowPayment page for bug-free P2P transactions.
    */
   const initiatePayment = () => {
       if(!marketItem) return;
       
-      const payeeId = DEVELOPER_UPI_ID;
-      const payeeName = encodeURIComponent("Natpe Thunai Escrow");
-      const transactionNote = encodeURIComponent(`Payment for ${marketItem.productTitle}`);
-      const amount = Number(marketItem.amount).toFixed(2); // Fixes 50 -> 50.00
-      const transactionRef = `NT${marketItem.id.substring(0,8)}${Date.now()}`; // Unique ID
+      const queryParams = new URLSearchParams({
+        amount: marketItem.amount.toString(),
+        txnId: marketItem.id,
+        title: marketItem.productTitle
+      }).toString();
 
-      const upiLink = `upi://pay?pa=${payeeId}&pn=${payeeName}&am=${amount}&cu=INR&tn=${transactionNote}&tr=${transactionRef}`;
-      
-      try {
-        window.location.href = upiLink; // Safer than window.open for deep links
-        setShowPaymentModal(true);
-      } catch (err) {
-        toast.error("Could not open UPI apps. Please try manual payment.");
-      }
+      // Redirect to universal gateway
+      navigate(`/escrow-payment?${queryParams}`);
   };
 
   const partnerName = item.isUserProvider ? (item as any).buyerName : (item.type === 'Food Order' ? (item as any).providerName : (item as any).sellerName);
@@ -490,25 +481,46 @@ const TrackingPage = () => {
     }
   };
 
+  /**
+   * ENHANCEMENT: DEDUPLICATION & DEAL LOCKING
+   * Ensures only one card per 'Deal' (Product/Offering) is shown.
+   * Priority is given to the 'Very First' card created for that deal.
+   */
   const refreshData = useCallback(async () => {
     if (!user?.$id) return;
     setIsLoading(true);
     try {
-      const response = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, [Query.or([Query.equal('buyerId', user.$id), Query.equal('sellerId', user.$id)]), Query.orderDesc('$createdAt')]);
+      const response = await databases.listDocuments(
+        APPWRITE_DATABASE_ID, 
+        APPWRITE_TRANSACTIONS_COLLECTION_ID, 
+        [
+          Query.or([Query.equal('buyerId', user.$id), Query.equal('sellerId', user.$id)]), 
+          Query.orderAsc('$createdAt') // Fetch chronologically to lock the 'First' deal card
+        ]
+      );
       
-      const uniqueItemsMap = new Map<string, TrackingItem>();
+      const uniqueDealsMap = new Map<string, TrackingItem>();
 
+      // Process Market Transactions (Unique by ProductId or ID if custom)
       response.documents.forEach((doc: any) => {
         const item = processTransactionDoc(doc, user.$id);
-        uniqueItemsMap.set(item.id, item);
+        const dealKey = item.productId || item.id; 
+        if (!uniqueDealsMap.has(dealKey)) {
+            uniqueDealsMap.set(dealKey, item);
+        }
       });
 
-      initialFoodOrders.forEach(o => {
+      // Process Food Orders (Unique by OfferingTitle + ProviderId)
+      initialFoodOrders.sort((a,b) => new Date(a.$createdAt).getTime() - new Date(b.$createdAt).getTime()).forEach(o => {
         const item = processFoodDoc(o, user.$id);
-        uniqueItemsMap.set(item.id, item);
+        const dealKey = `${item.offeringTitle}_${item.providerId}`;
+        if (!uniqueDealsMap.has(dealKey)) {
+            uniqueDealsMap.set(dealKey, item);
+        }
       });
 
-      const sortedItems = Array.from(uniqueItemsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+      // Sort final list by most recent for the UI
+      const sortedItems = Array.from(uniqueDealsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
       setItems(sortedItems);
 
     } catch (e) { toast.error("Sync failed."); } 
@@ -535,9 +547,17 @@ const TrackingPage = () => {
 
             if (isRelevant) {
                 setItems((prevItems) => {
-                    const newItemsMap = new Map(prevItems.map(i => [i.id, i]));
-                    let newItem: TrackingItem | null = null;
+                    // Re-apply unique deal logic on real-time update
+                    const newDealsMap = new Map();
+                    
+                    // Re-sort current items chronologically to maintain "First Card" priority
+                    const chronologicalItems = [...prevItems].sort((a,b) => a.timestamp - b.timestamp);
+                    chronologicalItems.forEach(i => {
+                        const key = (i as any).productId || (i as any).offeringTitle + (i as any).providerId || i.id;
+                        newDealsMap.set(key, i);
+                    });
 
+                    let newItem: TrackingItem | null = null;
                     if (doc.productTitle) { 
                         newItem = processTransactionDoc(doc, user.$id);
                     } else if (doc.offeringTitle) { 
@@ -545,13 +565,17 @@ const TrackingPage = () => {
                     }
 
                     if (newItem) {
+                        const newItemKey = (newItem as any).productId || (newItem as any).offeringTitle + (newItem as any).providerId || newItem.id;
                         if (eventType.includes('.delete')) {
-                            newItemsMap.delete(newItem.id);
+                            newDealsMap.delete(newItemKey);
                         } else {
-                            newItemsMap.set(newItem.id, newItem);
+                            // Only add if this specific deal isn't already being tracked
+                            if (!newDealsMap.has(newItemKey)) {
+                                newDealsMap.set(newItemKey, newItem);
+                            }
                         }
                     }
-                    return Array.from(newItemsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+                    return Array.from(newDealsMap.values()).sort((a, b) => (b as any).timestamp - (a as any).timestamp);
                 });
             }
         }
