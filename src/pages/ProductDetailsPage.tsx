@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   Loader2, ArrowLeft, MessageCircle, Percent, 
   MapPin, ShieldCheck, Share2, AlertTriangle, 
-  ShoppingCart, Heart
+  ShoppingCart, Heart, Handshake
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -72,7 +72,7 @@ const ProductDetailsPage = () => {
   }, [productId, user, navigate]);
 
   // --- 2. PAYMENT FLOW: CHAT FIRST ---
-  const handleChatToBuy = async () => {
+  const handleStartDeal = async () => {
     if (!user) {
       toast.error("Please login to buy items.");
       return;
@@ -91,7 +91,7 @@ const ProductDetailsPage = () => {
         [
             Query.equal('productId', product.$id),
             Query.equal('buyerId', user.$id),
-            Query.notEqual('status', 'completed') // Allow re-buying if previous was completed (unlikely but safe)
+            Query.notEqual('status', 'completed') 
         ]
       );
 
@@ -109,28 +109,26 @@ const ProductDetailsPage = () => {
         {
           productId: product.$id,
           productTitle: product.title,
-          amount: parseFloat(product.price.replace(/[^0-9.]/g, '')), // Extract number from "₹500"
+          amount: parseFloat(product.price.replace(/[^0-9.]/g, '')), 
           buyerId: user.$id,
           buyerName: user.name,
           sellerId: product.userId,
           sellerName: product.sellerName,
           sellerUpiId: product.sellerUpiId || "default@upi",
-          status: "negotiating", // <--- KEY CHANGE: Starts as negotiating
-          type: product.type || "buy", // 'buy', 'rent', etc.
+          status: "negotiating", 
+          type: product.type || "buy", 
           collegeName: product.collegeName,
           ambassadorDelivery: product.ambassadorDelivery,
           isBargain: bargainStatus === 'accepted'
         }
       );
 
-      toast.success("Interest Registered! Chat with the seller to finalize.");
-      
-      // Redirect to Tracking Page where Chat & Payment buttons live
+      toast.success("Deal Started! Check Activity Log.");
       navigate("/tracking");
 
     } catch (error: any) {
       console.error(error);
-      toast.error("Failed to start chat.");
+      toast.error("Failed to start deal.");
     } finally {
       setIsProcessing(false);
     }
@@ -184,7 +182,7 @@ const ProductDetailsPage = () => {
   const discountPrice = (numericPrice * 0.85).toFixed(0);
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-24">
+    <div className="min-h-screen bg-background text-foreground pb-32 relative">
       
       {/* HEADER IMAGE */}
       <div className="relative h-[40vh] w-full bg-muted">
@@ -197,16 +195,16 @@ const ProductDetailsPage = () => {
         <Button 
             variant="secondary" 
             size="icon" 
-            className="absolute top-4 left-4 rounded-full bg-background/50 backdrop-blur-md hover:bg-background"
+            className="absolute top-4 left-4 rounded-full bg-background/50 backdrop-blur-md hover:bg-background z-10"
             onClick={() => navigate(-1)}
         >
             <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="absolute bottom-4 left-4">
+        <div className="absolute bottom-4 left-4 z-10">
             <Badge variant="secondary" className="bg-secondary-neon text-primary-foreground font-black uppercase tracking-widest mb-2">
                 {product.type === 'rent' ? 'RENTAL' : 'FOR SALE'}
             </Badge>
-            <h1 className="text-3xl font-black uppercase text-foreground leading-tight">{product.title}</h1>
+            <h1 className="text-3xl font-black uppercase text-foreground leading-tight drop-shadow-md">{product.title}</h1>
         </div>
       </div>
 
@@ -282,7 +280,7 @@ const ProductDetailsPage = () => {
         </div>
 
         {/* SAFETY WARNING */}
-        <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex gap-3">
+        <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex gap-3 mb-20">
             <AlertTriangle className="h-5 w-5 text-blue-500 shrink-0" />
             <p className="text-xs text-blue-600 dark:text-blue-400 leading-snug">
                 <strong>Safe Trade:</strong> Always chat within the app. Do not transfer money outside the Escrow system.
@@ -291,33 +289,33 @@ const ProductDetailsPage = () => {
 
       </div>
 
-      {/* FOOTER ACTIONS */}
-      <div className="fixed bottom-0 left-0 w-full bg-background/80 backdrop-blur-lg border-t border-border p-4 pb-6 z-20">
-         <div className="max-w-3xl mx-auto flex gap-3">
+      {/* FOOTER ACTIONS - Z-INDEX BOOSTED TO 50 */}
+      <div className="fixed bottom-0 left-0 w-full bg-background/95 backdrop-blur-xl border-t-2 border-border p-4 pb-6 z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.1)]">
+         <div className="max-w-3xl mx-auto flex gap-3 items-center">
             {isOwner ? (
-                <Button className="w-full" disabled>This is your item</Button>
+                <Button className="w-full opacity-50 cursor-not-allowed font-bold" variant="secondary">Your Item</Button>
             ) : (
                 <>
                     {/* BARGAIN BUTTON */}
                     {bargainStatus === 'none' && (
                         <Button 
                             variant="outline" 
-                            className="flex-1 h-12 rounded-xl font-bold border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10"
+                            className="flex-1 h-12 rounded-xl font-bold border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10 text-xs uppercase tracking-wider"
                             onClick={() => setIsBargainOpen(true)}
                         >
-                            <Percent className="h-4 w-4 mr-2" /> Make Offer
+                            <Percent className="h-4 w-4 mr-2" /> Offer Price
                         </Button>
                     )}
                     
-                    {/* CHAT TO BUY BUTTON */}
+                    {/* START DEAL BUTTON */}
                     <Button 
-                        onClick={handleChatToBuy} 
+                        onClick={handleStartDeal} 
                         disabled={isProcessing}
-                        className="flex-[2] h-12 rounded-xl bg-secondary-neon text-primary-foreground font-black text-lg shadow-neon hover:scale-[1.02] transition-transform"
+                        className="flex-[2] h-12 rounded-xl bg-secondary-neon text-primary-foreground font-black text-sm uppercase shadow-neon hover:scale-[1.02] transition-transform tracking-widest"
                     >
                         {isProcessing ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                             <span className="flex items-center gap-2">
-                                <MessageCircle className="h-5 w-5" /> CHAT TO BUY
+                                <Handshake className="h-5 w-5" /> START DEAL
                             </span>
                         )}
                     </Button>
