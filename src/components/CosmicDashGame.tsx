@@ -2,19 +2,19 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Trophy, Play, RotateCcw, Zap, Activity, ChevronUp } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Zap, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // --- CONFIGURATION ---
 const PHYSICS = {
-  PLAYER_SIZE: 24,
+  PLAYER_SIZE: 30, // Slightly larger for better visibility
   GRAVITY_FLY: 0.25,
-  GRAVITY_RUN: 0.6,
+  GRAVITY_RUN: 0.7,
   JUMP_FLY: -6,
-  JUMP_RUN: -11,
-  SPEED_BASE: 4,
-  SPEED_MAX: 9,
-  PHASE_SCORE: 10, // Score to switch modes
+  JUMP_RUN: -12, // Stronger jump
+  SPEED_BASE: 5,
+  SPEED_MAX: 10,
+  PHASE_SCORE: 10, 
 };
 
 interface GameEntity {
@@ -47,22 +47,20 @@ const CosmicDashGame: React.FC = () => {
 
   // Mutable Game Engine State
   const engine = useRef({
-    // Physics
     playerY: 0,
     velocity: 0,
-    floorY: 0, // Dynamic floor position
+    floorY: 0,
     targetFloorY: 0,
     speed: PHYSICS.SPEED_BASE,
-    
-    // Entities
     obstacles: [] as GameEntity[],
     particles: [] as Particle[],
     bgOffset: 0,
-    
-    // Loop
     lastTime: 0,
     frameId: 0,
     scoreRef: 0,
+    // Store logical dimensions to sync render & logic
+    logicalWidth: 0,
+    logicalHeight: 0
   });
 
   // --- 1. SETUP & RESIZE ---
@@ -76,59 +74,73 @@ const CosmicDashGame: React.FC = () => {
         const parent = containerRef.current;
         const dpr = window.devicePixelRatio || 1;
         
-        // Match CSS size
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
+        // 1. Set Physical Size (for sharpness)
         canvas.width = parent.clientWidth * dpr;
         canvas.height = parent.clientHeight * dpr;
         
+        // 2. Set CSS Size (for layout)
+        canvas.style.width = `${parent.clientWidth}px`;
+        canvas.style.height = `${parent.clientHeight}px`;
+        
+        // 3. Scale Context (so 1 unit = 1 CSS pixel)
         const ctx = canvas.getContext('2d');
-        if(ctx) ctx.scale(dpr, dpr);
+        if(ctx) {
+            ctx.scale(dpr, dpr);
+            // Optimization: Disable text rendering during resizing
+            ctx.imageSmoothingEnabled = false; 
+        }
 
-        // Reset Player Position on Resize
-        engine.current.playerY = parent.clientHeight / 2;
-        engine.current.floorY = parent.clientHeight + 200; // Start floor off-screen
+        // 4. Update Engine Logical Dimensions
+        engine.current.logicalWidth = parent.clientWidth;
+        engine.current.logicalHeight = parent.clientHeight;
+
+        // Reset positions if IDLE to prevent getting stuck
+        if (gameState === 'IDLE') {
+            engine.current.playerY = parent.clientHeight / 2;
+            engine.current.floorY = parent.clientHeight + 200;
+        }
       }
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Init
+    handleResize(); // Init immediately
 
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [gameState]);
 
   // --- 2. GAME ENGINE ---
   const spawnObstacle = (width: number, height: number, mode: 'FLY' | 'RUN') => {
-    const minGap = 180;
+    const minGap = 200; // Wider gap for better playability
     
     if (mode === 'FLY') {
-      const pipeHeight = Math.random() * (height * 0.4) + 50;
+      const pipeHeight = Math.random() * (height * 0.3) + 50;
       const gap = Math.random() * 100 + minGap;
-      
+      const safeGap = Math.min(gap, height - pipeHeight - 50); // Ensure bottom pipe fits
+
       // Top Pipe
       engine.current.obstacles.push({
-        x: width, y: 0, w: 50, h: pipeHeight, 
+        x: width, y: 0, w: 60, h: pipeHeight, 
         type: 'PIPE', passed: false 
       });
       // Bottom Pipe
       engine.current.obstacles.push({
-        x: width, y: pipeHeight + gap, w: 50, h: height - (pipeHeight + gap), 
+        x: width, y: pipeHeight + safeGap, w: 60, h: height - (pipeHeight + safeGap), 
         type: 'PIPE', passed: false 
       });
     } else {
-      // Runner Mode Obstacles
-      const isFlyingEnemy = Math.random() > 0.7;
-      const floorLevel = height - 50;
+      // Runner Mode
+      const isFlyingEnemy = Math.random() > 0.6;
+      const floorLevel = height - 50; // Floor is 50px from bottom
 
       if (isFlyingEnemy) {
         engine.current.obstacles.push({
-          x: width, y: floorLevel - 90, w: 40, h: 40, 
+          x: width, y: floorLevel - 100, w: 40, h: 40, 
           type: 'FLYER', passed: false 
         });
       } else {
-        const h = Math.random() * 40 + 30;
+        const h = Math.random() * 50 + 40;
         engine.current.obstacles.push({
-          x: width, y: floorLevel - h, w: 30, h: h, 
+          x: width, y: floorLevel - h, w: 40, h: h, 
           type: 'BLOCK', passed: false 
         });
       }
@@ -136,36 +148,37 @@ const CosmicDashGame: React.FC = () => {
   };
 
   const createParticles = (x: number, y: number, color: string, burst: boolean) => {
-    const count = burst ? 15 : 3;
+    const count = burst ? 20 : 5;
     for (let i = 0; i < count; i++) {
       engine.current.particles.push({
         x, y,
-        vx: (Math.random() - 0.5) * (burst ? 12 : 5),
-        vy: (Math.random() - 0.5) * (burst ? 12 : 5),
+        vx: (Math.random() - 0.5) * (burst ? 15 : 6),
+        vy: (Math.random() - 0.5) * (burst ? 15 : 6),
         life: 1.0,
         color
       });
     }
   };
 
-  const updatePhysics = (deltaTime: number, width: number, height: number) => {
+  const updatePhysics = (deltaTime: number) => {
     const st = engine.current;
+    const width = st.logicalWidth;
+    const height = st.logicalHeight;
     
-    // --- MODE SWITCH LOGIC ---
+    // --- MODE SWITCH ---
     const targetMode = st.scoreRef >= PHYSICS.PHASE_SCORE ? 'RUN' : 'FLY';
-    
     if (targetMode !== activeMode) {
-      setActiveMode(targetMode); // React State Sync
+      setActiveMode(targetMode);
       if (targetMode === 'RUN') {
-        createParticles(width/2, height/2, '#00f3ff', true); // Visual Boom
+        createParticles(width/2, height/2, '#00f3ff', true);
       }
     }
 
     // Floor Animation
-    st.targetFloorY = targetMode === 'RUN' ? height - 50 : height + 200;
-    st.floorY += (st.targetFloorY - st.floorY) * 0.05; // Smooth Lerp
+    st.targetFloorY = targetMode === 'RUN' ? height - 50 : height + 300;
+    st.floorY += (st.targetFloorY - st.floorY) * 0.08;
 
-    // Gravity & Velocity
+    // Gravity
     const gravity = targetMode === 'FLY' ? PHYSICS.GRAVITY_FLY : PHYSICS.GRAVITY_RUN;
     st.velocity += gravity * deltaTime;
     st.playerY += st.velocity * deltaTime;
@@ -176,7 +189,7 @@ const CosmicDashGame: React.FC = () => {
         st.playerY = st.floorY - PHYSICS.PLAYER_SIZE;
         st.velocity = 0;
       } else {
-        return 'CRASH'; // Die if hitting bottom in Fly mode
+        return 'CRASH'; // Fly mode floor death
       }
     }
 
@@ -187,12 +200,11 @@ const CosmicDashGame: React.FC = () => {
     }
 
     // --- OBSTACLES ---
-    // Spawn Logic
     const lastObs = st.obstacles[st.obstacles.length - 1];
-    const spawnBuffer = targetMode === 'RUN' ? 400 : 250;
+    const spawnBuffer = targetMode === 'RUN' ? 450 : 300;
     
-    // Don't spawn pipes if we are about to switch to run mode (Score 8-10)
-    const transitionZone = st.scoreRef >= 8 && st.scoreRef < 10;
+    // Safe Zone during transition (Score 8-12) to prevent cheap deaths
+    const transitionZone = st.scoreRef >= 8 && st.scoreRef < 11;
     
     if (!transitionZone && (!lastObs || (width - lastObs.x > spawnBuffer))) {
       spawnObstacle(width, height, targetMode);
@@ -203,14 +215,12 @@ const CosmicDashGame: React.FC = () => {
       let o = st.obstacles[i];
       o.x -= st.speed * deltaTime;
 
-      // Score Counting
+      // Scoring
       if (!o.passed && o.x + o.w < width * 0.15) {
         o.passed = true;
-        // Only add score once per column
         if(o.type !== 'PIPE' || o.y === 0) {
            st.scoreRef += 1;
            setScore(st.scoreRef);
-           // Increase speed slightly
            st.speed = Math.min(st.speed + 0.05, PHYSICS.SPEED_MAX);
         }
       }
@@ -218,14 +228,14 @@ const CosmicDashGame: React.FC = () => {
       // Cleanup
       if (o.x + o.w < -100) st.obstacles.splice(i, 1);
 
-      // COLLISION DETECTION (AABB with buffer)
-      const pX = width * 0.15; // Player X position fixed at 15% screen width
-      const buffer = 6; 
+      // Collision (Smaller Hitbox for fairness)
+      const pX = width * 0.15;
+      const hitboxBuffer = 8; 
       if (
-        pX + buffer < o.x + o.w &&
-        pX + PHYSICS.PLAYER_SIZE - buffer > o.x &&
-        st.playerY + buffer < o.y + o.h &&
-        st.playerY + PHYSICS.PLAYER_SIZE - buffer > o.y
+        pX + hitboxBuffer < o.x + o.w &&
+        pX + PHYSICS.PLAYER_SIZE - hitboxBuffer > o.x &&
+        st.playerY + hitboxBuffer < o.y + o.h &&
+        st.playerY + PHYSICS.PLAYER_SIZE - hitboxBuffer > o.y
       ) {
         return 'CRASH';
       }
@@ -243,135 +253,115 @@ const CosmicDashGame: React.FC = () => {
     return 'OK';
   };
 
-  const drawGame = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  const drawGame = (ctx: CanvasRenderingContext2D) => {
     const st = engine.current;
+    const width = st.logicalWidth;
+    const height = st.logicalHeight;
     
-    // Clear
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Dynamic Background
+    // 1. Background
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
     if (activeMode === 'FLY') {
-        gradient.addColorStop(0, '#0f172a'); // Slate 900
-        gradient.addColorStop(1, '#1e293b'); // Slate 800
+        gradient.addColorStop(0, '#0f172a'); 
+        gradient.addColorStop(1, '#1e293b'); 
     } else {
-        gradient.addColorStop(0, '#2e1065'); // Violet 950
-        gradient.addColorStop(1, '#4c1d95'); // Violet 900
+        gradient.addColorStop(0, '#2e1065'); 
+        gradient.addColorStop(1, '#4c1d95'); 
     }
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    // Grid Effect (Runner Mode)
-    if (activeMode === 'RUN' || st.floorY < height) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
-        const gridSize = 50;
-        st.bgOffset = (st.bgOffset - st.speed) % gridSize;
+    // 2. Floor
+    if (st.floorY < height + 50) {
+        ctx.fillStyle = activeMode === 'RUN' ? '#a855f7' : '#38bdf8';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.fillRect(0, st.floorY, width, 6);
+        ctx.shadowBlur = 0;
         
-        ctx.beginPath();
-        // Vertical moving lines
-        for (let x = st.bgOffset; x < width; x += gridSize) {
-            ctx.moveTo(x, st.floorY);
-            ctx.lineTo(x - (height - st.floorY) * 2, height); // Perspective slant
-        }
-        // Horizontal lines below floor
-        for (let y = st.floorY; y < height; y += 20) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
-        }
-        ctx.stroke();
+        // Dark fill below
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(0, st.floorY + 6, width, height - st.floorY);
     }
 
-    // 2. Draw Floor
-    ctx.fillStyle = activeMode === 'RUN' ? '#a855f7' : '#38bdf8'; // Purple or Blue
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = ctx.fillStyle;
-    ctx.fillRect(0, st.floorY, width, 4);
-    ctx.shadowBlur = 0;
-    
-    // Fill below floor
-    ctx.fillStyle = '#020617';
-    ctx.fillRect(0, st.floorY + 4, width, height - st.floorY);
-
-    // 3. Draw Player
+    // 3. Player
     const pX = width * 0.15;
     ctx.save();
     ctx.translate(pX + PHYSICS.PLAYER_SIZE/2, st.playerY + PHYSICS.PLAYER_SIZE/2);
     
-    // Visual Rotation
     if (activeMode === 'FLY') {
         const rot = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (st.velocity * 0.1)));
         ctx.rotate(rot);
     } else {
-        // Bobbing while running
-        if (st.playerY >= st.floorY - PHYSICS.PLAYER_SIZE - 1) {
-            ctx.scale(1, 1 - Math.sin(Date.now()/50)*0.1); 
+        if (st.playerY >= st.floorY - PHYSICS.PLAYER_SIZE - 2) {
+            // Running Bob
+            ctx.scale(1, 1 - Math.sin(Date.now()/60)*0.15); 
         } else {
-            ctx.rotate(st.velocity * 0.05); // Spin jump
+            // Spin Jump
+            ctx.rotate(st.velocity * 0.1); 
         }
     }
 
-    // Neon Glow
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 20;
     ctx.shadowColor = activeMode === 'FLY' ? '#38bdf8' : '#e879f9';
     ctx.fillStyle = '#ffffff';
     
-    // Player Shape (Rounded Box)
+    // Player Body
     const s = PHYSICS.PLAYER_SIZE;
     ctx.beginPath();
-    ctx.roundRect(-s/2, -s/2, s, s, 6);
+    ctx.roundRect(-s/2, -s/2, s, s, 8);
     ctx.fill();
     ctx.restore();
 
-    // 4. Draw Obstacles
+    // 4. Obstacles
     st.obstacles.forEach(o => {
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 15;
         if (o.type === 'PIPE') {
-            ctx.fillStyle = '#38bdf8'; // Blue
+            ctx.fillStyle = '#38bdf8'; 
             ctx.shadowColor = '#0ea5e9';
         } else if (o.type === 'FLYER') {
-            ctx.fillStyle = '#f43f5e'; // Red
+            ctx.fillStyle = '#f43f5e'; 
             ctx.shadowColor = '#e11d48';
         } else {
-            ctx.fillStyle = '#c084fc'; // Purple
+            ctx.fillStyle = '#c084fc'; 
             ctx.shadowColor = '#a855f7';
         }
         ctx.fillRect(o.x, o.y, o.w, o.h);
     });
     ctx.shadowBlur = 0;
 
-    // 5. Draw Particles
+    // 5. Particles
     st.particles.forEach(p => {
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.random() * 4, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, Math.random() * 5, 0, Math.PI * 2);
         ctx.fill();
     });
     ctx.globalAlpha = 1.0;
   };
 
-  // --- 3. LOOP & INPUT ---
+  // --- 3. LOOP ---
   const loop = (time: number) => {
     if (gameState !== 'PLAYING') return;
 
     const canvas = canvasRef.current;
     if(!canvas) return;
-    
     const ctx = canvas.getContext('2d');
     if(!ctx) return;
 
-    // Delta Time Logic
+    // Time Delta Cap
     const rawDelta = (time - engine.current.lastTime) / 16;
-    const dt = Math.min(rawDelta, 2.5); // Cap delta to prevent skipping
+    const dt = Math.min(rawDelta, 2.0); 
     engine.current.lastTime = time;
 
-    const result = updatePhysics(dt, canvas.width, canvas.height);
+    const result = updatePhysics(dt);
     
     if (result === 'CRASH') {
         gameOver();
     } else {
-        drawGame(ctx, canvas.width, canvas.height);
+        drawGame(ctx);
         engine.current.frameId = requestAnimationFrame(loop);
     }
   };
@@ -382,12 +372,11 @@ const CosmicDashGame: React.FC = () => {
 
     if (activeMode === 'FLY') {
         st.velocity = PHYSICS.JUMP_FLY;
-        createParticles(window.innerWidth * 0.15, st.playerY + PHYSICS.PLAYER_SIZE, '#fff', false);
+        createParticles(st.logicalWidth * 0.15, st.playerY + PHYSICS.PLAYER_SIZE, '#fff', false);
     } else {
-        // Can only jump if on floor in Run mode
         if (st.playerY >= st.floorY - PHYSICS.PLAYER_SIZE - 5) {
             st.velocity = PHYSICS.JUMP_RUN;
-            createParticles(window.innerWidth * 0.15 + 10, st.floorY, '#a855f7', true); // Dust kick
+            createParticles(st.logicalWidth * 0.15 + 10, st.floorY, '#a855f7', true);
         }
     }
   }, [gameState, activeMode]);
@@ -395,15 +384,19 @@ const CosmicDashGame: React.FC = () => {
   const startGame = () => {
     if (containerRef.current) {
         const h = containerRef.current.clientHeight;
+        const w = containerRef.current.clientWidth;
         engine.current = {
             ...engine.current,
             playerY: h / 2,
             velocity: 0,
             floorY: h + 200,
+            targetFloorY: h + 200,
             obstacles: [],
             particles: [],
             scoreRef: 0,
             speed: PHYSICS.SPEED_BASE,
+            logicalHeight: h,
+            logicalWidth: w,
             lastTime: performance.now()
         };
     }
@@ -422,7 +415,7 @@ const CosmicDashGame: React.FC = () => {
     }
   };
 
-  // --- INPUT LISTENERS ---
+  // --- EVENTS ---
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
         if (e.code === 'Space' || e.code === 'ArrowUp') {
@@ -433,19 +426,18 @@ const CosmicDashGame: React.FC = () => {
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [gameState, activeMode]); // Dependencies matter for jump logic
+  }, [gameState, activeMode]);
 
   return (
     <div 
       ref={containerRef}
       className="relative w-full h-[100dvh] overflow-hidden bg-slate-950 select-none touch-none"
-      onMouseDown={(e) => { e.preventDefault(); if (gameState === 'PLAYING') jump(); }}
-      onTouchStart={(e) => { e.preventDefault(); if (gameState === 'PLAYING') jump(); }}
+      onMouseDown={(e) => { e.preventDefault(); if (gameState === 'IDLE' || gameState === 'GAME_OVER') startGame(); else jump(); }}
+      onTouchStart={(e) => { e.preventDefault(); if (gameState === 'IDLE' || gameState === 'GAME_OVER') startGame(); else jump(); }}
     >
-      {/* CANVAS LAYER */}
       <canvas ref={canvasRef} className="block w-full h-full" />
 
-      {/* --- HUD OVERLAY --- */}
+      {/* HUD */}
       <div className="absolute top-0 left-0 w-full p-6 flex justify-between pointer-events-none z-10">
          <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-4">
             <div className={cn(
@@ -469,7 +461,7 @@ const CosmicDashGame: React.FC = () => {
          </div>
       </div>
 
-      {/* --- MENUS --- */}
+      {/* MENU SCREENS */}
       {gameState === 'IDLE' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-20">
            <div className="text-center animate-in zoom-in-95 duration-300">
@@ -477,15 +469,11 @@ const CosmicDashGame: React.FC = () => {
                  COSMIC
               </h1>
               <h2 className="text-2xl md:text-4xl font-light text-white tracking-[0.5em] mb-8 opacity-90">SHIFT</h2>
-              
               <Button 
-                onClick={(e) => { e.stopPropagation(); startGame(); }}
-                className="group relative px-10 py-8 bg-white text-black hover:bg-cyan-50 rounded-full font-black text-xl tracking-widest shadow-[0_0_40px_rgba(34,211,238,0.6)] transition-all hover:scale-105 active:scale-95"
+                className="group relative px-10 py-8 bg-white text-black hover:bg-cyan-50 rounded-full font-black text-xl tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95"
               >
                  <Play className="w-6 h-6 mr-2 fill-black" /> START
-                 <div className="absolute inset-0 rounded-full ring-2 ring-white animate-ping opacity-50" />
               </Button>
-
               <div className="mt-8 flex gap-4 text-xs font-mono text-slate-400 bg-black/50 px-6 py-3 rounded-xl border border-white/10">
                  <div className="flex items-center gap-1"><span className="text-cyan-400">●</span> Tap to Fly</div>
                  <div className="w-[1px] h-4 bg-slate-600" />
@@ -497,38 +485,18 @@ const CosmicDashGame: React.FC = () => {
 
       {gameState === 'GAME_OVER' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md z-30">
-           <div className="bg-slate-900/80 p-8 rounded-3xl border border-white/10 shadow-2xl text-center w-[90%] max-w-sm animate-in fade-in slide-in-from-bottom-8">
+           <div className="bg-slate-900/90 p-8 rounded-3xl border border-white/10 shadow-2xl text-center w-[90%] max-w-sm animate-in fade-in slide-in-from-bottom-8">
               <h3 className="text-3xl font-black text-red-500 tracking-widest mb-1">CRASHED</h3>
               <p className="text-slate-400 text-xs uppercase tracking-widest mb-6">Synchronization Lost</p>
-              
               <div className="flex justify-center items-end gap-1 mb-8">
                  <span className="text-7xl font-black text-white leading-none">{score}</span>
                  <span className="text-sm font-bold text-slate-500 mb-1">PTS</span>
               </div>
-
-              {score >= highScore && score > 0 && (
-                 <div className="absolute top-[-15px] left-1/2 -translate-x-1/2 bg-yellow-500 text-black px-4 py-1 rounded-full text-xs font-black flex items-center gap-1 shadow-lg animate-bounce">
-                    <Trophy className="w-3 h-3 fill-black" /> NEW RECORD
-                 </div>
-              )}
-
-              <Button 
-                onClick={(e) => { e.stopPropagation(); startGame(); }}
-                className="w-full py-7 bg-white text-black hover:bg-slate-200 font-bold text-lg rounded-xl shadow-xl transition-transform active:scale-95"
-              >
-                 <RotateCcw className="w-5 h-5 mr-2" /> TRY AGAIN
+              <Button className="w-full py-7 bg-white text-black hover:bg-slate-200 font-bold text-lg rounded-xl shadow-xl transition-transform active:scale-95">
+                 <RotateCcw className="w-5 h-5 mr-2" /> RESTART
               </Button>
            </div>
         </div>
-      )}
-
-      {/* --- MOBILE CONTROL HINT (Bottom Fade) --- */}
-      {gameState === 'PLAYING' && (
-         <div className="absolute bottom-10 left-0 w-full text-center pointer-events-none opacity-40 animate-pulse">
-            <span className="text-white/50 text-xs font-black uppercase tracking-widest bg-black/20 px-4 py-2 rounded-full backdrop-blur-sm">
-               {activeMode === 'FLY' ? 'Tap to Float' : 'Tap to Jump'}
-            </span>
-         </div>
       )}
     </div>
   );
