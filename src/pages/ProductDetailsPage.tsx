@@ -1,378 +1,359 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, IndianRupee, Wallet, X, AlertCircle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
+  Loader2, ArrowLeft, MessageCircle, Percent, 
+  MapPin, ShieldCheck, Share2, AlertTriangle, 
+  ShoppingCart, Heart
+} from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
 import { 
   databases, 
   APPWRITE_DATABASE_ID, 
-  APPWRITE_FOOD_ORDERS_COLLECTION_ID, // Ensure this is imported
+  APPWRITE_PRODUCTS_COLLECTION_ID,
   APPWRITE_TRANSACTIONS_COLLECTION_ID 
 } from "@/lib/appwrite";
-import { ID } from "appwrite";
-import { DEVELOPER_UPI_ID } from "@/lib/config";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+import { ID, Query } from "appwrite";
+import { useAuth } from "@/context/AuthContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
-interface PlaceFoodOrderFormProps {
-  mode: "buy" | "sell" | "request";
-  offering?: any; 
-  onSubmit?: (data: any) => void; 
-  onOrderPlaced?: () => void;
-  onCancel: () => void;
-}
+const ProductDetailsPage = () => {
+  const { productId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-const PlaceFoodOrderForm: React.FC<PlaceFoodOrderFormProps> = ({ 
-  mode, 
-  offering, 
-  onSubmit, 
-  onOrderPlaced, 
-  onCancel 
-}) => {
-  const { user, userProfile } = useAuth();
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // BUY MODE STATE
-  const [quantity, setQuantity] = useState(1);
-  const [deliveryLocation, setDeliveryLocation] = useState("");
-  const [notes, setNotes] = useState(""); 
-  const [paymentStep, setPaymentStep] = useState<'initial' | 'verify'>('initial');
-  const [transactionId, setTransactionId] = useState("");
-  
-  // Ambassador State
-  const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
-  const [ambassadorMessage, setAmbassadorMessage] = useState("");
+  // Bargain State
+  const [isBargainOpen, setIsBargainOpen] = useState(false);
+  const [bargainStatus, setBargainStatus] = useState<'none' | 'pending' | 'accepted'>('none');
 
-  // SELL/REQUEST MODE STATE
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState("homemade-meals");
-  const [dietaryType, setDietaryType] = useState("veg");
-  const [timeEstimate, setTimeEstimate] = useState("30 min");
-
-  // --- HELPER: ROBUST PRICE PARSER ---
-  const parsePrice = (priceStr: string | number): number => {
-    if (typeof priceStr === 'number') return priceStr;
-    if (!priceStr) return 0;
-    const numericPart = priceStr.toString().replace(/[^0-9.]/g, '');
-    return parseFloat(numericPart) || 0;
-  };
-
-  // --- BUY LOGIC (ORDERING) ---
-  const handleInitiatePayment = () => {
-    if (!user || !offering) return;
-    
-    if (!deliveryLocation.trim()) {
-        toast.error("Please enter a delivery spot (e.g., Room 304).");
-        return;
-    }
-
-    // Generic UPI Intent (No parameters to ensure app opens successfully)
-    const upiLink = "upi://pay";
-    
-    // Create hidden link for robust mobile launching
-    const link = document.createElement('a');
-    link.href = upiLink;
-    link.rel = 'noreferrer';
-    document.body.appendChild(link);
-    
-    try {
-        link.click();
-        toast.info("Opening App...", {
-            description: "Please paste the UPI ID and enter the amount manually."
-        });
-        setPaymentStep('verify');
-    } catch (e) {
-        toast.error("Could not open UPI app. Please pay manually.");
-        setPaymentStep('verify');
-    } finally {
-        document.body.removeChild(link);
-    }
-  };
-
-  const handleConfirmOrder = async () => {
-    if (isProcessing) return; // Prevent double click
-    if (!user || !offering) return;
-    if (!transactionId.trim()) {
-        toast.error("Please enter the Transaction ID (UTR).");
-        return;
-    }
-
-    setIsProcessing(true); // LOCK UI
-    try {
-        const priceVal = parsePrice(offering.price);
-        const totalAmount = priceVal * quantity;
+  // --- 1. FETCH PRODUCT ---
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        if (!productId) return;
+        const doc = await databases.getDocument(
+          APPWRITE_DATABASE_ID, 
+          APPWRITE_PRODUCTS_COLLECTION_ID, 
+          productId
+        );
+        setProduct(doc);
         
-        // 1. Prepare Order Data for 'food_orders' collection
-        const orderData = {
-            offeringId: String(offering.$id),
-            offeringTitle: String(offering.title).substring(0, 99),
-            providerId: String(offering.posterId),
-            providerName: String(offering.posterName),
-            buyerId: String(user.$id),
-            buyerName: String(user.name),
-            quantity: Number(quantity),
-            totalAmount: Number(totalAmount.toFixed(2)),
-            deliveryLocation: String(deliveryLocation),
-            status: "Pending Confirmation",
-            transactionId: String(transactionId),
-            collegeName: String(userProfile?.collegeName || "Unknown"),
-            notes: String(notes), 
-            ambassadorDelivery: Boolean(ambassadorDelivery), 
-            ambassadorMessage: String(ambassadorMessage)
-        };
+        // Check bargain status if user is logged in
+        if (user) {
+            const bargains = await databases.listDocuments(
+                APPWRITE_DATABASE_ID,
+                'bargain_requests', // Assuming collection ID is literal or imported
+                [
+                    Query.equal('productId', productId),
+                    Query.equal('buyerId', user.$id)
+                ]
+            );
+            if(bargains.documents.length > 0) {
+                setBargainStatus(bargains.documents[0].status);
+            }
+        }
+      } catch (error) {
+        toast.error("Product not found");
+        navigate("/market");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProduct();
+  }, [productId, user, navigate]);
 
-        // 2. Prepare Transaction Data for 'transactions' ledger
-        const transactionData = {
-            productId: orderData.offeringId,
-            productTitle: `Food: ${orderData.offeringTitle} (x${quantity})`,
-            buyerId: orderData.buyerId,
-            buyerName: orderData.buyerName,
-            sellerId: orderData.providerId,
-            sellerName: orderData.providerName,
-            sellerUpiId: offering.sellerUpiId || "default@upi",
-            amount: orderData.totalAmount,
-            status: "payment_confirmed_to_developer",
-            type: "food",
-            collegeName: orderData.collegeName,
-            ambassadorDelivery: orderData.ambassadorDelivery,
-            utrId: orderData.transactionId,
-            isBargain: false
-        };
-
-        // 3. Parallel Writes to Correct Collections
-        await Promise.all([
-            // Primary Order Record -> 'food_orders'
-            databases.createDocument(
-                APPWRITE_DATABASE_ID, 
-                APPWRITE_FOOD_ORDERS_COLLECTION_ID, // <--- EXPLICITLY USING FOOD ORDERS
-                ID.unique(), 
-                orderData
-            ),
-            // Financial Record -> 'transactions'
-            databases.createDocument(
-                APPWRITE_DATABASE_ID, 
-                APPWRITE_TRANSACTIONS_COLLECTION_ID, 
-                ID.unique(), 
-                transactionData
-            )
-        ]);
-
-        toast.success("Order Placed Successfully!");
-        if (onOrderPlaced) onOrderPlaced();
-
-    } catch (error: any) {
-        console.error("Order Error:", error);
-        toast.error(`Order Failed: ${error.message || "Unknown error"}`);
-        setIsProcessing(false); // Unlock only on error
+  // --- 2. PAYMENT FLOW: CHAT FIRST ---
+  const handleChatToBuy = async () => {
+    if (!user) {
+      toast.error("Please login to buy items.");
+      return;
     }
-  };
-
-  // --- SELL/REQUEST LOGIC ---
-  const handlePostSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isProcessing) return; 
-
-    if (!title || !price || !description) {
-      toast.error("Please fill all fields.");
+    if (user.$id === product.userId) {
+      toast.error("You cannot buy your own item.");
       return;
     }
 
-    setIsProcessing(true); 
-    const postData = {
-      title, description, price, category, dietaryType, timeEstimate,
-      isCustomOrder: mode === "request", status: "active"
-    };
-    
-    // Pass data up to parent (which handles writing to 'services' collection)
-    if (onSubmit) onSubmit(postData);
-    
-    // Simulate delay or wait for parent to close
-    setTimeout(() => setIsProcessing(false), 3000); 
+    setIsProcessing(true);
+    try {
+      // Check if a transaction already exists to avoid duplicates
+      const existing = await databases.listDocuments(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        [
+            Query.equal('productId', product.$id),
+            Query.equal('buyerId', user.$id),
+            Query.notEqual('status', 'completed') // Allow re-buying if previous was completed (unlikely but safe)
+        ]
+      );
+
+      if (existing.documents.length > 0) {
+        toast.info("Active chat found! Redirecting...");
+        navigate("/tracking");
+        return;
+      }
+
+      // Create Initial Transaction Record (Status: Negotiating)
+      await databases.createDocument(
+        APPWRITE_DATABASE_ID,
+        APPWRITE_TRANSACTIONS_COLLECTION_ID,
+        ID.unique(),
+        {
+          productId: product.$id,
+          productTitle: product.title,
+          amount: parseFloat(product.price.replace(/[^0-9.]/g, '')), // Extract number from "₹500"
+          buyerId: user.$id,
+          buyerName: user.name,
+          sellerId: product.userId,
+          sellerName: product.sellerName,
+          sellerUpiId: product.sellerUpiId || "default@upi",
+          status: "negotiating", // <--- KEY CHANGE: Starts as negotiating
+          type: product.type || "buy", // 'buy', 'rent', etc.
+          collegeName: product.collegeName,
+          ambassadorDelivery: product.ambassadorDelivery,
+          isBargain: bargainStatus === 'accepted'
+        }
+      );
+
+      toast.success("Interest Registered! Chat with the seller to finalize.");
+      
+      // Redirect to Tracking Page where Chat & Payment buttons live
+      navigate("/tracking");
+
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Failed to start chat.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  // --- RENDER: BUY MODE ---
-  if (mode === "buy" && offering) {
-    const priceVal = parsePrice(offering.price);
-    const total = (priceVal * quantity).toFixed(0);
+  // --- 3. BARGAIN LOGIC (Preserved) ---
+  const handleMakeOffer = async () => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+        const originalPrice = parseFloat(product.price.replace(/[^0-9.]/g, ''));
+        const discountPrice = originalPrice * 0.85; // 15% rule
 
-    return (
-      <div className="space-y-5 pt-2">
-        {paymentStep === 'initial' ? (
-            <>
-                <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-lg p-3 flex items-start gap-3">
-                    <div className="p-1 bg-red-100 dark:bg-red-900/30 rounded-full mt-0.5">
-                        <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div>
-                        <h4 className="text-sm font-bold text-red-700 dark:text-red-400">No Cancellation</h4>
-                        <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5 leading-snug">
-                            Orders cannot be cancelled once preparation starts.
-                        </p>
-                    </div>
-                </div>
+        await databases.createDocument(
+            APPWRITE_DATABASE_ID,
+            'bargain_requests',
+            ID.unique(),
+            {
+                productId: product.$id,
+                productTitle: product.title,
+                buyerId: user.$id,
+                buyerName: user.name,
+                sellerId: product.userId,
+                originalAmount: originalPrice,
+                requestedAmount: discountPrice,
+                status: 'pending',
+                type: 'product'
+            }
+        );
+        setBargainStatus('pending');
+        toast.success("Offer sent to seller!");
+        setIsBargainOpen(false);
+    } catch (error) {
+        toast.error("Failed to send offer.");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
 
-                <div className="grid grid-cols-[80px_1fr] gap-4">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-bold text-foreground/80">Qty</Label>
-                        <div className="flex items-center justify-center border-2 border-primary/20 rounded-xl h-11 relative overflow-hidden bg-background focus-within:border-secondary-neon transition-colors">
-                            <Input 
-                                type="number" 
-                                min="1" 
-                                value={quantity} 
-                                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                                className="absolute inset-0 w-full h-full text-center text-lg font-bold bg-transparent border-none focus-visible:ring-0 px-0 z-10"
-                            />
-                            <div className="absolute inset-0 bg-secondary-neon/5 pointer-events-none" />
-                        </div>
-                    </div>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-secondary-neon" />
+    </div>
+  );
 
-                    <div className="space-y-1.5">
-                        <Label className="text-xs font-bold text-foreground/80">Delivery Spot</Label>
-                        <Input 
-                            placeholder="e.g. Block C, Room 404" 
-                            className="h-11 rounded-xl bg-muted/30 border-border/50 focus-visible:ring-secondary-neon"
-                            value={deliveryLocation}
-                            onChange={(e) => setDeliveryLocation(e.target.value)}
-                        />
-                    </div>
-                </div>
+  if (!product) return null;
 
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-bold text-foreground/80">Instructions</Label>
-                    <Textarea 
-                        placeholder="e.g. Extra spicy, don't ring bell..." 
-                        className="min-h-[80px] rounded-xl bg-muted/30 border-border/50 resize-none focus-visible:ring-secondary-neon"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                    />
-                </div>
+  // Visuals
+  const isOwner = user?.$id === product.userId;
+  const numericPrice = parseFloat(product.price.replace(/[^0-9.]/g, ''));
+  const discountPrice = (numericPrice * 0.85).toFixed(0);
 
-                <div className="py-2">
-                    <AmbassadorDeliveryOption 
-                        ambassadorDelivery={ambassadorDelivery}
-                        setAmbassadorDelivery={setAmbassadorDelivery}
-                        ambassadorMessage={ambassadorMessage}
-                        setAmbassadorMessage={setAmbassadorMessage}
-                    />
-                </div>
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-24">
+      
+      {/* HEADER IMAGE */}
+      <div className="relative h-[40vh] w-full bg-muted">
+        <img 
+            src={product.imageUrl} 
+            alt={product.title} 
+            className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+        <Button 
+            variant="secondary" 
+            size="icon" 
+            className="absolute top-4 left-4 rounded-full bg-background/50 backdrop-blur-md hover:bg-background"
+            onClick={() => navigate(-1)}
+        >
+            <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="absolute bottom-4 left-4">
+            <Badge variant="secondary" className="bg-secondary-neon text-primary-foreground font-black uppercase tracking-widest mb-2">
+                {product.type === 'rent' ? 'RENTAL' : 'FOR SALE'}
+            </Badge>
+            <h1 className="text-3xl font-black uppercase text-foreground leading-tight">{product.title}</h1>
+        </div>
+      </div>
 
-                <div className="flex gap-3 pt-2">
-                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold border-border/60 hover:bg-muted" onClick={onCancel}>
-                        <X className="w-4 h-4 mr-2" /> Close
-                    </Button>
-                    <Button 
-                        onClick={handleInitiatePayment} 
-                        className="flex-[2] h-12 rounded-xl bg-[#22c55e] hover:bg-[#16a34a] text-white font-black text-lg shadow-lg shadow-green-500/20"
-                    >
-                        Pay ₹{total}
-                    </Button>
-                </div>
-            </>
-        ) : (
-            <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 pt-2">
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-800 text-center space-y-2">
-                    <Wallet className="h-8 w-8 text-yellow-600 mx-auto mb-1" />
-                    <h4 className="text-base font-bold text-yellow-800 dark:text-yellow-200">Payment Initiated</h4>
-                    <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
-                        Manually transfer <strong>₹{total}</strong> using your UPI app and paste the UTR (Transaction ID) below.
-                    </p>
-                </div>
-
-                <div className="space-y-2">
-                    <Label className="text-xs font-bold text-foreground/80 uppercase tracking-wider">Transaction ID (UTR)</Label>
-                    <Input 
-                        placeholder="e.g. 329104829102" 
-                        value={transactionId}
-                        onChange={(e) => setTransactionId(e.target.value)}
-                        className="h-12 text-center font-mono text-lg tracking-widest uppercase rounded-xl border-border/60 bg-muted/30 focus-visible:ring-secondary-neon"
-                    />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setPaymentStep('initial')} disabled={isProcessing}>Back</Button>
-                    <Button 
-                        onClick={handleConfirmOrder} 
-                        disabled={isProcessing || !transactionId} 
-                        className="flex-[2] h-12 rounded-xl bg-secondary-neon text-primary-foreground font-bold hover:bg-secondary-neon/90"
-                    >
-                        {isProcessing ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirm Order"}
-                    </Button>
+      <div className="p-5 max-w-3xl mx-auto space-y-6">
+        
+        {/* PRICE & ACTIONS */}
+        <div className="flex justify-between items-start">
+            <div>
+                <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide">Asking Price</p>
+                <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-black text-secondary-neon">
+                        {bargainStatus === 'accepted' ? `₹${discountPrice}` : product.price}
+                    </span>
+                    {bargainStatus === 'accepted' && (
+                        <span className="text-sm text-muted-foreground line-through decoration-red-500">
+                            {product.price}
+                        </span>
+                    )}
                 </div>
             </div>
-        )}
-      </div>
-    );
-  }
+            <div className="flex gap-2">
+                <Button variant="outline" size="icon" className="rounded-full">
+                    <Share2 className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="rounded-full text-red-500 hover:text-red-600 hover:bg-red-50">
+                    <Heart className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
 
-  // --- RENDER: SELL / REQUEST MODE ---
-  return (
-    <form onSubmit={handlePostSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Dish Name {mode === 'request' && "(What do you want?)"}</Label>
-        <Input placeholder="e.g. Chicken Biryani / Ginger Tea" value={title} onChange={(e) => setTitle(e.target.value)} disabled={isProcessing} />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Price (₹)</Label>
-          <div className="relative">
-             <IndianRupee className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-             <Input type="number" placeholder="50" className="pl-8" value={price} onChange={(e) => setPrice(e.target.value)} disabled={isProcessing} />
-          </div>
+        {/* SELLER INFO */}
+        <Card className="border-border/60 bg-card/50">
+            <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 border border-border">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${product.sellerName}`} />
+                        <AvatarFallback>SL</AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <p className="text-sm font-bold">{product.sellerName}</p>
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <MapPin className="h-3 w-3" /> {product.location || "Campus Area"}
+                        </div>
+                    </div>
+                </div>
+                <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/5">
+                    <ShieldCheck className="h-3 w-3 mr-1" /> Verified
+                </Badge>
+            </CardContent>
+        </Card>
+
+        {/* DETAILS */}
+        <div className="space-y-4">
+            <div>
+                <h3 className="font-bold text-lg mb-2">Description</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                    {product.description}
+                </p>
+            </div>
+
+            {product.condition && (
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-muted/30 p-3 rounded-xl border border-border/50">
+                        <span className="text-[10px] uppercase text-muted-foreground font-bold">Condition</span>
+                        <p className="text-sm font-semibold">{product.condition}</p>
+                    </div>
+                    <div className="bg-muted/30 p-3 rounded-xl border border-border/50">
+                        <span className="text-[10px] uppercase text-muted-foreground font-bold">Damages</span>
+                        <p className="text-sm font-semibold">{product.damages || "None"}</p>
+                    </div>
+                </div>
+            )}
         </div>
-        <div className="space-y-2">
-          <Label>Prep Time</Label>
-          <Select value={timeEstimate} onValueChange={setTimeEstimate} disabled={isProcessing}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10 min">10 min</SelectItem>
-              <SelectItem value="20 min">20 min</SelectItem>
-              <SelectItem value="30 min">30 min</SelectItem>
-              <SelectItem value="1 hour">1 hour</SelectItem>
-              <SelectItem value="Pre-order">Pre-order Only</SelectItem>
-            </SelectContent>
-          </Select>
+
+        {/* SAFETY WARNING */}
+        <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-blue-500 shrink-0" />
+            <p className="text-xs text-blue-600 dark:text-blue-400 leading-snug">
+                <strong>Safe Trade:</strong> Always chat within the app. Do not transfer money outside the Escrow system.
+            </p>
         </div>
+
       </div>
-      <div className="space-y-2">
-        <Label>Dietary Type</Label>
-        <RadioGroup value={dietaryType} onValueChange={setDietaryType} className="flex gap-4" disabled={isProcessing}>
-          <div className="flex items-center space-x-2 border p-2 rounded-md w-full cursor-pointer hover:bg-green-50/50 border-green-200">
-            <RadioGroupItem value="veg" id="veg" className="text-green-600 border-green-600" />
-            <Label htmlFor="veg" className="text-green-700 font-bold cursor-pointer">Veg</Label>
-          </div>
-          <div className="flex items-center space-x-2 border p-2 rounded-md w-full cursor-pointer hover:bg-red-50/50 border-red-200">
-            <RadioGroupItem value="non-veg" id="non-veg" className="text-red-600 border-red-600" />
-            <Label htmlFor="non-veg" className="text-red-700 font-bold cursor-pointer">Non-Veg</Label>
-          </div>
-        </RadioGroup>
+
+      {/* FOOTER ACTIONS */}
+      <div className="fixed bottom-0 left-0 w-full bg-background/80 backdrop-blur-lg border-t border-border p-4 pb-6 z-20">
+         <div className="max-w-3xl mx-auto flex gap-3">
+            {isOwner ? (
+                <Button className="w-full" disabled>This is your item</Button>
+            ) : (
+                <>
+                    {/* BARGAIN BUTTON */}
+                    {bargainStatus === 'none' && (
+                        <Button 
+                            variant="outline" 
+                            className="flex-1 h-12 rounded-xl font-bold border-secondary-neon/50 text-secondary-neon hover:bg-secondary-neon/10"
+                            onClick={() => setIsBargainOpen(true)}
+                        >
+                            <Percent className="h-4 w-4 mr-2" /> Make Offer
+                        </Button>
+                    )}
+                    
+                    {/* CHAT TO BUY BUTTON */}
+                    <Button 
+                        onClick={handleChatToBuy} 
+                        disabled={isProcessing}
+                        className="flex-[2] h-12 rounded-xl bg-secondary-neon text-primary-foreground font-black text-lg shadow-neon hover:scale-[1.02] transition-transform"
+                    >
+                        {isProcessing ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                            <span className="flex items-center gap-2">
+                                <MessageCircle className="h-5 w-5" /> CHAT TO BUY
+                            </span>
+                        )}
+                    </Button>
+                </>
+            )}
+         </div>
       </div>
-      <div className="space-y-2">
-        <Label>Description & Ingredients</Label>
-        <Textarea 
-          placeholder="Describe the taste, ingredients, and portion size..." 
-          className="h-20"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          disabled={isProcessing}
-        />
-      </div>
-      <div className="flex gap-2 pt-2">
-        <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isProcessing}>Cancel</Button>
-        <Button type="submit" className="flex-[2] bg-primary text-primary-foreground font-bold" disabled={isProcessing}>
-           {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-           {mode === 'sell' ? 'List Dish' : 'Post Request'}
-        </Button>
-      </div>
-    </form>
+
+      {/* BARGAIN DIALOG */}
+      <Dialog open={isBargainOpen} onOpenChange={setIsBargainOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+                <DialogTitle>Make an Offer</DialogTitle>
+                <DialogDescription>Request a 15% discount on this item.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-2">
+                <div className="flex justify-between">
+                    <span className="text-muted-foreground">Original Price</span>
+                    <span className="line-through">₹{numericPrice}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg">
+                    <span>Your Offer</span>
+                    <span className="text-green-500">₹{discountPrice}</span>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsBargainOpen(false)}>Cancel</Button>
+                <Button onClick={handleMakeOffer} disabled={isProcessing} className="bg-secondary-neon">
+                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Offer"}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+    </div>
   );
 };
 
-export default PlaceFoodOrderForm;
+export default ProductDetailsPage;
