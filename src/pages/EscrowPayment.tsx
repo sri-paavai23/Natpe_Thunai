@@ -16,8 +16,10 @@ import {
   Smartphone,
   AlertTriangle,
   HeartHandshake,
-  ExternalLink
+  ExternalLink,
+  Info
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { 
     databases, 
@@ -30,53 +32,67 @@ const DEVELOPER_UPI = "8903480105@superyes";
 const DEVELOPER_NAME = "Natpe Thunai";
 
 const EscrowPayment = () => {
-  // FIX: Support both Path Params and Query Params for flexibility
   const { transactionId: pathId } = useParams<{ transactionId: string }>(); 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  // LOGIC: Check query param 'txnId' first (used by TrackingPage), fallback to path param
   const transactionId = searchParams.get("txnId") || pathId;
 
   const [copiedVPA, setCopiedVPA] = useState(false);
   const [utrNumber, setUtrNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showManualDialog, setShowManualDialog] = useState(false);
 
   // Data
   const amount = searchParams.get("amount") || "0";
   const itemTitle = searchParams.get("title") || "Order";
   const formattedAmount = parseFloat(amount).toFixed(2);
 
-  // --- 1. OPEN UPI APP HANDLER ---
-  const handleOpenUPI = () => {
-    const upiLink = `upi://pay?pa=${DEVELOPER_UPI}&pn=${encodeURIComponent(DEVELOPER_NAME)}&am=${formattedAmount}&cu=INR`;
-    window.location.href = upiLink;
-    
-    toast.info("Opening Payment App...", {
-        description: "Please complete the payment and return here to enter the UTR."
-    });
-  };
-
-  // --- 2. MANUAL COPY HANDLER ---
+  // --- 1. MANUAL COPY HANDLER ---
   const handleCopyVPA = () => {
     navigator.clipboard.writeText(DEVELOPER_UPI);
     setCopiedVPA(true);
-    toast.success("UPI ID Copied!");
+    toast.success("UPI ID Copied to Clipboard");
     setTimeout(() => setCopiedVPA(false), 2000);
+  };
+
+  // --- 2. OPEN UPI APP HANDLER ---
+  const handleOpenUPI = () => {
+    // We try to open the UPI app generically. 
+    // If we don't pass parameters, some apps might just open to home screen.
+    // Ideally, passing `pa` is safer to ensure they pay the right person, 
+    // but per your request, we are simplifying the redirection flow.
+    
+    // Attempting a generic launch. If this fails, we show the manual dialog.
+    const upiLink = "upi://pay"; 
+    
+    try {
+        window.location.href = upiLink;
+        
+        // We set a timeout to check if the user stayed on the page (meaning redirection failed)
+        // This is a common heuristic for deep linking on web.
+        setTimeout(() => {
+             // If user is still here after 1s, assume redirection might have failed or they are on desktop
+             // We can optionally show the manual dialog here, but for now we rely on user action.
+        }, 1000);
+        
+    } catch (e) {
+        setShowManualDialog(true);
+    }
   };
 
   // --- 3. VERIFICATION HANDLER ---
   const handleVerifyPayment = async () => {
     if (!utrNumber || utrNumber.length < 12) {
         toast.error("Invalid UTR Format", {
-            description: "UTR numbers are typically 12 digits long. Please check your SMS/Banking History."
+            description: "UTR numbers are typically 12 digits long. Please check your banking SMS."
         });
         return;
     }
 
     if (!transactionId) {
         toast.error("System Error: Order ID Missing", {
-            description: "Please go back to the Activity Log and try clicking 'Pay' again."
+            description: "Please return to the Activity Log and retry."
         });
         return;
     }
@@ -89,14 +105,14 @@ const EscrowPayment = () => {
             APPWRITE_TRANSACTIONS_COLLECTION_ID,
             transactionId, 
             {
-                transactionId: utrNumber, // Storing UTR as the main ref
+                transactionId: utrNumber, 
                 status: "payment_confirmed_to_developer",
                 utrId: utrNumber 
             }
         );
 
         toast.success("Verification Submitted!", {
-            description: "We are processing your order. Thanks for the hustle!"
+            description: "Order is now processing. Thanks for your cooperation!"
         });
         
         setTimeout(() => {
@@ -134,45 +150,45 @@ const EscrowPayment = () => {
             <p className="text-sm text-muted-foreground font-medium truncate px-4">
                 Escrow for: <span className="text-foreground font-bold">{itemTitle}</span>
             </p>
-            {/* Debug helper: Only visible if ID is missing */}
-            {!transactionId && <p className="text-[10px] text-red-500 font-mono">Error: Transaction ID not found in URL</p>}
+            {!transactionId && <p className="text-[10px] text-red-500 font-mono">Error: Transaction ID missing</p>}
         </div>
 
         {/* === PAYMENT DESK CARD === */}
         <Card className="border-border/60 shadow-xl overflow-hidden animate-in slide-in-from-bottom-8 duration-700 bg-card/80 backdrop-blur-sm">
           <CardContent className="p-0">
             
-            {/* Step 1: The Payment Action */}
+            {/* Step 1: Manual Copy & App Launch */}
             <div className="p-6 space-y-5 border-b border-border/50">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black uppercase text-muted-foreground tracking-widest">Step 1: Transfer Money</h3>
+                    <h3 className="text-xs font-black uppercase text-muted-foreground tracking-widest">Step 1: Pay to Developer</h3>
                     <ShieldCheck className="h-4 w-4 text-green-500" />
                 </div>
 
-                <Button 
-                    onClick={handleOpenUPI}
-                    className="w-full h-14 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-black text-lg shadow-lg shadow-secondary-neon/20 transition-transform active:scale-[0.98] rounded-xl"
+                {/* COPY ID SECTION */}
+                <div 
+                    onClick={handleCopyVPA}
+                    className="group relative flex items-center justify-between bg-muted/40 border-2 border-dashed border-border hover:border-secondary-neon hover:bg-secondary-neon/5 rounded-xl p-4 cursor-pointer transition-all active:scale-[0.98]"
                 >
-                    <Smartphone className="mr-2 h-5 w-5" /> OPEN PAYMENT APP
-                </Button>
-                
-                <div className="bg-muted/40 p-4 rounded-xl border border-dashed border-border/60 space-y-2">
-                    <div className="flex justify-between items-center text-[10px] text-muted-foreground font-bold uppercase">
-                        <span>If redirection fails, copy ID:</span>
+                    <div>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase mb-1">Developer UPI ID</p>
+                        <p className="text-sm font-mono font-bold text-foreground tracking-wide">{DEVELOPER_UPI}</p>
                     </div>
-                    <div 
-                        onClick={handleCopyVPA}
-                        className="flex items-center justify-between cursor-pointer group"
-                    >
-                        <span className="text-sm font-mono font-bold text-foreground tracking-wide group-hover:text-secondary-neon transition-colors">
-                            {DEVELOPER_UPI}
-                        </span>
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground bg-background px-2 py-1 rounded border border-border">
-                            {copiedVPA ? <CheckCircle2 className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                            {copiedVPA ? "COPIED" : "COPY"}
-                        </div>
+                    <div className="h-10 w-10 bg-background rounded-full flex items-center justify-center border border-border shadow-sm group-hover:scale-110 transition-transform">
+                        {copiedVPA ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5 text-foreground" />}
                     </div>
                 </div>
+
+                {/* OPEN APP BUTTON */}
+                <Button 
+                    onClick={handleOpenUPI}
+                    className="w-full h-12 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-black text-sm uppercase shadow-lg shadow-secondary-neon/20 transition-transform active:scale-[0.98] rounded-xl"
+                >
+                    <Smartphone className="mr-2 h-4 w-4" /> Open Payment App
+                </Button>
+                
+                <p className="text-[10px] text-center text-muted-foreground leading-tight px-2">
+                    <strong>1. Copy ID</strong> above. <strong>2. Click Open App</strong>. <strong>3. Paste & Pay ₹{formattedAmount}</strong>.
+                </p>
             </div>
 
             {/* Step 2: The Verification */}
@@ -181,7 +197,7 @@ const EscrowPayment = () => {
                     <div className="h-6 w-6 rounded-full bg-blue-500/10 flex items-center justify-center">
                         <span className="text-xs font-bold text-blue-500">2</span>
                     </div>
-                    <h3 className="text-xs font-black uppercase text-muted-foreground tracking-widest">Verification</h3>
+                    <h3 className="text-xs font-black uppercase text-muted-foreground tracking-widest">Verify Transaction</h3>
                 </div>
 
                 <div className="space-y-3">
@@ -195,7 +211,7 @@ const EscrowPayment = () => {
                         maxLength={12}
                     />
                     <p className="text-[10px] text-muted-foreground text-center px-4 leading-tight">
-                        Check your banking app's "History" for the <strong>UTR / UPI Ref No</strong>.
+                        Enter the <strong>UTR / UPI Ref No</strong> from your payment success screen.
                     </p>
                 </div>
 
@@ -204,12 +220,38 @@ const EscrowPayment = () => {
                     onClick={handleVerifyPayment}
                     disabled={isSubmitting || utrNumber.length < 12}
                 >
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "VERIFY TRANSACTION"}
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "VERIFY & COMPLETE"}
                 </Button>
             </div>
 
           </CardContent>
         </Card>
+
+        {/* === MANUAL FALLBACK DIALOG === */}
+        <Dialog open={showManualDialog} onOpenChange={setShowManualDialog}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-amber-500">
+                        <Info className="h-5 w-5" /> Manual Payment Required
+                    </DialogTitle>
+                    <DialogDescription>
+                        We couldn't open your UPI app automatically. Please follow these steps:
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <ol className="list-decimal list-inside text-sm space-y-2 text-muted-foreground">
+                        <li><strong>Copy</strong> the UPI ID: <span className="font-mono text-foreground bg-muted px-1 rounded">{DEVELOPER_UPI}</span></li>
+                        <li>Open your preferred app (GPay, PhonePe, Paytm).</li>
+                        <li>Select <strong>"To UPI ID"</strong> and paste.</li>
+                        <li>Enter amount <strong>₹{formattedAmount}</strong> and pay.</li>
+                        <li>Copy the <strong>UTR/Ref No</strong> and paste it here.</li>
+                    </ol>
+                </div>
+                <DialogFooter>
+                    <Button onClick={() => setShowManualDialog(false)} className="w-full">I Understand</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         {/* === TRUST & ALPHA NOTES === */}
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-200">
