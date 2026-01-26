@@ -7,11 +7,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
-import { Brain, CheckCircle, XCircle, MapPin, IndianRupee, Image as ImageIcon, Tag, AlertCircle, HelpCircle } from "lucide-react";
+import { 
+  Brain, CheckCircle, MapPin, IndianRupee, 
+  Image as ImageIcon, AlertCircle, Loader2, UploadCloud, X, Check
+} from "lucide-react";
 import { usePriceAnalysis } from "@/hooks/usePriceAnalysis";
-import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import imageCompression from 'browser-image-compression';
+import AmbassadorDeliveryOption from "@/components/AmbassadorDeliveryOption";
+
+// --- CONFIGURATION ---
+// I have updated these with the values from your screenshot
+const CLOUDINARY_CLOUD_NAME = "dpusuqjvo"; 
+const CLOUDINARY_UPLOAD_PRESET = "natpe_thunai_preset"; 
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
 
 interface SellListingFormProps {
   onSubmit: (product: {
@@ -21,7 +30,7 @@ interface SellListingFormProps {
     category: string;
     damages: string;
     imageUrl: string;
-    location: string; // Added Location
+    location: string;
     ambassadorDelivery: boolean;
     ambassadorMessage: string;
   }) => void;
@@ -31,11 +40,13 @@ interface SellListingFormProps {
 const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel }) => {
   const [title, setTitle] = useState("");
   const [priceValue, setPriceValue] = useState("");
-  const [location, setLocation] = useState(""); // Location State
+  const [location, setLocation] = useState(""); 
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [damages, setDamages] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState(""); 
+  const [isUploading, setIsUploading] = useState(false);
+  
   const [ambassadorDelivery, setAmbassadorDelivery] = useState(false);
   const [ambassadorMessage, setAmbassadorMessage] = useState("");
 
@@ -48,18 +59,80 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
     resetAnalysis,
   } = usePriceAnalysis();
 
+  // --- CLOUDINARY UPLOAD LOGIC ---
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const imageFile = event.target.files?.[0];
+    if (!imageFile) return;
+
+    setIsUploading(true);
+
+    try {
+      // 1. Client-Side Compression (Vital for speed)
+      const options = {
+        maxSizeMB: 0.5,          // Max 500KB
+        maxWidthOrHeight: 1080,  // Max 1080p width
+        useWebWorker: true,
+      };
+      
+      let fileToUpload = imageFile;
+      try {
+          fileToUpload = await imageCompression(imageFile, options);
+      } catch (e) {
+          console.warn("Compression failed, using original file", e);
+      }
+
+      // 2. Prepare Form Data for Cloudinary
+      const formData = new FormData();
+      formData.append("file", fileToUpload);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET); 
+
+      // 3. Direct Upload to Cloudinary API
+      const response = await fetch(CLOUDINARY_URL, {
+          method: "POST",
+          body: formData,
+      });
+
+      if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.secure_url) {
+        setImageUrl(data.secure_url);
+        toast.success("Image uploaded successfully!");
+      } else {
+        throw new Error("Cloudinary did not return a secure_url");
+      }
+
+    } catch (error: any) {
+      console.error("Upload failed", error);
+      toast.error(`Image upload failed: ${error.message || "Unknown error"}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+      setImageUrl("");
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !priceValue || !description || !category || !location) {
       toast.error("Please fill in all required fields.");
       return;
     }
+    if (!imageUrl) {
+        toast.error("Please upload an image of the item.");
+        return;
+    }
     if (!isPriceAnalyzed) {
       toast.error("Please analyze the price first.");
       return;
     }
     
-    // Allow submission even if unreasonable, but warn user via UI logic before this
+    // Send data to parent (which saves to Appwrite Database)
     onSubmit({ 
       title, 
       price: `₹${priceValue}`, 
@@ -67,7 +140,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
       category, 
       damages, 
       location, 
-      imageUrl: imageUrl.trim() || "/app-logo.png", 
+      imageUrl, // This is now a secure Cloudinary URL
       ambassadorDelivery, 
       ambassadorMessage 
     });
@@ -87,7 +160,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
         />
       </div>
 
-      {/* Price & Category Row */}
+      {/* Price & Category */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-foreground font-semibold">Price</Label>
@@ -118,7 +191,7 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
         </div>
       </div>
 
-      {/* AI Price Analysis Card */}
+      {/* AI Price Analysis */}
       <div className={cn("rounded-lg border p-3 transition-all", isPriceAnalyzed ? (isPriceReasonable ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20") : "bg-muted/30 border-dashed")}>
         <div className="flex justify-between items-center mb-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
@@ -180,23 +253,57 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
         </div>
       </div>
 
-      {/* Image URL */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between items-center">
-            <Label className="text-foreground font-semibold">Image URL</Label>
-            <Link to="/help/image-to-url" className="text-[10px] text-secondary-neon flex items-center gap-1 hover:underline">
-                <HelpCircle className="h-3 w-3" /> Get Link?
-            </Link>
-        </div>
-        <div className="relative">
-            <ImageIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-            placeholder="https://..."
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            className="pl-9 h-11 bg-secondary/5 border-border"
-            />
-        </div>
+      {/* --- CLOUDINARY IMAGE UPLOAD --- */}
+      <div className="space-y-2">
+        <Label className="text-foreground font-semibold">Product Image</Label>
+        
+        {!imageUrl ? (
+            <div className="relative border-2 border-dashed border-border hover:border-secondary-neon/50 bg-secondary/5 rounded-xl h-32 transition-all group cursor-pointer overflow-hidden">
+                <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleImageUpload}
+                    disabled={isUploading}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors">
+                    {isUploading ? (
+                        <>
+                            <Loader2 className="h-8 w-8 animate-spin text-secondary-neon mb-2" />
+                            <span className="text-xs font-medium animate-pulse">Uploading to Cloud...</span>
+                        </>
+                    ) : (
+                        <>
+                            <div className="p-3 bg-background rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
+                                <UploadCloud className="h-6 w-6 text-secondary-neon" />
+                            </div>
+                            <span className="text-xs font-medium">Tap to upload photo</span>
+                            <span className="text-[10px] text-muted-foreground/70 mt-1">Free image hosting via Cloudinary</span>
+                        </>
+                    )}
+                </div>
+            </div>
+        ) : (
+            <div className="relative h-48 w-full rounded-xl overflow-hidden border border-border shadow-sm group bg-black/5">
+                <img src={imageUrl} alt="Preview" className="w-full h-full object-contain" />
+                
+                <div className="absolute top-2 right-2 bg-green-500 text-white text-[10px] px-2 py-1 rounded-full shadow-md flex items-center gap-1">
+                    <Check className="h-3 w-3" /> Uploaded
+                </div>
+
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Button 
+                        type="button" 
+                        variant="destructive" 
+                        size="sm" 
+                        onClick={handleRemoveImage}
+                        className="rounded-full shadow-lg"
+                    >
+                        <X className="h-4 w-4 mr-1" /> Remove Image
+                    </Button>
+                </div>
+            </div>
+        )}
       </div>
 
       <AmbassadorDeliveryOption
@@ -213,8 +320,9 @@ const SellListingForm: React.FC<SellListingFormProps> = ({ onSubmit, onCancel })
         <Button 
             type="submit" 
             className="flex-[2] h-11 bg-secondary-neon text-primary-foreground hover:bg-secondary-neon/90 font-bold shadow-md"
-            disabled={!isPriceReasonable && isPriceAnalyzed} // Prevent if flagged unreasonable
+            disabled={(!isPriceReasonable && isPriceAnalyzed) || isUploading} 
         >
+          {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
           Post Listing
         </Button>
       </div>
