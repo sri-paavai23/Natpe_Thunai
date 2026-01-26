@@ -47,7 +47,7 @@ import DeveloperDashboardPage from "./pages/DeveloperDashboardPage";
 import ImageToUrlHelpPage from "./pages/ImageToUrlHelpPage";
 import ServicePaymentConfirmationPage from "./pages/ServicePaymentConfirmationPage";
 import ChatPage from "./pages/ChatPage";
-import EscrowPayment from "./pages/EscrowPayment";
+import EscrowPayment from "./pages/EscrowPayment"; // Updated Payment Page
 
 // Import the Offline Game Page
 import OfflinePage from "./pages/OfflinePage";
@@ -109,6 +109,8 @@ const OnlineRoutes = () => {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/help/image-to-url" element={<ImageToUrlHelpPage />} />
+      
+      {/* Standalone Payment Route (No Bottom Nav) */}
       <Route path="/escrow-payment" element={<EscrowPayment />} />
       
       <Route element={<AppLayout />}>
@@ -147,6 +149,7 @@ const OnlineRoutes = () => {
         {/* TOURNAMENTS */}
         <Route path="/tournaments" element={<TournamentPage />} />
 
+        {/* Global Access to Tracking */}
         <Route path="/tracking" element={<TrackingPage />} />
         
       </Route>
