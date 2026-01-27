@@ -479,10 +479,10 @@ const TrackingPage = () => {
     try {
         // If 'APPWRITE_PROFILES_COLLECTION_ID' is defined in your config, use it.
         // If not, ensure this logic matches your database structure for fetching user prefs.
-        if (APPWRITE_PROFILES_COLLECTION_ID) {
+        if (APPWRITE_USER_PROFILES_COLLECTION_ID) {
             const profiles = await databases.listDocuments(
                 APPWRITE_DATABASE_ID,
-                APPWRITE_PROFILES_COLLECTION_ID,
+                APPWRITE_USER_PROFILES_COLLECTION_ID,
                 [Query.equal('userId', targetUserId)]
             );
             if (profiles.documents.length > 0) {
