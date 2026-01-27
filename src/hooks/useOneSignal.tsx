@@ -41,7 +41,7 @@ const useOneSignal = () => {
           await account.createPushTarget(
             ID.unique(),
             fcmToken, 
-            'YOUR_FCM_PROVIDER_ID' 
+            '69788b1f002fcdf4fae1' 
           );
           console.log("✅ Appwrite Target Registered!");
         } catch (error: any) {
