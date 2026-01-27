@@ -33,9 +33,9 @@ export interface BaseTrackingItem {
   description: string;
   date: string;
   status: string;
-  isUserProvider: boolean; // True if current user is Seller/Provider
+  isUserProvider: boolean; 
   timestamp: number;
-  lastUpdated: number; // Needed for 24h expiry logic
+  lastUpdated: number; 
 }
 
 export interface MarketTransactionItem extends BaseTrackingItem {
@@ -92,12 +92,10 @@ const StatusStepper = ({ currentStep, steps }: { currentStep: number, steps: str
 
 // --- ACTION BUTTON LOGIC ---
 const ActionButtons = ({ item, marketItem, onAction, initiatePayment, isCompleted }: any) => {
-    // 1. DETERMINE STATE
     const status = marketItem?.appwriteStatus || 'initiated';
-    const isProvider = item.isUserProvider; // True = Seller/Worker/Chef
+    const isProvider = item.isUserProvider; 
     const type = item.type;
 
-    // 2. DEFINE BUTTONS BASED ON STATE & ROLE
     if (isCompleted) {
         return (
             <Button variant="ghost" disabled className="w-full h-11 opacity-50 border-2 border-dashed">
@@ -106,10 +104,9 @@ const ActionButtons = ({ item, marketItem, onAction, initiatePayment, isComplete
         );
     }
 
-    // STATE: INITIATED (Waiting for Payment)
+    // STATE: INITIATED
     if (status === 'initiated' || status === 'negotiating') {
         if (!isProvider) {
-            // Buyer needs to Pay
             return (
                 <Button 
                     className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-black text-xs uppercase rounded-xl shadow-lg animate-pulse" 
@@ -119,24 +116,22 @@ const ActionButtons = ({ item, marketItem, onAction, initiatePayment, isComplete
                     {marketItem.amount > 0 ? (
                       <span className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Pay Escrow ₹{marketItem.amount}</span>
                     ) : (
-                      <span className="flex items-center gap-2 opacity-50"><LockIcon className="h-3 w-3" /> Wait for Price</span>
+                      <span className="flex items-center gap-2 opacity-50"><LockIcon className="h-3 w-3" /> Chat to Fix Price</span>
                     )}
                 </Button>
             );
         } else {
-            // Provider waits for payment
             return (
                 <Button variant="secondary" disabled className="w-full h-11 opacity-70">
-                    <Hourglass className="mr-2 h-4 w-4 animate-spin" /> Waiting for Client Payment
+                    <Hourglass className="mr-2 h-4 w-4 animate-spin" /> Waiting for Client
                 </Button>
             );
         }
     }
 
-    // STATE: PAYMENT CONFIRMED (Ready to Start)
+    // STATE: PAYMENT CONFIRMED
     if (status === 'payment_confirmed_to_developer' || status === 'commission_deducted') {
         if (isProvider) {
-            // Provider accepts work
             let label = "Accept & Start";
             if (type === 'Food Order') label = "Confirm Order & Cook";
             if (type === 'Transaction') label = "Confirm & Pack Item";
@@ -147,15 +142,13 @@ const ActionButtons = ({ item, marketItem, onAction, initiatePayment, isComplete
                 </Button>
             );
         } else {
-            // Buyer waits for start
-            return <Button variant="secondary" disabled className="w-full h-11">Waiting for Provider to Accept...</Button>;
+            return <Button variant="secondary" disabled className="w-full h-11">Waiting for Provider...</Button>;
         }
     }
 
-    // STATE: ACTIVE (Work in Progress)
+    // STATE: ACTIVE
     if (status === 'active') {
         if (isProvider) {
-            // Provider marks complete/delivered
             let label = "Mark Completed";
             if (type === 'Food Order') label = "Out for Delivery";
             if (type === 'Transaction') label = "Mark Shipped / Ready";
@@ -170,10 +163,9 @@ const ActionButtons = ({ item, marketItem, onAction, initiatePayment, isComplete
         }
     }
 
-    // STATE: DELIVERED (Waiting for Confirmation)
+    // STATE: DELIVERED
     if (status === 'seller_confirmed_delivery') {
         if (!isProvider) {
-            // Buyer confirms receipt to release money
             let label = "Confirm Receipt";
             if (type === 'Food Order') label = "Food Received - Yummy!";
             if (type === 'Service') label = "Job Done - Release Pay";
@@ -184,7 +176,7 @@ const ActionButtons = ({ item, marketItem, onAction, initiatePayment, isComplete
                 </Button>
             );
         } else {
-            return <Button variant="secondary" disabled className="w-full h-11">Waiting for Client Confirmation...</Button>;
+            return <Button variant="secondary" disabled className="w-full h-11">Waiting for Client...</Button>;
         }
     }
 
@@ -200,7 +192,6 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
   const foodItem = !isMarket ? (item as FoodOrderItem) : null;
 
-  // --- STEPPER LOGIC ---
   const status = marketItem?.appwriteStatus || 'initiated';
   let currentStep = 0;
   if (status === 'completed') currentStep = 4;
@@ -209,7 +200,6 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
   else if (status === 'payment_confirmed_to_developer' || status === 'commission_deducted') currentStep = 1;
   else currentStep = 0;
 
-  // Treat 'failed', 'cancelled', 'disputed' as completed for UI purposes (locks actions)
   const isCompleted = ['completed', 'failed', 'cancelled', 'disputed'].includes(status.toLowerCase());
 
   const initiatePayment = () => {
@@ -233,7 +223,6 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
       "relative overflow-hidden border-2 transition-all bg-card shadow-sm mb-4 group hover:shadow-neon/10 animate-in fade-in zoom-in-95 duration-300 rounded-2xl", 
       item.isUserProvider ? "border-secondary-neon/20" : "border-blue-500/20"
     )}>
-      {/* Role Ribbon */}
       <div className={cn(
         "absolute top-0 left-0 w-1 h-full",
         item.isUserProvider ? "bg-secondary-neon" : "bg-blue-500"
@@ -270,7 +259,6 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
 
         {!isCompleted && <StatusStepper currentStep={currentStep} steps={getStepsLabels()} />}
 
-        {/* ERRAND PRICE NEGOTIATION */}
         {!isCompleted && item.type === 'Errand' && marketItem && (
           <div className="mb-5 p-4 bg-secondary-neon/5 rounded-2xl border border-secondary-neon/10 space-y-3">
               <div className="flex items-center justify-between">
@@ -303,7 +291,6 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
           </div>
         )}
 
-        {/* DYNAMIC ACTION BUTTONS */}
         <div className="grid grid-cols-2 gap-3 mt-4">
             <Button 
               variant="outline" 
@@ -326,7 +313,6 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
             />
         </div>
 
-        {/* FOOTER INFO */}
         <div className="mt-5 pt-3 border-t border-border/30 flex justify-between items-center">
             <div className="flex items-center gap-2 opacity-60">
                <UserCircle className="h-3 w-3" />
@@ -359,15 +345,17 @@ const TrackingPage = () => {
       ]);
       
       const uniqueDealsMap = new Map<string, TrackingItem>();
+      
+      // FIX 1: Use 'doc.$id' as Key to prevent duplicates/collapsing
       response.documents.forEach((doc: any) => {
         const item = processTransactionDoc(doc, user.$id);
-        const dealKey = item.productId || item.id; 
+        const dealKey = item.id; 
         if (!uniqueDealsMap.has(dealKey)) uniqueDealsMap.set(dealKey, item);
       });
 
       initialFoodOrders.forEach(o => {
         const item = processFoodDoc(o, user.$id);
-        const dealKey = `${item.offeringTitle}_${item.providerId}`;
+        const dealKey = item.id;
         if (!uniqueDealsMap.has(dealKey)) uniqueDealsMap.set(dealKey, item);
       });
 
@@ -385,6 +373,7 @@ const TrackingPage = () => {
     return () => unsubscribe();
   }, [user, refreshData]);
 
+  // --- EDGE CASE FIX: ROBUST PARTICIPANT RESOLVER ---
   const handleChatNavigation = async (item: TrackingItem) => {
     if (!user) return;
     try {
@@ -397,11 +386,18 @@ const TrackingPage = () => {
         if (rooms.documents.length > 0) {
             navigate(`/chat/${rooms.documents[0].$id}`);
         } else {
-            const marketItem = item as MarketTransactionItem;
-            const buyerId = item.isUserProvider ? (marketItem.buyerId || "unknown") : user.$id;
-            const providerId = item.isUserProvider ? user.$id : (marketItem.sellerId || "unknown");
-            const buyerName = item.isUserProvider ? (marketItem.buyerName || "Student") : user.name;
-            const providerName = item.isUserProvider ? user.name : (marketItem.sellerName || "Provider");
+            // FIX 2: Safely handle Food vs Market Item structures
+            const isMarket = item.type !== "Food Order";
+            const marketItem = isMarket ? (item as MarketTransactionItem) : null;
+            const foodItem = !isMarket ? (item as FoodOrderItem) : null;
+
+            // Resolve IDs safely
+            const buyerId = isMarket ? (marketItem?.buyerId || user.$id) : (foodItem?.buyerId || user.$id);
+            const providerId = isMarket ? (marketItem?.sellerId || user.$id) : (foodItem?.providerId || user.$id);
+            
+            // Resolve Names safely
+            const buyerName = isMarket ? (marketItem?.buyerName || "Student") : (foodItem?.buyerName || "Student");
+            const providerName = isMarket ? (marketItem?.sellerName || "Provider") : (foodItem?.providerName || "Provider");
 
             const newRoom = await databases.createDocument(
                 APPWRITE_DATABASE_ID,
@@ -409,14 +405,21 @@ const TrackingPage = () => {
                 ID.unique(),
                 {
                     transactionId: item.id,
-                    buyerId, providerId, buyerUsername: buyerName, providerUsername: providerName,
+                    buyerId, 
+                    providerId, 
+                    buyerUsername: buyerName, 
+                    providerUsername: providerName,
                     status: "active",
                     collegeName: userProfile?.collegeName || "Campus Peer"
                 }
             );
             navigate(`/chat/${newRoom.$id}`);
         }
-    } catch (e) { toast.error("Chat sync failed."); }
+    } catch (e) { 
+        // Silent error log, don't disturb user flow too much
+        console.error("Chat Error:", e);
+        toast.error("Chat sync failed."); 
+    }
   };
 
   const handleAction = async (action: string, id: string, payload?: any) => {
@@ -433,7 +436,6 @@ const TrackingPage = () => {
         } else if (action === "confirm_receipt") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "completed" });
             
-            // Close chat logic
             const rooms = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_CHAT_ROOMS_COLLECTION_ID, [Query.equal('transactionId', id)]);
             if(rooms.documents.length > 0) {
                 await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_CHAT_ROOMS_COLLECTION_ID, rooms.documents[0].$id, { status: 'closed' });
@@ -456,7 +458,7 @@ const TrackingPage = () => {
         appwriteStatus: doc.status,
         date: new Date(doc.$createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
         timestamp: new Date(doc.$createdAt).getTime(),
-        lastUpdated: new Date(doc.$updatedAt).getTime(), // Added for expiry logic
+        lastUpdated: new Date(doc.$updatedAt).getTime(),
         amount: doc.amount || 0,
         sellerName: doc.sellerName,
         buyerName: doc.buyerName,
@@ -481,12 +483,11 @@ const TrackingPage = () => {
         buyerId: doc.buyerId,
         isUserProvider: doc.providerId === currentUserId,
         timestamp: new Date(doc.$createdAt).getTime(),
-        lastUpdated: new Date(doc.$updatedAt).getTime(), // Added for expiry logic
+        lastUpdated: new Date(doc.$updatedAt).getTime(),
         date: new Date(doc.$createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
     };
   };
 
-  // Logic: 24 Hour Retention for History
   const now = Date.now();
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -499,7 +500,6 @@ const TrackingPage = () => {
       const s = i.status.toLowerCase();
       const isFinished = s.includes('completed') || s === 'cancelled' || s === 'failed' || s === 'disputed';
       
-      // If it is finished, check if it's within the 24-hour window
       if (isFinished) {
           const timeSinceCompletion = now - i.lastUpdated;
           return timeSinceCompletion < ONE_DAY_MS;
