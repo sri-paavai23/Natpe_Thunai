@@ -22,7 +22,7 @@ import {
   APPWRITE_DATABASE_ID, 
   APPWRITE_TRANSACTIONS_COLLECTION_ID, 
   APPWRITE_CHAT_ROOMS_COLLECTION_ID,
-  APPWRITE_PROFILES_COLLECTION_ID 
+  APPWRITE_USER_PROFILES_COLLECTION_ID 
 } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
