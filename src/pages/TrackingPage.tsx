@@ -24,7 +24,7 @@ import {
   APPWRITE_CHAT_ROOMS_COLLECTION_ID,
   // Assuming you have a profiles collection for user lookups. 
   // If not, replace with your actual User Collection ID or ensure user prefs are accessible.
-  APPWRITE_PROFILES_COLLECTION_ID 
+  APPWRITE_USER_PROFILES_COLLECTION_ID 
 } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
