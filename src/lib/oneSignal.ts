@@ -1,5 +1,5 @@
 // CONFIGURATION
-const ONESIGNAL_APP_ID = "YOUR_ONESIGNAL_APP_ID"; // Get from OneSignal > Settings > Keys & IDs
+const ONESIGNAL_APP_ID = "Y65543ba1-d45e-405d-bcf9-0c4e82d73b87"; // Get from OneSignal > Settings > Keys & IDs
 const REST_API_KEY = "YOUR_REST_API_KEY";         // Get from OneSignal > Settings > Keys & IDs
 
 /**
