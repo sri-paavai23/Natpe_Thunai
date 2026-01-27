@@ -2,19 +2,27 @@ import { useEffect } from 'react';
 import { account, ID } from '@/lib/appwrite';
 import { toast } from "sonner";
 
-// Define the interface for local usage
+// Define the interface for the Median OneSignal Info object
 interface OneSignalInfo {
   userId: string;    // OneSignal Player ID
   pushToken: string; // The raw FCM Token (We need this for Appwrite)
   subscribed: boolean;
 }
 
+// Extend the window object to satisfy TypeScript
+declare global {
+  interface Window {
+    median_onesignal_info?: (info: OneSignalInfo) => void;
+    // We remove 'median' from here to avoid conflicts if it is defined elsewhere,
+    // and instead use (window as any).median inside the hook.
+  }
+}
+
 const useMedianPush = () => {
   useEffect(() => {
     // 1. Define the Listener
-    // FIX: Cast window to 'any' to avoid the "Subsequent property declarations" error
-    // caused by conflicting type definitions in other files.
-    (window as any).median_onesignal_info = async (info: OneSignalInfo) => {
+    // Median calls this function automatically when it gets info from the native layer
+    window.median_onesignal_info = async (info: OneSignalInfo) => {
       console.log("📲 Median Info Received:", info);
 
       if (info && info.pushToken) {
@@ -47,7 +55,7 @@ const useMedianPush = () => {
     };
 
     // 2. Force a Request (Trigger)
-    // We cast window to any here as well to access the native median object safely
+    // If the app loads fast, we might miss the initial call. This forces Median to send the info again.
     const medianGlobal = (window as any).median;
     
     if (medianGlobal && medianGlobal.onesignal) {

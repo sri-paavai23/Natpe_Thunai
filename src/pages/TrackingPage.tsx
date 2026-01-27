@@ -21,54 +21,12 @@ import {
   databases, 
   APPWRITE_DATABASE_ID, 
   APPWRITE_TRANSACTIONS_COLLECTION_ID, 
-  APPWRITE_CHAT_ROOMS_COLLECTION_ID,
-  // Assuming you have a profiles collection for user lookups. 
-  // If not, replace with your actual User Collection ID or ensure user prefs are accessible.
-  APPWRITE_USER_PROFILES_COLLECTION_ID 
+  APPWRITE_CHAT_ROOMS_COLLECTION_ID 
 } from "@/lib/appwrite";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Query, ID } from "appwrite";
 import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
-
-// --- ONESIGNAL CONFIGURATION (Direct REST API) ---
-// ⚠️ REPLACE THESE WITH YOUR ACTUAL KEYS FROM ONESIGNAL DASHBOARD
-const ONESIGNAL_APP_ID = "Y65543ba1-d45e-405d-bcf9-0c4e82d73b87"; 
-const ONESIGNAL_REST_KEY = "os_v2_app_mvkdxioulzaf3phzbrhifvz3q6gu7cu7btietrftnlxbsakcrkm3kq2iycnhrtc2jpxz626uoqp5cz7mfdphu6piavurzxzen6yr5ai";
-
-// --- NOTIFICATION HELPER ---
-const sendTransactionNotification = async (
-    recipientPlayerId: string, 
-    title: string, 
-    message: string,
-    data: any = {}
-) => {
-    if (!recipientPlayerId || !ONESIGNAL_APP_ID) return;
-
-    try {
-        await fetch('https://onesignal.com/api/v1/notifications', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${ONESIGNAL_REST_KEY}`
-            },
-            body: JSON.stringify({
-                app_id: ONESIGNAL_APP_ID,
-                include_player_ids: [recipientPlayerId],
-                headings: { en: title },
-                contents: { en: message },
-                data: data,
-                // Non-annoying settings:
-                android_group: "transactions", // Groups notifications
-                ttl: 3600, // Expires after 1 hour if not delivered
-                priority: 10
-            })
-        });
-        console.log("🔔 Notification sent to", recipientPlayerId);
-    } catch (e) {
-        console.error("Notification failed", e);
-    }
-};
 
 // --- INTERFACES ---
 export interface BaseTrackingItem {
@@ -293,7 +251,7 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
                 <Badge variant="secondary" className="text-[8px] font-black tracking-widest bg-muted/50 px-1.5 py-0">
                   {item.type}
                 </Badge>
-                {/* */}
+                {/*  */}
                 {/* VISUAL FIX: Show WHO the deal is with clearly */}
                 <div className="flex items-center gap-1 text-[10px] text-foreground font-bold bg-muted/30 px-2 py-0.5 rounded-md">
                     <Users className="h-3 w-3" /> 
@@ -324,12 +282,12 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
                 <div className="relative flex-1">
                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary-neon" />
                    <Input 
-                     type="number" 
-                     value={newAmount} 
-                     onChange={(e) => setNewAmount(e.target.value)} 
-                     disabled={!item.isUserProvider || status !== 'initiated'} 
-                     className="h-12 pl-10 text-lg font-black bg-background border-2 border-border/50 rounded-xl focus:border-secondary-neon transition-all"
-                     placeholder="0.00"
+                      type="number" 
+                      value={newAmount} 
+                      onChange={(e) => setNewAmount(e.target.value)} 
+                      disabled={!item.isUserProvider || status !== 'initiated'} 
+                      className="h-12 pl-10 text-lg font-black bg-background border-2 border-border/50 rounded-xl focus:border-secondary-neon transition-all"
+                      placeholder="0.00"
                    />
                 </div>
                 {item.isUserProvider && status === 'initiated' && (
@@ -393,6 +351,7 @@ const TrackingPage = () => {
     if (!user?.$id) return;
     setIsLoading(true);
     try {
+      // FIX 1: Add Query.limit(100) to ensure we get all transactions, not just the first 25
       const response = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, [
         Query.or([Query.equal('buyerId', user.$id), Query.equal('sellerId', user.$id)]),
         Query.orderDesc('$createdAt'),
@@ -401,6 +360,8 @@ const TrackingPage = () => {
       
       const uniqueDealsMap = new Map<string, TrackingItem>();
       
+      // FIX 2: Explicitly use doc.$id (Transaction ID) as key. 
+      // This allows multiple transactions for the same Product to exist as separate cards.
       response.documents.forEach((doc: any) => {
         const item = processTransactionDoc(doc, user.$id);
         const dealKey = item.id; 
@@ -471,70 +432,18 @@ const TrackingPage = () => {
     }
   };
 
-  // --- HELPER: FIND COUNTERPARTY ONE SIGNAL ID ---
-  // This logic tries to find the other user's OneSignal Player ID from the profiles collection
-  const getCounterpartyPlayerId = async (targetUserId: string) => {
-    try {
-        // If your architecture stores user prefs in a profiles collection, this query works.
-        // If using standard Appwrite user.prefs, you cannot access this from client side.
-        // Assuming 'profiles' or 'users' collection exists and is readable.
-        if (APPWRITE_USER_PROFILES_COLLECTION_ID) {
-            const profiles = await databases.listDocuments(
-                APPWRITE_DATABASE_ID,
-                APPWRITE_USER_PROFILES_COLLECTION_ID,
-                [Query.equal('userId', targetUserId)]
-            );
-            if (profiles.documents.length > 0) {
-                return profiles.documents[0].oneSignalPlayerId;
-            }
-        }
-    } catch (e) {
-        console.log("Could not fetch counterparty player ID", e);
-    }
-    return null;
-  };
-
   const handleAction = async (action: string, id: string, payload?: any) => {
     try {
-        // 1. Identify current item context for notification logic
-        const currentItem = items.find(i => i.id === id);
-        let notificationMsg = "";
-        let notificationTitle = "";
-        let targetUserId = "";
-
-        if (currentItem) {
-            // Determine Target (The Counterparty)
-            const isMarket = currentItem.type !== "Food Order";
-            const marketItem = isMarket ? (currentItem as MarketTransactionItem) : null;
-            const foodItem = !isMarket ? (currentItem as FoodOrderItem) : null;
-
-            if (currentItem.isUserProvider) {
-                targetUserId = isMarket ? marketItem?.buyerId || "" : foodItem?.buyerId || "";
-            } else {
-                targetUserId = isMarket ? marketItem?.sellerId || "" : foodItem?.providerId || "";
-            }
-        }
-
-        // 2. Perform Database Update
         if (action === "update_errand_price") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { amount: payload.amount });
             toast.success("Bounty updated!");
-            notificationTitle = "Bounty Update";
-            notificationMsg = `The errand bounty has been updated to ₹${payload.amount}.`;
-        } 
-        else if (action === "start_work") {
+        } else if (action === "start_work") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "active" });
             toast.success("Work Started!");
-            notificationTitle = "Action Started";
-            notificationMsg = "The provider has started working on your request.";
-        } 
-        else if (action === "mark_delivered") {
+        } else if (action === "mark_delivered") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "seller_confirmed_delivery" });
             toast.success("Marked Delivered/Done!");
-            notificationTitle = "Task Completed";
-            notificationMsg = "Provider marked the task as completed. Please confirm receipt.";
-        } 
-        else if (action === "confirm_receipt") {
+        } else if (action === "confirm_receipt") {
             await databases.updateDocument(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, id, { status: "completed" });
             
             const rooms = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_CHAT_ROOMS_COLLECTION_ID, [Query.equal('transactionId', id)]);
@@ -543,19 +452,7 @@ const TrackingPage = () => {
             }
             
             toast.success("Deal Closed! Chat Locked.");
-            notificationTitle = "Payment Released";
-            notificationMsg = "Client confirmed receipt. Funds have been released to your wallet.";
         }
-
-        // 3. Send Notification (Fire & Forget)
-        if (targetUserId && notificationMsg) {
-            getCounterpartyPlayerId(targetUserId).then(playerId => {
-                if (playerId) {
-                    sendTransactionNotification(playerId, notificationTitle, notificationMsg, { transactionId: id });
-                }
-            });
-        }
-
         refreshData();
     } catch (e: any) { toast.error("Action failed"); }
   };

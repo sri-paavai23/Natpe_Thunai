@@ -19,8 +19,7 @@ import {
   APPWRITE_DATABASE_ID, 
   APPWRITE_CHAT_ROOMS_COLLECTION_ID, 
   APPWRITE_CHAT_MESSAGES_COLLECTION_ID,
-  APPWRITE_REPORTS_COLLECTION_ID,
-  APPWRITE_USER_PROFILES_COLLECTION_ID // Ensure this is exported from your lib/appwrite file
+  APPWRITE_REPORTS_COLLECTION_ID
 } from "@/lib/appwrite";
 import { Models, ID, Query } from "appwrite";
 import { useAuth } from "@/context/AuthContext";
@@ -32,43 +31,6 @@ import imageCompression from 'browser-image-compression';
 const CLOUDINARY_CLOUD_NAME = "dpusuqjvo"; 
 const CLOUDINARY_UPLOAD_PRESET = "natpe_thunai_preset"; 
 const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-
-// --- ONESIGNAL CONFIG (Direct REST API) ---
-// ⚠️ REPLACE WITH YOUR ACTUAL KEYS
-const ONESIGNAL_APP_ID = "Y65543ba1-d45e-405d-bcf9-0c4e82d73b87"; 
-const ONESIGNAL_REST_KEY = "os_v2_app_mvkdxioulzaf3phzbrhifvz3q6gu7cu7btietrftnlxbsakcrkm3kq2iycnhrtc2jpxz626uoqp5cz7mfdphu6piavurzxzen6yr5ai";
-
-// --- NOTIFICATION HELPER ---
-const sendChatNotification = async (
-    recipientPlayerId: string, 
-    senderName: string, 
-    messagePreview: string,
-    data: any = {}
-) => {
-    if (!recipientPlayerId || !ONESIGNAL_APP_ID) return;
-
-    try {
-        await fetch('https://onesignal.com/api/v1/notifications', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${ONESIGNAL_REST_KEY}`
-            },
-            body: JSON.stringify({
-                app_id: ONESIGNAL_APP_ID,
-                include_player_ids: [recipientPlayerId],
-                headings: { en: `New Message from ${senderName}` },
-                contents: { en: messagePreview },
-                data: data,
-                android_group: "chat_messages", 
-                priority: 10
-            })
-        });
-        console.log("🔔 Chat Notification sent");
-    } catch (e) {
-        console.error("Notification failed", e);
-    }
-};
 
 // --- INTERFACES ---
 interface ChatRoom extends Models.Document {
@@ -204,7 +166,7 @@ const ChatPage = () => {
     e.preventDefault();
     const trimmedMessage = newMessage.trim();
 
-    if ((!trimmedMessage && !selectedImage) || !user || !chatRoomId || !chatRoom) return;
+    if ((!trimmedMessage && !selectedImage) || !user || !chatRoomId) return;
 
     setIsSendingMessage(true);
     
@@ -247,25 +209,7 @@ const ChatPage = () => {
         }
       );
 
-      // --- C. NOTIFICATION LOGIC (NEW) ---
-      // Fire and forget - don't await to avoid blocking UI
-      const recipientId = user.$id === chatRoom.buyerId ? chatRoom.providerId : chatRoom.buyerId;
-      if (recipientId) {
-        // Fetch Recipient Player ID
-        databases.listDocuments(
-            APPWRITE_DATABASE_ID,
-            APPWRITE_USER_PROFILES_COLLECTION_ID,
-            [Query.equal('userId', recipientId)]
-        ).then((profiles) => {
-            const playerId = profiles.documents[0]?.oneSignalPlayerId;
-            if (playerId) {
-                const notifyText = trimmedMessage || (selectedImage ? "📷 Sent an image" : "New message");
-                sendChatNotification(playerId, user.name, notifyText, { chatRoomId });
-            }
-        }).catch(err => console.log("Push trigger failed", err));
-      }
-
-      // D. Reset State
+      // C. Reset State
       setNewMessage(""); 
       clearImageSelection();
 
