@@ -33,7 +33,7 @@ import { useFoodOrders, FoodOrder } from "@/hooks/useFoodOrders";
 
 // --- ONESIGNAL CONFIGURATION (Direct REST API) ---
 // ⚠️ REPLACE THESE WITH YOUR ACTUAL KEYS FROM ONESIGNAL DASHBOARD
-const ONESIGNAL_APP_ID = "YOUR_ONESIGNAL_APP_ID"; 
+const ONESIGNAL_APP_ID = "Y65543ba1-d45e-405d-bcf9-0c4e82d73b87"; 
 const ONESIGNAL_REST_KEY = "os_v2_app_mvkdxioulzaf3phzbrhifvz3q6gu7cu7btietrftnlxbsakcrkm3kq2iycnhrtc2jpxz626uoqp5cz7mfdphu6piavurzxzen6yr5ai";
 
 // --- NOTIFICATION HELPER ---
