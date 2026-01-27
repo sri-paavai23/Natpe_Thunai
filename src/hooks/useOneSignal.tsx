@@ -4,11 +4,12 @@ import { useAuth } from '@/context/AuthContext';
 
 declare global {
   interface Window {
-    median_onesignal_info?: (info: OneSignalInfo) => void;
+    median_onesignal_info?: (data: OneSignalData) => void;
   }
 }
 
-interface OneSignalInfo {
+interface OneSignalData {
+  oneSignalUserId: string; // OneSignal Player ID (We DON'T want this for Appwrite FCM)
   pushToken: string;       // <--- THIS IS THE RAW FCM TOKEN WE NEED
   subscribed: boolean;
 }
@@ -18,11 +19,11 @@ const useOneSignal = () => {
 
   useEffect(() => {
     // 1. Define the callback Median calls
-    window.median_onesignal_info = async (info: OneSignalInfo) => { // Changed 'data' to 'info'
-      console.log("OneSignal Data:", info); // Changed 'data' to 'info'
+    window.median_onesignal_info = async (data: OneSignalData) => {
+      console.log("OneSignal Data:", data);
 
       // CRITICAL: Extract the raw FCM token
-      const fcmToken = info.pushToken; // Changed 'data' to 'info'
+      const fcmToken = data.pushToken; 
 
       if (!fcmToken) {
         console.warn("OneSignal loaded, but no FCM Token found yet.");
