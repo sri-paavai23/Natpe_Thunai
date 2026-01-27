@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { ThemeProvider } from "@/components/theme-provider";
-import useOneSignal from "@/hooks/useOneSignal"; // UPDATED IMPORT
+import useOneSignal from "@/hooks/useOneSignal"; // Ensure this path matches your file structure
 
 // --- Page Imports ---
 import Index from "./pages/Index";
@@ -60,6 +60,7 @@ const AppLayout = () => {
 
   // --- ACTIVATE PUSH NOTIFICATIONS HERE ---
   // This hooks into the OneSignal plugin to get the Token for Appwrite
+  // Placing it here ensures it only runs when a user session exists.
   useOneSignal(); 
 
   if (!isAuthenticated) {
