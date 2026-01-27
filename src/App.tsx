@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { ThemeProvider } from "@/components/theme-provider";
+import useMedianPush from "@/hooks/useMedianPush"; // <--- IMPORT THE HOOK
 
 // --- Page Imports ---
 import Index from "./pages/Index";
@@ -51,8 +52,6 @@ import EscrowPayment from "./pages/EscrowPayment";
 
 // Import the Offline Game Page
 import OfflinePage from "./pages/OfflinePage";
-
-// REMOVED: import PlaceFoodOrderForm (This caused the error because it's a component, not a page)
 
 const queryClient = new QueryClient();
 
@@ -167,6 +166,9 @@ const OnlineRoutes = () => {
 
 const App = () => {
   const isOnline = useOnlineStatus();
+  
+  // --- ACTIVATE PUSH NOTIFICATION BRIDGE ---
+  useMedianPush(); 
 
   return (
     <QueryClientProvider client={queryClient}>
