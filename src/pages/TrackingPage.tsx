@@ -12,7 +12,8 @@ import {
   IndianRupee, Loader2, Utensils, CheckCircle, 
   Handshake, Clock, ShoppingBag, Activity, 
   PackageCheck, MessageCircle, Briefcase, Wallet, Ban, Hourglass,
-  Save, ArrowRight, UserCircle, Target, Lock as LockIcon, CheckCircle2
+  Save, ArrowRight, UserCircle, Target, Lock as LockIcon, CheckCircle2,
+  Users
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -192,6 +193,11 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
   const marketItem = isMarket ? (item as MarketTransactionItem) : null;
   const foodItem = !isMarket ? (item as FoodOrderItem) : null;
 
+  // VISUAL FIX: Determine the "Counterparty" Name
+  const counterpartyName = item.isUserProvider 
+      ? (isMarket ? marketItem?.buyerName : foodItem?.buyerName) 
+      : (isMarket ? marketItem?.sellerName : foodItem?.providerName);
+
   const status = marketItem?.appwriteStatus || 'initiated';
   let currentStep = 0;
   if (status === 'completed') currentStep = 4;
@@ -245,7 +251,13 @@ const TrackingCard = ({ item, onAction, onChat }: { item: TrackingItem, onAction
                 <Badge variant="secondary" className="text-[8px] font-black tracking-widest bg-muted/50 px-1.5 py-0">
                   {item.type}
                 </Badge>
-                <span className="text-[10px] text-muted-foreground font-mono">{item.date}</span>
+                {/*  */}
+                {/* VISUAL FIX: Show WHO the deal is with clearly */}
+                <div className="flex items-center gap-1 text-[10px] text-foreground font-bold bg-muted/30 px-2 py-0.5 rounded-md">
+                    <Users className="h-3 w-3" /> 
+                    {item.isUserProvider ? "Client: " : "Provider: "}
+                    <span className="text-primary">{counterpartyName || "Unknown"}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -339,14 +351,17 @@ const TrackingPage = () => {
     if (!user?.$id) return;
     setIsLoading(true);
     try {
+      // FIX 1: Add Query.limit(100) to ensure we get all transactions, not just the first 25
       const response = await databases.listDocuments(APPWRITE_DATABASE_ID, APPWRITE_TRANSACTIONS_COLLECTION_ID, [
         Query.or([Query.equal('buyerId', user.$id), Query.equal('sellerId', user.$id)]),
-        Query.orderDesc('$createdAt')
+        Query.orderDesc('$createdAt'),
+        Query.limit(100) 
       ]);
       
       const uniqueDealsMap = new Map<string, TrackingItem>();
       
-      // FIX 1: Use 'doc.$id' as Key to prevent duplicates/collapsing
+      // FIX 2: Explicitly use doc.$id (Transaction ID) as key. 
+      // This allows multiple transactions for the same Product to exist as separate cards.
       response.documents.forEach((doc: any) => {
         const item = processTransactionDoc(doc, user.$id);
         const dealKey = item.id; 
@@ -373,7 +388,6 @@ const TrackingPage = () => {
     return () => unsubscribe();
   }, [user, refreshData]);
 
-  // --- EDGE CASE FIX: ROBUST PARTICIPANT RESOLVER ---
   const handleChatNavigation = async (item: TrackingItem) => {
     if (!user) return;
     try {
@@ -386,16 +400,13 @@ const TrackingPage = () => {
         if (rooms.documents.length > 0) {
             navigate(`/chat/${rooms.documents[0].$id}`);
         } else {
-            // FIX 2: Safely handle Food vs Market Item structures
             const isMarket = item.type !== "Food Order";
             const marketItem = isMarket ? (item as MarketTransactionItem) : null;
             const foodItem = !isMarket ? (item as FoodOrderItem) : null;
 
-            // Resolve IDs safely
             const buyerId = isMarket ? (marketItem?.buyerId || user.$id) : (foodItem?.buyerId || user.$id);
             const providerId = isMarket ? (marketItem?.sellerId || user.$id) : (foodItem?.providerId || user.$id);
             
-            // Resolve Names safely
             const buyerName = isMarket ? (marketItem?.buyerName || "Student") : (foodItem?.buyerName || "Student");
             const providerName = isMarket ? (marketItem?.sellerName || "Provider") : (foodItem?.providerName || "Provider");
 
@@ -416,7 +427,6 @@ const TrackingPage = () => {
             navigate(`/chat/${newRoom.$id}`);
         }
     } catch (e) { 
-        // Silent error log, don't disturb user flow too much
         console.error("Chat Error:", e);
         toast.error("Chat sync failed."); 
     }
