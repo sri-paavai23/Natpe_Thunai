@@ -16,6 +16,7 @@ const useOneSignal = () => {
 
   useEffect(() => {
     // 1. Define the callback function globally
+    // We cast window to 'any' to avoid TypeScript errors with the custom Median function
     (window as any).median_onesignal_info = async (data: OneSignalData) => {
       console.log("OneSignal Info Received:", data);
 
@@ -44,11 +45,11 @@ const useOneSignal = () => {
           await account.createPushTarget(
             ID.unique(),
             fcmToken, 
-            'YOUR_FCM_PROVIDER_ID' // Ensure this matches Appwrite Console > Messaging > Providers
+            '69788b1f002fcdf4fae1' // Your Appwrite FCM Provider ID
           );
           console.log("✅ Appwrite Push Target Registered Successfully");
         } catch (error: any) {
-          // If it already exists, that's perfect.
+          // If it already exists (409), that's perfect.
           if (error.code !== 409) {
             console.error("Target Registration Error:", error.message);
           }
