@@ -2,63 +2,56 @@ import { useEffect, useRef } from 'react';
 import { account, ID } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 
-// Interface for the data Median returns
 interface OneSignalData {
-  oneSignalUserId: string; // The OneSignal Player ID
-  pushToken?: string;      // The Raw FCM Token (might be missing initially)
+  oneSignalUserId: string;
+  pushToken?: string;      // The Raw FCM Token we need
   subscribed: boolean;
 }
 
 const useOneSignal = () => {
   const { user } = useAuth();
   const retryCount = useRef(0);
-  const maxRetries = 5; // Try 5 times (approx 15 seconds)
+  const maxRetries = 10; // Try for 30 seconds
 
   useEffect(() => {
-    // 1. Define the callback function globally
-    // We cast window to 'any' to avoid TypeScript errors with the custom Median function
+    // 1. Define the Listener
     (window as any).median_onesignal_info = async (data: OneSignalData) => {
-      console.log("OneSignal Info Received:", data);
+      console.log("signal received:", data);
 
-      // Try to find the token in likely fields
       const fcmToken = data?.pushToken;
 
-      // 2. RETRY LOGIC: If no token, wait and try again
+      // 2. RETRY LOGIC: If OneSignal hasn't fetched the token yet...
       if (!fcmToken) {
         if (retryCount.current < maxRetries) {
-          console.log(`No FCM token yet. Retrying (${retryCount.current + 1}/${maxRetries})...`);
+          console.log(`Waiting for FCM Token... (${retryCount.current + 1}/${maxRetries})`);
           retryCount.current += 1;
           setTimeout(() => {
             window.location.href = 'median://onesignal/info';
-          }, 3000); // Wait 3 seconds
+          }, 3000); // Wait 3 seconds and ask again
         } else {
-          console.warn("OneSignal initialized, but FCM Token never arrived.");
+          console.warn("Gave up waiting for FCM Token.");
         }
         return;
       }
 
-      // 3. SUCCESS: We have the token!
+      // 3. SUCCESS: We have the token! Send to Appwrite.
       if (user?.$id) {
         try {
-          // Check if we already registered this specific token to avoid console spam
-          // (Optimization: Appwrite throws 409 if it exists, which is fine)
+          // Replace 'YOUR_FCM_PROVIDER_ID' with the ID from Appwrite > Messaging > Providers
           await account.createPushTarget(
             ID.unique(),
             fcmToken, 
-            '69788b1f002fcdf4fae1' // Your Appwrite FCM Provider ID
+            'YOUR_FCM_PROVIDER_ID' 
           );
-          console.log("✅ Appwrite Push Target Registered Successfully");
+          console.log("✅ Appwrite Target Registered!");
         } catch (error: any) {
-          // If it already exists (409), that's perfect.
-          if (error.code !== 409) {
-            console.error("Target Registration Error:", error.message);
-          }
+          // Ignore "Target already exists" (409) errors
+          if (error.code !== 409) console.error("Registration Error:", error.message);
         }
       }
     };
 
-    // 4. Initial Trigger
-    // We wait a moment for the native plugin to warm up
+    // 4. Start the Process (Only on Mobile)
     if (navigator.userAgent.includes('wv') || window.location.href.includes('median')) {
       const timer = setTimeout(() => {
         window.location.href = 'median://onesignal/info';
