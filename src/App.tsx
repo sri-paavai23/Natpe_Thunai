@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { ThemeProvider } from "@/components/theme-provider";
-import useMedianPush from "@/hooks/useMedianPush"; // Imported Hook
+import useOneSignal from "@/hooks/useOneSignal"; // UPDATED IMPORT
 
 // --- Page Imports ---
 import Index from "./pages/Index";
@@ -59,8 +59,8 @@ const AppLayout = () => {
   const { isAuthenticated, isVerified } = useAuth();
 
   // --- ACTIVATE PUSH NOTIFICATIONS HERE ---
-  // This ensures we only register the target AFTER the user is logged in.
-  useMedianPush(); 
+  // This hooks into the OneSignal plugin to get the Token for Appwrite
+  useOneSignal(); 
 
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace />;
@@ -170,9 +170,6 @@ const OnlineRoutes = () => {
 
 const App = () => {
   const isOnline = useOnlineStatus();
-  
-  // NOTE: useMedianPush removed from here and moved to AppLayout
-  // to ensure it only runs when user is logged in.
 
   return (
     <QueryClientProvider client={queryClient}>
