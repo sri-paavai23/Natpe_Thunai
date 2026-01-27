@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { ThemeProvider } from "@/components/theme-provider";
-import useMedianPush from "@/hooks/useMedianPush"; // <--- IMPORT THE HOOK
+import useMedianPush from "@/hooks/useMedianPush"; // Imported Hook
 
 // --- Page Imports ---
 import Index from "./pages/Index";
@@ -57,6 +57,10 @@ const queryClient = new QueryClient();
 
 const AppLayout = () => {
   const { isAuthenticated, isVerified } = useAuth();
+
+  // --- ACTIVATE PUSH NOTIFICATIONS HERE ---
+  // This ensures we only register the target AFTER the user is logged in.
+  useMedianPush(); 
 
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace />;
@@ -167,8 +171,8 @@ const OnlineRoutes = () => {
 const App = () => {
   const isOnline = useOnlineStatus();
   
-  // --- ACTIVATE PUSH NOTIFICATION BRIDGE ---
-  useMedianPush(); 
+  // NOTE: useMedianPush removed from here and moved to AppLayout
+  // to ensure it only runs when user is logged in.
 
   return (
     <QueryClientProvider client={queryClient}>
