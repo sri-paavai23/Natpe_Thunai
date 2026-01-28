@@ -1,68 +1,81 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { account } from '@/lib/appwrite';
 import { useAuth } from '@/context/AuthContext';
 import { Models } from 'appwrite';
+import { toast } from 'sonner';
 
 interface OneSignalData {
-  oneSignalUserId: string; // The Player ID
+  oneSignalUserId: string; 
   pushToken?: string;
   subscribed: boolean;
 }
 
-// Define your custom preferences structure
 interface UserPrefs extends Models.Preferences {
     oneSignalPlayerId?: string;
 }
 
 const useOneSignal = () => {
   const { user } = useAuth();
-  const retryCount = useRef(0);
+  const [playerId, setPlayerId] = useState<string | null>(null);
 
+  // --- EFFECT 1: GET THE PLAYER ID (Runs once on mount) ---
   useEffect(() => {
-    // Listener for Median/OneSignal
-    (window as any).median_onesignal_info = async (data: OneSignalData) => {
-      const playerId = data?.oneSignalUserId;
-
-      // Retry logic if OneSignal is slow to init
-      if (!playerId) {
-        if (retryCount.current < 5) {
-          retryCount.current++;
-          setTimeout(() => {
-             window.location.href = 'median://onesignal/info';
-          }, 2000);
-        }
-        return;
-      }
-
-      // CRITICAL: Save the Player ID to Appwrite Preferences
-      if (user?.$id) {
-        try {
-          // Cast user.prefs to our custom type so TS knows 'oneSignalPlayerId' exists
-          const prefs = user.prefs as UserPrefs;
-
-          // Only update if it's different to save bandwidth
-          if (prefs.oneSignalPlayerId !== playerId) {
-            // We must merge existing prefs with the new ID
-            await account.updatePrefs({
-              ...user.prefs, 
-              oneSignalPlayerId: playerId 
-            });
-            console.log("✅ Device Linked to User:", playerId);
-          }
-        } catch (error) {
-          console.error("Failed to save Device ID", error);
-        }
+    // 1. Define the global listener
+    (window as any).median_onesignal_info = (data: OneSignalData) => {
+      console.log("📲 OneSignal Info Received:", data);
+      
+      if (data?.oneSignalUserId) {
+        setPlayerId(data.oneSignalUserId); // Save to state, don't upload yet
+        // toast.success("Device ID Found"); // Uncomment for debugging
       }
     };
 
-    // Trigger the Native Call
-    if (navigator.userAgent.includes('wv') || window.location.href.includes('median')) {
-      const timer = setTimeout(() => {
-        window.location.href = 'median://onesignal/info';
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [user]); 
+    // 2. Trigger Median to send the info
+    // We try both the URL scheme and the JS Bridge to be safe
+    const triggerMedian = () => {
+        if (window.location.href.includes('median') || navigator.userAgent.includes('wv')) {
+            window.location.href = 'median://onesignal/info';
+            
+            // Backup method for newer Median versions
+            if ((window as any).median?.onesignal?.info) {
+                (window as any).median.onesignal.info();
+            }
+        }
+    };
+
+    // Slight delay to ensure native bridge is ready
+    const timer = setTimeout(triggerMedian, 1000);
+    return () => clearTimeout(timer);
+  }, []); 
+
+  // --- EFFECT 2: SYNC TO APPWRITE (Runs when User OR PlayerId changes) ---
+  useEffect(() => {
+    const syncToAppwrite = async () => {
+        // We need BOTH a logged-in user AND a Player ID to proceed
+        if (!user?.$id || !playerId) return;
+
+        try {
+            const prefs = user.prefs as UserPrefs;
+
+            // Only make the API call if the ID is actually new/different
+            if (prefs.oneSignalPlayerId !== playerId) {
+                console.log("🔄 Syncing Player ID to Appwrite...");
+                
+                await account.updatePrefs({
+                    ...user.prefs, 
+                    oneSignalPlayerId: playerId 
+                });
+                
+                console.log("✅ Device Linked Successfully:", playerId);
+                // toast.success("Notifications Active"); 
+            }
+        } catch (error) {
+            console.error("❌ Failed to save Device ID:", error);
+        }
+    };
+
+    syncToAppwrite();
+  }, [user, playerId]); // Reruns automatically when User logs in OR when ID is found
 };
 
 export default useOneSignal;
