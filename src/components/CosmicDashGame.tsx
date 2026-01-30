@@ -1,39 +1,32 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Trophy, Play, RotateCcw, Zap, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Zap, Trophy, Play, RotateCcw } from 'lucide-react';
 
 // --- CONFIGURATION ---
-const CFG = {
-  GRAVITY_SPACE: 0.4,
-  GRAVITY_GRID: 0.8,
-  JUMP_FORCE: -7,
-  FLIP_FORCE: 12, // For gravity flipping
-  SPEED_START: 5,
-  SPEED_MAX: 12,
+const CONSTANTS = {
+  ASPECT_RATIO: 16 / 9,
+  GRAVITY: 0.6,
+  JUMP_FORCE: -10,
+  DOUBLE_JUMP_FORCE: -8,
+  BASE_SPEED: 4,
+  MAX_SPEED: 12,
+  SPEED_INCREMENT: 0.001, // Speed increase per frame
+  GROUND_HEIGHT_RATIO: 0.85,
   PLAYER_SIZE: 24,
-  SPAWN_RATE: 100,
-  MODE_SWITCH_SCORE: 5, // Switch dimensions every 5 points approx
+  PARTICLE_COUNT: 20,
+  COLORS: {
+    BG: '#050510',
+    NEON_BLUE: '#00f3ff',
+    NEON_PINK: '#ff00ff',
+    NEON_GREEN: '#0aff0a',
+    GRID: 'rgba(0, 243, 255, 0.2)',
+  }
 };
 
 // --- TYPES ---
-type GameMode = 'SPACE' | 'GRID'; // SPACE = Fly, GRID = Gravity Flip
-
-interface Entity {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  color: string;
-}
-
-interface Obstacle extends Entity {
-  passed: boolean;
-  type: 'WALL' | 'SPIKE';
-}
-
 interface Particle {
   x: number;
   y: number;
@@ -44,114 +37,78 @@ interface Particle {
   size: number;
 }
 
-interface GlitchCore extends Entity {
-  active: boolean;
-  rotation: number;
-}
-
-// --- ENGINE STATE ---
-type EngineState = {
-  mode: GameMode;
-  player: { 
-    x: number; 
-    y: number; 
-    vy: number; 
-    grounded: boolean; 
-    gravityDir: 1 | -1; // 1 = down, -1 = up (for Grid mode)
-    rotation: number;
-  };
-  obstacles: Obstacle[];
-  particles: Particle[];
-  core: GlitchCore | null; // The dimension switching item
-  stars: { x: number; y: number; s: number; v: number }[]; // Background
-  score: number;
-  speed: number;
-  frames: number;
-  running: boolean;
-  gameOver: boolean;
+interface Obstacle {
+  x: number;
+  y: number;
   width: number;
   height: number;
-  shake: number; // Screen shake intensity
-};
+  type: 'GROUND' | 'FLYING';
+}
 
-const CosmicDashGame = () => {
+const CosmicDashGame: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const reqRef = useRef<number>();
-
-  // UI State
-  const [uiState, setUiState] = useState<'MENU' | 'PLAYING' | 'GAME_OVER'>('MENU');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [currentMode, setCurrentMode] = useState<GameMode>('SPACE');
+  const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAME_OVER'>('IDLE');
+  const [dimensions, setDimensions] = useState({ width: 320, height: 180 });
 
-  // Game Engine Ref (Mutable)
-  const engine = useRef<EngineState>({
-    mode: 'SPACE',
-    player: { x: 60, y: 0, vy: 0, grounded: false, gravityDir: 1, rotation: 0 },
-    obstacles: [],
-    particles: [],
-    core: null,
-    stars: [],
+  // Game State Ref (Mutable for performance)
+  const game = useRef({
+    playerY: 0,
+    velocity: 0,
+    isGrounded: false,
+    jumpCount: 0,
+    rotation: 0,
+    obstacles: [] as Obstacle[],
+    particles: [] as Particle[],
+    speed: CONSTANTS.BASE_SPEED,
     score: 0,
-    speed: CFG.SPEED_START,
-    frames: 0,
-    running: false,
-    gameOver: false,
-    width: 0,
-    height: 0,
+    lastObstacleTime: 0,
     shake: 0,
+    frameId: 0,
+    stars: [] as { x: number; y: number; size: number; speed: number }[],
+    gridOffset: 0,
   });
 
-  // --- INITIALIZATION ---
+  // --- INITIALIZATION & RESIZE ---
   useEffect(() => {
-    const saved = localStorage.getItem('cosmic_hs');
-    if (saved) setHighScore(parseInt(saved));
-
     const handleResize = () => {
-      if (containerRef.current && canvasRef.current) {
-        const { clientWidth: w, clientHeight: h } = containerRef.current;
-        const dpr = window.devicePixelRatio || 1;
-        
-        canvasRef.current.width = w * dpr;
-        canvasRef.current.height = h * dpr;
-        canvasRef.current.style.width = `${w}px`;
-        canvasRef.current.style.height = `${h}px`;
-        
-        const ctx = canvasRef.current.getContext('2d');
-        if (ctx) ctx.scale(dpr, dpr);
-
-        engine.current.width = w;
-        engine.current.height = h;
-        
-        // Init Background Stars
-        if (engine.current.stars.length === 0) {
-          for(let i=0; i<60; i++) {
-            engine.current.stars.push({
-              x: Math.random() * w,
-              y: Math.random() * h,
-              s: Math.random() * 2 + 0.5,
-              v: Math.random() * 0.5 + 0.1
-            });
-          }
-        }
+      if (containerRef.current) {
+        const w = containerRef.current.offsetWidth;
+        const h = w / CONSTANTS.ASPECT_RATIO;
+        setDimensions({ width: w, height: h });
+        initStars(w, h);
       }
     };
-
-    handleResize();
     window.addEventListener('resize', handleResize);
+    handleResize();
+    
+    // Load High Score
+    const saved = localStorage.getItem('cosmicHighScore');
+    if (saved) setHighScore(parseInt(saved));
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- HELPER: PARTICLES ---
-  const explode = (x: number, y: number, color: string, count = 15) => {
-    for(let i=0; i<count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 5 + 2;
-      engine.current.particles.push({
-        x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
+  const initStars = (w: number, h: number) => {
+    game.current.stars = Array.from({ length: 40 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      size: Math.random() * 2,
+      speed: Math.random() * 0.5 + 0.1
+    }));
+  };
+
+  // --- GAME LOGIC HELPER FUNCTIONS ---
+
+  const spawnParticles = (x: number, y: number, count: number, color: string, speedMultiplier = 1) => {
+    for (let i = 0; i < count; i++) {
+      game.current.particles.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 4 * speedMultiplier,
+        vy: (Math.random() - 0.5) * 4 * speedMultiplier,
         life: 1.0,
         color,
         size: Math.random() * 3 + 1
@@ -159,432 +116,358 @@ const CosmicDashGame = () => {
     }
   };
 
-  // --- GAME LOGIC ---
-  const startLoop = () => {
-    if (reqRef.current) cancelAnimationFrame(reqRef.current);
-    reqRef.current = requestAnimationFrame(loop);
-  };
-
-  const resetGame = useCallback(() => {
-    const st = engine.current;
-    st.mode = 'SPACE';
-    setCurrentMode('SPACE');
-    st.player = { x: 60, y: st.height / 2, vy: 0, grounded: false, gravityDir: 1, rotation: 0 };
-    st.obstacles = [];
-    st.particles = [];
-    st.core = null;
-    st.score = 0;
-    st.speed = CFG.SPEED_START;
-    st.frames = 0;
-    st.running = true;
-    st.gameOver = false;
-    st.shake = 0;
-    
+  const resetGame = () => {
+    const groundY = dimensions.height * CONSTANTS.GROUND_HEIGHT_RATIO;
+    game.current = {
+      ...game.current,
+      playerY: groundY - CONSTANTS.PLAYER_SIZE,
+      velocity: 0,
+      obstacles: [],
+      particles: [],
+      score: 0,
+      speed: CONSTANTS.BASE_SPEED,
+      shake: 0,
+      jumpCount: 0,
+    };
     setScore(0);
-    setUiState('PLAYING');
-    
-    // Ensure loop is running
-    startLoop();
-  }, []);
-
-  const switchMode = () => {
-    const st = engine.current;
-    st.mode = st.mode === 'SPACE' ? 'GRID' : 'SPACE';
-    st.shake = 20; // Big screen shake
-    st.speed += 0.5; // Speed up
-    setCurrentMode(st.mode);
-    
-    // Visual flare
-    explode(st.player.x, st.player.y, '#ffffff', 30);
-    
-    // Reset physics for new mode
-    st.player.vy = 0;
-    st.player.gravityDir = 1; 
-    
-    // Clear obstacles nearby to prevent cheap deaths
-    st.obstacles = st.obstacles.filter(o => o.x > st.width * 0.8);
+    setGameState('PLAYING');
   };
 
-  const handleInput = useCallback(() => {
-    const st = engine.current;
-    if (!st.running) return;
+  const jump = () => {
+    if (gameState !== 'PLAYING') return;
 
-    if (st.mode === 'SPACE') {
-      // Flappy mechanics
-      st.player.vy = CFG.JUMP_FORCE;
-      explode(st.player.x, st.player.y + 10, '#00f3ff', 5); // Thruster effect
-    } else {
-      // Gravity Flip mechanics
-      st.player.gravityDir *= -1; // Flip direction
-      st.player.vy = 0; // Reset velocity for instant snap feel
-      explode(st.player.x, st.player.y + (st.player.gravityDir === 1 ? -10 : 10), '#ff00ff', 5);
+    // Double Jump Logic
+    if (game.current.jumpCount < 2) {
+      const force = game.current.jumpCount === 0 ? CONSTANTS.JUMP_FORCE : CONSTANTS.DOUBLE_JUMP_FORCE;
+      game.current.velocity = force;
+      game.current.jumpCount++;
+      
+      // Spawn Jump Particles
+      const pX = dimensions.width * 0.15 + CONSTANTS.PLAYER_SIZE / 2;
+      const pY = game.current.playerY + CONSTANTS.PLAYER_SIZE;
+      spawnParticles(pX, pY, 8, CONSTANTS.COLORS.NEON_BLUE);
     }
-  }, []);
+  };
 
-  // --- MAIN LOOP ---
-  const loop = () => {
+  // --- MAIN GAME LOOP ---
+  useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
-    const st = engine.current;
-
     if (!canvas || !ctx) return;
 
-    // 1. UPDATE PHYSICS
-    if (st.running && !st.gameOver) {
-      st.frames++;
-      
-      // Screen Shake Decay
-      if (st.shake > 0) st.shake *= 0.9;
-      if (st.shake < 0.5) st.shake = 0;
+    const loop = () => {
+      const { width, height } = dimensions;
+      const groundLevel = height * CONSTANTS.GROUND_HEIGHT_RATIO;
+      const g = game.current;
 
-      // Player Movement
-      const gravity = st.mode === 'SPACE' ? CFG.GRAVITY_SPACE : (CFG.GRAVITY_GRID * st.player.gravityDir);
-      st.player.vy += gravity;
-      st.player.y += st.player.vy;
-
-      // Mode Specific Constraints
-      if (st.mode === 'SPACE') {
-        st.player.rotation = Math.min(Math.PI/4, Math.max(-Math.PI/4, st.player.vy * 0.1));
-        // Death check
-        if (st.player.y < 0 || st.player.y > st.height) die();
-      } else {
-        // GRID Mode: Floor/Ceiling Clamping
-        st.player.rotation += 0.1; // Rolling effect
-        if (st.player.y < 0) {
-          st.player.y = 0;
-          st.player.vy = 0;
-        } else if (st.player.y + CFG.PLAYER_SIZE > st.height) {
-          st.player.y = st.height - CFG.PLAYER_SIZE;
-          st.player.vy = 0;
-        }
-      }
-
-      // Spawning Obstacles
-      if (st.frames % CFG.SPAWN_RATE === 0) {
-        spawnObstacle();
-      }
-
-      // Spawning Glitch Core (Mode Switcher)
-      if (st.score > 0 && st.score % CFG.MODE_SWITCH_SCORE === 0 && !st.core && st.frames % 20 === 0) {
-        st.core = {
-          x: st.width + 100,
-          y: st.height / 2 - 15,
-          w: 30,
-          h: 30,
-          color: '#ffffff',
-          active: true,
-          rotation: 0
-        };
-      }
-
-      // Update Obstacles
-      st.obstacles.forEach(obs => {
-        obs.x -= st.speed;
-        // Collision
-        if (AABB(st.player, obs)) die();
-        // Score
-        if (!obs.passed && obs.x + obs.w < st.player.x) {
-          obs.passed = true;
-          st.score++;
-          setScore(st.score);
-        }
-      });
-
-      // Update Core
-      if (st.core) {
-        st.core.x -= st.speed;
-        st.core.rotation += 0.1;
-        if (AABB(st.player, st.core)) {
-          st.core = null;
-          switchMode();
-        } else if (st.core.x < -50) {
-          st.core = null; // Missed it
-        }
-      }
-
-      // Cleanup
-      st.obstacles = st.obstacles.filter(o => o.x + o.w > -100);
-    }
-
-    // 2. DRAWING
-    // Clear & Shake
-    ctx.save();
-    ctx.clearRect(0, 0, st.width, st.height);
-    
-    if (st.shake > 0) {
-      const dx = (Math.random() - 0.5) * st.shake;
-      const dy = (Math.random() - 0.5) * st.shake;
-      ctx.translate(dx, dy);
-    }
-
-    // Background
-    drawBackground(ctx, st);
-
-    // Player
-    drawPlayer(ctx, st);
-
-    // Obstacles
-    st.obstacles.forEach(obs => {
-      ctx.fillStyle = obs.color;
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = obs.color;
-      ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-      ctx.shadowBlur = 0;
-    });
-
-    // Core
-    if (st.core) {
+      // 1. CLEAR & SHAKE
+      ctx.clearRect(0, 0, width, height);
       ctx.save();
-      ctx.translate(st.core.x + 15, st.core.y + 15);
-      ctx.rotate(st.core.rotation);
-      ctx.fillStyle = '#fff';
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = '#fff';
-      ctx.beginPath();
-      ctx.moveTo(0, -15);
-      ctx.lineTo(15, 15);
-      ctx.lineTo(-15, 15);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Particles
-    st.particles.forEach((p, i) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 0.02;
-      if (p.life <= 0) st.particles.splice(i, 1);
       
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
+      // Screen Shake Effect
+      if (g.shake > 0) {
+        const shakeX = (Math.random() - 0.5) * g.shake;
+        const shakeY = (Math.random() - 0.5) * g.shake;
+        ctx.translate(shakeX, shakeY);
+        g.shake *= 0.9; // Damping
+        if (g.shake < 0.5) g.shake = 0;
+      }
 
-    ctx.restore();
+      // 2. DRAW BACKGROUND (Stars & Retro Grid)
+      ctx.fillStyle = CONSTANTS.COLORS.BG;
+      ctx.fillRect(0, 0, width, height);
+      
+      // Parallax Stars
+      ctx.fillStyle = '#ffffff';
+      g.stars.forEach(star => {
+        if (gameState === 'PLAYING') star.x -= star.speed * (g.speed / 4);
+        if (star.x < 0) star.x = width;
+        ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1.0;
 
-    if (st.running) {
-      reqRef.current = requestAnimationFrame(loop);
-    }
-  };
-
-  const drawBackground = (ctx: CanvasRenderingContext2D, st: EngineState) => {
-    // Gradient changes based on mode
-    const grad = ctx.createLinearGradient(0, 0, 0, st.height);
-    if (st.mode === 'SPACE') {
-      grad.addColorStop(0, '#020617');
-      grad.addColorStop(1, '#1e1b4b');
-    } else {
-      grad.addColorStop(0, '#2a0a18'); // Reddish dark for grid mode
-      grad.addColorStop(1, '#000000');
-    }
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, st.width, st.height);
-
-    // Draw Stars
-    ctx.fillStyle = '#fff';
-    st.stars.forEach(s => {
-      s.x -= s.v * (st.running ? (st.speed * 0.5) : 0.2);
-      if (s.x < 0) s.x = st.width;
-      ctx.globalAlpha = Math.random() * 0.5 + 0.2;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.s, 0, Math.PI*2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-
-    // Draw Grid Lines in GRID mode
-    if (st.mode === 'GRID') {
-      ctx.strokeStyle = 'rgba(255, 0, 255, 0.2)';
+      // Retro Grid Floor
+      if (gameState === 'PLAYING') g.gridOffset = (g.gridOffset - g.speed) % 40;
+      ctx.strokeStyle = CONSTANTS.COLORS.GRID;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      // Moving floor lines
-      const offset = (st.frames * st.speed) % 50;
-      for(let i=0; i<st.width + 50; i+=50) {
-        ctx.moveTo(i - offset, 0);
-        ctx.lineTo(i - offset, st.height);
-      }
       // Horizontal lines
-      ctx.moveTo(0, 50); ctx.lineTo(st.width, 50);
-      ctx.moveTo(0, st.height - 50); ctx.lineTo(st.width, st.height - 50);
+      for (let i = groundLevel; i < height; i += 15) {
+        ctx.moveTo(0, i);
+        ctx.lineTo(width, i);
+      }
+      // Vertical Perspective lines
+      for (let i = -width; i < width * 2; i += 40) {
+        const slant = (i - width/2) * 0.8; // Perspective slant
+        ctx.moveTo(i + g.gridOffset, groundLevel);
+        ctx.lineTo(i + slant + g.gridOffset, height);
+      }
       ctx.stroke();
-    }
-  };
 
-  const drawPlayer = (ctx: CanvasRenderingContext2D, st: EngineState) => {
-    const { player } = st;
-    ctx.save();
-    ctx.translate(player.x + CFG.PLAYER_SIZE/2, player.y + CFG.PLAYER_SIZE/2);
-    ctx.rotate(player.rotation);
-    
-    // Mode specific Player Look
-    if (st.mode === 'SPACE') {
-      ctx.fillStyle = '#00f3ff'; // Cyan
+      // Top Horizon Line
       ctx.shadowBlur = 15;
-      ctx.shadowColor = '#00f3ff';
-    } else {
-      ctx.fillStyle = '#ff00ff'; // Magenta
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = '#ff00ff';
-    }
+      ctx.shadowColor = CONSTANTS.COLORS.NEON_BLUE;
+      ctx.strokeStyle = CONSTANTS.COLORS.NEON_BLUE;
+      ctx.beginPath();
+      ctx.moveTo(0, groundLevel);
+      ctx.lineTo(width, groundLevel);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
 
-    ctx.fillRect(-CFG.PLAYER_SIZE/2, -CFG.PLAYER_SIZE/2, CFG.PLAYER_SIZE, CFG.PLAYER_SIZE);
-    
-    // Inner Core
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(-5, -5, 10, 10);
-    
-    ctx.restore();
-  };
 
-  const spawnObstacle = () => {
-    const st = engine.current;
-    
-    if (st.mode === 'SPACE') {
-      // Flappy Bird Style Pipes
-      const gap = 160;
-      const minH = 50;
-      const topH = Math.random() * (st.height - gap - (minH*2)) + minH;
-      
-      st.obstacles.push({
-        x: st.width, y: 0, w: 50, h: topH,
-        color: '#3b82f6', passed: false, type: 'WALL'
-      });
-      st.obstacles.push({
-        x: st.width, y: topH + gap, w: 50, h: st.height - (topH + gap),
-        color: '#3b82f6', passed: false, type: 'WALL'
-      });
-    } else {
-      // Grid Runner Spikes (Floor or Ceiling)
-      const onFloor = Math.random() > 0.5;
-      const h = Math.random() * 60 + 40;
-      st.obstacles.push({
-        x: st.width,
-        y: onFloor ? st.height - h : 0,
-        w: 40,
-        h: h,
-        color: '#ef4444',
-        passed: false,
-        type: 'SPIKE'
-      });
-    }
-  };
-
-  const AABB = (r1: any, r2: any) => {
-    // Small padding to be forgiving
-    const p = 6; 
-    return (
-      r1.x + p < r2.x + r2.w &&
-      r1.x + CFG.PLAYER_SIZE - p > r2.x &&
-      r1.y + p < r2.y + r2.h &&
-      r1.y + CFG.PLAYER_SIZE - p > r2.y
-    );
-  };
-
-  const die = () => {
-    const st = engine.current;
-    st.gameOver = true;
-    st.running = false;
-    st.shake = 30; // Massive shake
-    explode(st.player.x, st.player.y, '#ffffff', 50); // Big Boom
-    setUiState('GAME_OVER');
-    
-    if (st.score > highScore) {
-      setHighScore(st.score);
-      localStorage.setItem('cosmic_hs', st.score.toString());
-    }
-  };
-
-  // --- INPUT HANDLING ---
-  useEffect(() => {
-    const kd = (e: KeyboardEvent) => {
-      if (e.code === 'Space' || e.code === 'ArrowUp') {
-        e.preventDefault();
-        // FIX: Replaced complex nested checks with straightforward logic
-        // If playing, input; otherwise, reset.
-        if (uiState === 'PLAYING') {
-            handleInput();
+      if (gameState === 'PLAYING') {
+        // 3. PHYSICS & UPDATES
+        
+        // Player Physics
+        g.velocity += CONSTANTS.GRAVITY;
+        g.playerY += g.velocity;
+        
+        // Ground Collision
+        if (g.playerY >= groundLevel - CONSTANTS.PLAYER_SIZE) {
+          g.playerY = groundLevel - CONSTANTS.PLAYER_SIZE;
+          g.velocity = 0;
+          g.isGrounded = true;
+          g.jumpCount = 0;
+          g.rotation = 0; // Reset rotation on ground
         } else {
-            resetGame();
+          g.isGrounded = false;
+          g.rotation += 0.1; // Spin while jumping
+        }
+
+        // Speed Scaling
+        if (g.speed < CONSTANTS.MAX_SPEED) g.speed += CONSTANTS.SPEED_INCREMENT;
+
+        // Score
+        g.score += g.speed * 0.05;
+        setScore(Math.floor(g.score));
+
+        // Obstacle Spawning
+        const now = Date.now();
+        if (now - g.lastObstacleTime > 2000 / (g.speed / 3)) {
+          const isFlying = Math.random() > 0.7; // 30% chance of flying obstacle
+          const obsHeight = isFlying ? 30 : 40 + Math.random() * 20;
+          const obsWidth = 30;
+          const obsY = isFlying 
+            ? groundLevel - 70 - Math.random() * 30 // Air position
+            : groundLevel - obsHeight; // Ground position
+
+          g.obstacles.push({
+            x: width,
+            y: obsY,
+            width: obsWidth,
+            height: obsHeight,
+            type: isFlying ? 'FLYING' : 'GROUND'
+          });
+          g.lastObstacleTime = now;
+        }
+
+        // Update Obstacles
+        g.obstacles.forEach(obs => obs.x -= g.speed);
+        g.obstacles = g.obstacles.filter(obs => obs.x + obs.width > -50);
+
+        // Collision Detection
+        const pX = width * 0.15; // Fixed player X
+        const hitboxPadding = 4;
+        
+        for (const obs of g.obstacles) {
+          if (
+            pX + CONSTANTS.PLAYER_SIZE - hitboxPadding > obs.x &&
+            pX + hitboxPadding < obs.x + obs.width &&
+            g.playerY + CONSTANTS.PLAYER_SIZE - hitboxPadding > obs.y &&
+            g.playerY + hitboxPadding < obs.y + obs.height
+          ) {
+            // GAME OVER
+            setGameState('GAME_OVER');
+            g.shake = 20; // Big impact shake
+            spawnParticles(pX, g.playerY, 30, CONSTANTS.COLORS.NEON_PINK, 2);
+            if (g.score > highScore) {
+              setHighScore(Math.floor(g.score));
+              localStorage.setItem('cosmicHighScore', Math.floor(g.score).toString());
+            }
+          }
         }
       }
+
+      // 4. DRAWING ENTITIES
+
+      // Draw Particles
+      g.particles.forEach((p, index) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.05;
+        p.size *= 0.9;
+        
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (p.life <= 0) g.particles.splice(index, 1);
+      });
+      ctx.globalAlpha = 1.0;
+
+      // Draw Player (Neon Capsule)
+      const pX = width * 0.15;
+      ctx.save();
+      ctx.translate(pX + CONSTANTS.PLAYER_SIZE/2, g.playerY + CONSTANTS.PLAYER_SIZE/2);
+      ctx.rotate(g.rotation);
+      
+      // Glow
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = CONSTANTS.COLORS.NEON_BLUE;
+      ctx.fillStyle = '#000';
+      ctx.strokeStyle = CONSTANTS.COLORS.NEON_BLUE;
+      ctx.lineWidth = 2;
+      
+      // Shape
+      ctx.beginPath();
+      ctx.rect(-CONSTANTS.PLAYER_SIZE/2, -CONSTANTS.PLAYER_SIZE/2, CONSTANTS.PLAYER_SIZE, CONSTANTS.PLAYER_SIZE);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Core
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(0, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.restore();
+
+      // Draw Obstacles (Glitch Spikes)
+      g.obstacles.forEach(obs => {
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = CONSTANTS.COLORS.NEON_PINK;
+        ctx.fillStyle = CONSTANTS.COLORS.NEON_PINK;
+        
+        ctx.beginPath();
+        if (obs.type === 'FLYING') {
+            // Drone shape
+            ctx.moveTo(obs.x, obs.y + obs.height/2);
+            ctx.lineTo(obs.x + obs.width/2, obs.y);
+            ctx.lineTo(obs.x + obs.width, obs.y + obs.height/2);
+            ctx.lineTo(obs.x + obs.width/2, obs.y + obs.height);
+        } else {
+            // Spike shape
+            ctx.moveTo(obs.x, obs.y + obs.height);
+            ctx.lineTo(obs.x + obs.width/2, obs.y);
+            ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+        }
+        ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+
+      // Trail Effect (Spawn particles while moving)
+      if (gameState === 'PLAYING' && g.frameId % 5 === 0) {
+        spawnParticles(pX, g.playerY + CONSTANTS.PLAYER_SIZE/2, 1, CONSTANTS.COLORS.NEON_BLUE, 0.5);
+      }
+
+      ctx.restore();
+      g.frameId = requestAnimationFrame(loop);
     };
-    window.addEventListener('keydown', kd);
-    return () => window.removeEventListener('keydown', kd);
-  }, [uiState, handleInput, resetGame]);
+
+    const frameId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frameId);
+  }, [dimensions, gameState, highScore]);
+
+  // --- CONTROLS ---
+  useEffect(() => {
+    const handleInput = (e: TouchEvent | KeyboardEvent | MouseEvent) => {
+      e.preventDefault(); // Uncommented this line for better mobile interactivity
+      if (gameState === 'GAME_OVER') {
+        resetGame();
+      } else if (gameState === 'IDLE') {
+        setGameState('PLAYING');
+      } else {
+        jump();
+      }
+    };
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('touchstart', handleInput);
+      canvas.addEventListener('mousedown', handleInput);
+    }
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.code === 'ArrowUp') handleInput(e);
+    });
+
+    return () => {
+      if (canvas) {
+        canvas.removeEventListener('touchstart', handleInput);
+        canvas.removeEventListener('mousedown', handleInput);
+      }
+      window.removeEventListener('keydown', handleInput as any);
+    };
+  }, [gameState]);
 
   return (
-    <div 
-      ref={containerRef}
-      className="relative w-full h-[100dvh] bg-black overflow-hidden select-none"
-      onMouseDown={(e) => { e.preventDefault(); if(uiState === 'PLAYING') handleInput(); else resetGame(); }}
-      onTouchStart={(e) => { e.preventDefault(); if(uiState === 'PLAYING') handleInput(); else resetGame(); }}
-    >
-      {/* Background/Game Layer */}
-      <canvas ref={canvasRef} className="block w-full h-full" />
-
-      {/* HUD Layer */}
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start pointer-events-none">
-        <div className={cn(
-          "flex items-center gap-3 px-4 py-2 rounded-full border backdrop-blur-md transition-colors duration-500",
-          currentMode === 'SPACE' ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-400" : "bg-magenta-500/20 border-magenta-500/50 text-magenta-400"
-        )}>
-          <Activity className="w-5 h-5 animate-pulse" />
-          <span className="font-black tracking-widest text-sm">
-            DIMENSION: {currentMode}
-          </span>
+    <div ref={containerRef} className="w-full max-w-md mx-auto p-4 flex flex-col items-center gap-4">
+      {/* HUD */}
+      <div className="flex w-full justify-between items-center text-sm font-bold font-mono tracking-wider text-cyan-400">
+        <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-yellow-400" />
+            <span className="text-yellow-400">HI: {highScore}</span>
         </div>
-
-        <div className="text-right">
-          <div className="text-xs font-bold text-slate-400 mb-1 flex items-center justify-end gap-1">
-            <Trophy className="w-3 h-3" /> BEST: {highScore}
-          </div>
-          <div className="text-7xl font-black italic text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] tabular-nums leading-none">
-            {score}
-          </div>
+        <div className="flex items-center gap-2 bg-slate-900/50 px-3 py-1 rounded-full border border-cyan-500/30">
+            <Zap className="w-4 h-4" />
+            <span>{score.toString().padStart(5, '0')}</span>
         </div>
       </div>
 
-      {/* Main Menu */}
-      {uiState === 'MENU' && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm animate-in zoom-in-95">
-          <h1 className="text-6xl md:text-8xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-pink-500 drop-shadow-2xl mb-4">
-            NEON<br/>SHIFT
-          </h1>
-          <Button 
-            onClick={(e) => { e.stopPropagation(); resetGame(); }}
-            className="px-10 py-8 bg-white hover:bg-slate-200 text-black rounded-full font-black text-xl tracking-widest shadow-[0_0_40px_rgba(255,255,255,0.3)] hover:scale-105 transition-all"
-          >
-            <Play className="w-6 h-6 mr-2 fill-black" /> INITIALIZE
-          </Button>
-          <div className="mt-8 text-center text-slate-400 text-xs font-mono uppercase tracking-widest space-y-1">
-            <p>Space Mode: Tap to Fly</p>
-            <p>Grid Mode: Tap to Flip Gravity</p>
-            <p className="text-yellow-400 animate-pulse mt-2">Catch the Core to Switch Dimensions</p>
-          </div>
-        </div>
-      )}
+      {/* GAME CANVAS CONTAINER */}
+      <div 
+        className={cn(
+            "relative w-full rounded-xl overflow-hidden shadow-[0_0_20px_rgba(0,243,255,0.15)] border border-slate-800",
+            "transition-all duration-300",
+            gameState === 'GAME_OVER' ? "grayscale-[0.5] ring-2 ring-red-500/50" : "ring-1 ring-cyan-500/30"
+        )}
+        style={{ height: dimensions.height }}
+      >
+        <canvas
+            ref={canvasRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            className="block touch-none cursor-pointer"
+        />
 
-      {/* Game Over */}
-      {uiState === 'GAME_OVER' && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-red-950/40 backdrop-blur-md animate-in fade-in zoom-in-90">
-          <div className="bg-black/80 border border-white/10 p-8 rounded-3xl text-center shadow-2xl max-w-sm w-[90%]">
-            <h2 className="text-4xl font-black text-red-500 mb-1">SYNC LOST</h2>
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-6">Reality Collapse Imminent</p>
-            
-            <div className="text-6xl font-black text-white mb-8">{score}</div>
-            
-            <Button 
-              onClick={(e) => { e.stopPropagation(); resetGame(); }}
-              className="w-full py-6 bg-white hover:bg-slate-200 text-black font-bold rounded-xl"
-            >
-              <RotateCcw className="w-5 h-5 mr-2" /> REBOOT
-            </Button>
-          </div>
-        </div>
-      )}
+        {/* UI OVERLAYS */}
+        {gameState === 'IDLE' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px]">
+                <h2 className="text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600 mb-2 drop-shadow-[0_2px_10px_rgba(0,255,255,0.5)]">
+                    COSMIC DASH
+                </h2>
+                <div className="animate-pulse flex items-center gap-2 text-white font-mono text-sm bg-cyan-500/20 px-4 py-2 rounded">
+                    <Play className="w-4 h-4" /> TAP TO START
+                </div>
+            </div>
+        )}
+
+        {gameState === 'GAME_OVER' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+                <h2 className="text-3xl font-black text-red-500 mb-2 tracking-widest drop-shadow-[0_0_10px_rgba(255,0,0,0.8)]">
+                    CRASHED
+                </h2>
+                <div className="flex flex-col items-center gap-1 mb-6 font-mono">
+                    <span className="text-slate-400 text-xs">FINAL SCORE</span>
+                    <span className="text-2xl text-white font-bold">{score}</span>
+                </div>
+                <Button 
+                    onClick={resetGame}
+                    className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold gap-2 shadow-[0_0_15px_rgba(0,243,255,0.4)]"
+                >
+                    <RotateCcw className="w-4 h-4" /> TRY AGAIN
+                </Button>
+            </div>
+        )}
+      </div>
+
+      <p className="text-[10px] text-slate-500 font-mono text-center uppercase tracking-widest">
+        Double Tap to Boost Jump • Avoid Glitch Spikes
+      </p>
     </div>
   );
 };
